@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>網站開發估價系統</title>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+  /* ─── Reset & Base ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --white: #ffffff;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+    --blue-50: #eff6ff;
+    --blue-100: #dbeafe;
+    --blue-500: #3b82f6;
+    --blue-600: #2563eb;
+    --blue-700: #1d4ed8;
+    --green-50: #f0fdf4;
+    --green-500: #22c55e;
+    --amber-50: #fffbeb;
+    --amber-500: #f59e0b;
+    --radius-sm: 8px;
+    --radius: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    --shadow: 0 4px 12px rgba(0,0,0,.06), 0 2px 6px rgba(0,0,0,.04);
+    --shadow-lg: 0 12px 32px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.04);
+    --transition: 180ms cubic-bezier(.4,0,.2,1);
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font);
+    background: var(--gray-50);
+    color: var(--gray-800);
+    line-height: 1.6;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── Layout ─── */
+  .app-header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,.88);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--gray-200);
+    padding: 0 24px;
+    height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .app-header .logo {
+    font-size: 15px; font-weight: 600; color: var(--gray-900); letter-spacing: -.3px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .app-header .logo span {
+    display: inline-block; width: 26px; height: 26px; background: var(--gray-900);
+    border-radius: 6px; color: #fff; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .header-meta { font-size: 13px; color: var(--gray-400); }
+
+  .main-wrap {
+    display: flex; align-items: flex-start;
+    max-width: 1200px; margin: 0 auto;
+    padding: 40px 24px 80px;
+    gap: 28px;
+  }
+
+  /* ─── Step Progress ─── */
+  .step-nav {
+    display: flex; gap: 6px; align-items: center;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+  .step-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gray-200); transition: var(--transition);
+    cursor: pointer;
+  }
+  .step-dot.active { background: var(--gray-900); width: 24px; border-radius: 4px; }
+  .step-dot.done { background: var(--gray-400); }
+
+  /* ─── Form Area ─── */
+  .form-area { flex: 1; min-width: 0; }
+
+  .step-header { margin-bottom: 32px; }
+  .step-eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--gray-400);
+    margin-bottom: 8px;
+  }
+  .step-title {
+    font-size: 26px; font-weight: 700; color: var(--gray-900);
+    letter-spacing: -.5px; line-height: 1.25;
+    margin-bottom: 6px;
+  }
+  .step-subtitle { font-size: 14px; color: var(--gray-500); line-height: 1.5; }
+
+  /* ─── Cards ─── */
+  .card-grid { display: grid; gap: 12px; }
+  .card-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .card-grid.cols-1 { grid-template-columns: 1fr; }
+
+  .option-card {
+    position: relative;
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    cursor: pointer;
+    transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+    user-select: none;
+  }
+  .option-card:hover {
+    border-color: var(--gray-300);
+    box-shadow: var(--shadow);
+  }
+  .option-card.selected {
+    border-color: var(--gray-900);
+    box-shadow: var(--shadow);
+    background: var(--white);
+  }
+  .option-card.selected::after {
+    content: '✓';
+    position: absolute; top: 14px; right: 14px;
+    width: 22px; height: 22px; background: var(--gray-900);
+    color: #fff; border-radius: 50%;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .card-title { font-size: 15px; font-weight: 600; color: var(--gray-900); margin-bottom: 4px; }
+  .card-desc { font-size: 13px; color: var(--gray-500); line-height: 1.5; margin-bottom: 10px; }
+  .card-price-label { font-size: 12px; color: var(--gray-400); margin-bottom: 2px; }
+  .card-price { font-size: 16px; font-weight: 700; color: var(--gray-900); }
+  .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+  .tag {
+    font-size: 11px; font-weight: 500; padding: 2px 8px;
+    border-radius: 20px; background: var(--gray-100); color: var(--gray-500);
+  }
+
+  /* ─── Feature List ─── */
+  .feature-section { margin-bottom: 28px; }
+  .feature-section-title {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--gray-400); margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .feature-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .feature-item {
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color var(--transition);
+  }
+  .feature-item.selected { border-color: var(--gray-900); }
+
+  .feature-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; cursor: pointer;
+  }
+  .feature-checkbox {
+    width: 18px; height: 18px; border-radius: 5px;
+    border: 1.5px solid var(--gray-300);
+    flex-shrink: 0; transition: var(--transition);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .feature-item.selected .feature-checkbox {
+    background: var(--gray-900); border-color: var(--gray-900);
+  }
+  .feature-item.selected .feature-checkbox::after {
+    content: ''; display: block;
+    width: 4px; height: 7px;
+    border: 2px solid #fff; border-top: none; border-left: none;
+    transform: rotate(45deg) translateY(-1px);
+  }
+  .feature-main { flex: 1; min-width: 0; }
+  .feature-name { font-size: 14px; font-weight: 500; color: var(--gray-800); }
+  .feature-badge {
+    font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-left: 6px;
+    vertical-align: middle;
+  }
+  .badge-must { background: #fef2f2; color: #dc2626; }
+  .badge-rec { background: var(--blue-50); color: var(--blue-600); }
+  .badge-opt { background: var(--gray-100); color: var(--gray-500); }
+  .badge-ent { background: #f5f3ff; color: #7c3aed; }
+
+  .feature-price-range { font-size: 12px; color: var(--gray-400); flex-shrink: 0; }
+  .feature-info-btn {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--gray-100); color: var(--gray-400);
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; cursor: pointer;
+    transition: var(--transition);
+  }
+  .feature-info-btn:hover { background: var(--gray-900); color: #fff; }
+  .feature-expand {
+    display: none; padding: 0 16px 14px 46px;
+    font-size: 13px; color: var(--gray-500); line-height: 1.6;
+    border-top: 1px solid var(--gray-100);
+  }
+  .feature-expand.open { display: block; padding-top: 12px; }
+  .feature-expand ul { padding-left: 16px; }
+  .feature-expand ul li { margin-bottom: 2px; }
+
+  /* ─── Yes/No Question ─── */
+  .question-block { margin-bottom: 28px; }
+  .question-text { font-size: 16px; font-weight: 600; color: var(--gray-800); margin-bottom: 14px; }
+  .yn-row { display: flex; gap: 10px; }
+  .yn-btn {
+    flex: 1; padding: 14px; border-radius: var(--radius);
+    border: 1.5px solid var(--gray-200); background: var(--white);
+    font-size: 14px; font-weight: 500; color: var(--gray-600);
+    cursor: pointer; transition: var(--transition); text-align: center;
+  }
+  .yn-btn:hover { border-color: var(--gray-300); }
+  .yn-btn.selected-yes { border-color: var(--gray-900); color: var(--gray-900); background: var(--white); }
+  .yn-btn.selected-no { border-color: var(--gray-300); color: var(--gray-400); background: var(--gray-50); }
+
+  .sub-features {
+    margin-top: 14px; padding: 16px;
+    background: var(--gray-50); border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+    display: none;
+  }
+  .sub-features.open { display: block; }
+  .sub-features .feature-list { gap: 6px; }
+  .sub-features .feature-item { background: var(--white); }
+
+  /* ─── Step 8 — Conditions ─── */
+  .conditions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .condition-group { background: var(--white); border: 1.5px solid var(--gray-200); border-radius: var(--radius-lg); padding: 20px; }
+  .condition-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--gray-400); margin-bottom: 14px; }
+  .condition-options { display: flex; flex-direction: column; gap: 8px; }
+  .condition-option {
+    padding: 10px 14px; border-radius: var(--radius-sm);
+    border: 1.5px solid var(--gray-200); background: var(--white);
+    font-size: 14px; color: var(--gray-700);
+    cursor: pointer; transition: var(--transition);
+  }
+  .condition-option:hover { border-color: var(--gray-300); }
+  .condition-option.selected { border-color: var(--gray-900); color: var(--gray-900); font-weight: 500; }
+  .condition-option .modifier { font-size: 12px; color: var(--gray-400); margin-left: 6px; }
+  .condition-option.selected .modifier { color: var(--blue-500); }
+
+  /* ─── Contact Form ─── */
+  .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label { font-size: 13px; font-weight: 500; color: var(--gray-700); }
+  .form-input, .form-textarea {
+    padding: 10px 14px;
+    border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm);
+    font-size: 14px; color: var(--gray-800); font-family: var(--font);
+    background: var(--white); transition: var(--transition); outline: none;
+  }
+  .form-input:focus, .form-textarea:focus { border-color: var(--gray-900); }
+  .form-textarea { resize: vertical; min-height: 90px; }
+
+  /* ─── Navigation buttons ─── */
+  .step-actions {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 36px; padding-top: 24px;
+    border-top: 1px solid var(--gray-100);
+  }
+  .btn {
+    padding: 10px 22px; border-radius: var(--radius-sm);
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: var(--transition); border: none; display: inline-flex;
+    align-items: center; gap: 6px;
+  }
+  .btn-ghost {
+    background: transparent; color: var(--gray-500);
+    border: 1.5px solid var(--gray-200);
+  }
+  .btn-ghost:hover { border-color: var(--gray-300); color: var(--gray-700); }
+  .btn-primary {
+    background: var(--gray-900); color: #fff;
+  }
+  .btn-primary:hover { background: var(--gray-700); }
+  .btn-primary:disabled { background: var(--gray-300); cursor: not-allowed; }
+
+  /* ─── Summary Sidebar ─── */
+  .summary-sidebar {
+    width: 280px; flex-shrink: 0;
+    position: sticky; top: 80px; max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
+  .summary-card {
+    background: var(--white); border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-xl); padding: 22px;
+    box-shadow: var(--shadow);
+  }
+  .summary-title {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--gray-400); margin-bottom: 16px;
+  }
+  .summary-items { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; min-height: 40px; }
+  .summary-item {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6px 0; border-bottom: 1px solid var(--gray-100);
+    font-size: 13px; animation: fadeInUp .2s ease;
+  }
+  .summary-item:last-child { border-bottom: none; }
+  .summary-item-name { color: var(--gray-600); flex: 1; padding-right: 8px; }
+  .summary-item-price { color: var(--gray-800); font-weight: 500; font-size: 12px; flex-shrink: 0; }
+  .summary-empty { font-size: 13px; color: var(--gray-300); text-align: center; padding: 12px 0; }
+
+  .summary-divider { height: 1px; background: var(--gray-100); margin: 14px 0; }
+
+  .summary-total-label { font-size: 12px; color: var(--gray-400); margin-bottom: 4px; }
+  .summary-total-price {
+    font-size: 26px; font-weight: 800; color: var(--gray-900);
+    letter-spacing: -1px; font-variant-numeric: tabular-nums;
+    transition: color .2s;
+  }
+  .summary-range { font-size: 12px; color: var(--gray-400); margin-top: 3px; }
+
+  .summary-duration {
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--gray-100);
+  }
+  .summary-duration-label { font-size: 12px; color: var(--gray-400); margin-bottom: 3px; }
+  .summary-duration-value { font-size: 14px; font-weight: 600; color: var(--gray-700); }
+
+  .summary-quote-id {
+    margin-top: 10px; padding: 8px 12px;
+    background: var(--gray-50); border-radius: var(--radius-sm);
+    font-size: 11px; color: var(--gray-400); letter-spacing: .05em;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Price Animation ─── */
+  .price-change { color: var(--blue-500) !important; }
+
+  /* ─── Final Summary Step ─── */
+  .final-summary {
+    background: var(--white); border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-xl); padding: 28px; margin-bottom: 24px;
+  }
+  .final-section { margin-bottom: 24px; }
+  .final-section-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--gray-400); margin-bottom: 12px;
+  }
+  .final-price-block { text-align: center; padding: 24px; background: var(--gray-50); border-radius: var(--radius-lg); }
+  .final-price-label { font-size: 13px; color: var(--gray-500); margin-bottom: 4px; }
+  .final-price-main { font-size: 36px; font-weight: 800; color: var(--gray-900); letter-spacing: -1.5px; }
+  .final-price-range { font-size: 14px; color: var(--gray-500); margin-top: 4px; }
+  .final-price-note { font-size: 12px; color: var(--gray-400); margin-top: 8px; }
+  .final-duration { font-size: 15px; font-weight: 600; color: var(--gray-700); margin-top: 10px; }
+
+  .final-features { display: flex; flex-wrap: wrap; gap: 6px; }
+  .final-feature-tag {
+    font-size: 12px; padding: 4px 10px; border-radius: 20px;
+    background: var(--gray-100); color: var(--gray-600); font-weight: 500;
+  }
+
+  /* ─── Quote ID banner ─── */
+  .quote-banner {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--gray-900); color: #fff;
+    border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 20px;
+  }
+  .quote-banner-id { font-size: 16px; font-weight: 700; letter-spacing: .05em; }
+  .quote-banner-note { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 2px; }
+
+  /* ─── Success Screen ─── */
+  .success-screen {
+    display: none; flex-direction: column; align-items: center;
+    text-align: center; padding: 60px 24px;
+  }
+  .success-screen.show { display: flex; }
+  .success-icon {
+    width: 64px; height: 64px; border-radius: 50%; background: var(--gray-900);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; margin-bottom: 24px;
+  }
+  .success-title { font-size: 24px; font-weight: 700; color: var(--gray-900); margin-bottom: 10px; }
+  .success-sub { font-size: 15px; color: var(--gray-500); line-height: 1.6; margin-bottom: 28px; }
+  .success-id {
+    background: var(--gray-100); border-radius: var(--radius);
+    padding: 12px 24px; font-size: 14px; color: var(--gray-600);
+    font-weight: 600; letter-spacing: .05em; margin-bottom: 32px;
+  }
+  .success-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  /* ─── Tooltip ─── */
+  .tooltip {
+    position: absolute; z-index: 200;
+    background: var(--gray-900); color: #fff;
+    font-size: 12px; line-height: 1.5;
+    padding: 10px 14px; border-radius: var(--radius-sm);
+    max-width: 240px; pointer-events: none;
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* ─── RWD ─── */
+  @media (max-width: 768px) {
+    .main-wrap { flex-direction: column-reverse; padding: 20px 16px 60px; gap: 20px; }
+    .summary-sidebar { width: 100%; position: static; max-height: none; }
+    .card-grid.cols-2 { grid-template-columns: 1fr; }
+    .conditions-grid { grid-template-columns: 1fr; }
+    .contact-grid { grid-template-columns: 1fr; }
+    .step-title { font-size: 22px; }
+  }
+
+  /* ─── Hidden ─── */
+  [data-step] { display: none; }
+  [data-step].active { display: block; }
+
+  /* ─── Loading PDF ─── */
+  .btn-download {
+    background: var(--blue-600); color: #fff;
+  }
+  .btn-download:hover { background: var(--blue-700); }
+
+  .form-input.error, .form-textarea.error { border-color: #dc2626; }
+  .form-error-msg { font-size: 12px; color: #dc2626; margin-top: 3px; display: none; }
+  .form-group.has-error .form-error-msg { display: block; }
+  .form-group.has-error .form-input { border-color: #dc2626; }
+
+  /* ─── Toast ─── */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--gray-900); color: #fff;
+    padding: 12px 22px; border-radius: var(--radius); font-size: 14px;
+    opacity: 0; pointer-events: none; transition: all .3s; z-index: 999;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .summary-sidebar::-webkit-scrollbar-track { background: transparent; }
+  .summary-sidebar::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+  <div class="logo">
+    <span>W</span>
+    網站開發估價系統
+  </div>
+  <div class="header-meta">僅供估算 · 正式報價需需求訪談確認</div>
+</header>
+
+<!-- Main -->
+<div class="main-wrap">
+
+  <!-- Form Area -->
+  <div class="form-area">
+
+    <!-- Step Progress -->
+    <div class="step-nav" id="stepNav"></div>
+
+    <!-- ── Step 1: 專案類型 ── -->
+    <div data-step="1" class="active">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 1 · 8</div>
+        <div class="step-title">你的網站屬於哪種類型？</div>
+        <div class="step-subtitle">選擇後會自動帶入必要功能配置，其他推薦項目可在後續步驟自行勾選。</div>
+      </div>
+      <div class="card-grid cols-1" style="gap:10px">
+        <div class="option-card" data-type="brand-image" onclick="selectType(this,'brand-image')">
+          <div class="card-title">形象網站</div>
+          <div class="card-desc">展示公司品牌、服務與聯絡資訊。適合新創、顧問、中小企業做第一個官方網站。</div>
+          <div class="card-price-label">專案管理費起跳</div>
+          <div class="card-price">NT$8,000 起</div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:4px;margin-bottom:6px">總價依選配頁面與功能而定</div>
+          <div class="card-tags"><span class="tag">靜態為主</span><span class="tag">快速上線</span><span class="tag">SEO基礎</span></div>
+        </div>
+        <div class="option-card" data-type="brand-cms" onclick="selectType(this,'brand-cms')">
+          <div class="card-title">品牌網站 + CMS</div>
+          <div class="card-desc">具備後台管理、最新消息、SEO 設定，適合需要長期經營內容的品牌。</div>
+          <div class="card-price-label">專案管理費起跳</div>
+          <div class="card-price">NT$12,000 起</div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:4px;margin-bottom:6px">總價依選配頁面與功能而定</div>
+          <div class="card-tags"><span class="tag">CMS後台</span><span class="tag">SEO進階</span><span class="tag">多語系</span></div>
+        </div>
+        <div class="option-card" data-type="ecommerce" onclick="selectType(this,'ecommerce')">
+          <div class="card-title">電商網站</div>
+          <div class="card-desc">完整商品、會員、購物車、金流與物流串接。適合有實體或虛擬商品銷售需求的品牌。</div>
+          <div class="card-price-label">專案管理費起跳</div>
+          <div class="card-price">NT$18,000 起</div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:4px;margin-bottom:6px">總價依選配頁面與功能而定</div>
+          <div class="card-tags"><span class="tag">會員系統</span><span class="tag">金流串接</span><span class="tag">後台管理</span></div>
+        </div>
+        <div class="option-card" data-type="custom" onclick="selectType(this,'custom')">
+          <div class="card-title">客製化系統</div>
+          <div class="card-desc">ERP、CRM、B2B 平台、預約系統等複雜業務流程，依需求客製開發。</div>
+          <div class="card-price-label">專案管理費起跳</div>
+          <div class="card-price">NT$25,000 起</div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:4px;margin-bottom:6px">總價依需求複雜度與串接項目而定</div>
+          <div class="card-tags"><span class="tag">ERP/CRM</span><span class="tag">B2B</span><span class="tag">預約系統</span><span class="tag">API整合</span></div>
+        </div>
+      </div>
+      <div class="step-actions">
+        <div></div>
+        <button class="btn btn-primary" onclick="step1Next()" id="btn1" disabled style="opacity:.4;cursor:not-allowed">下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 2: 頁面需求 ── -->
+    <div data-step="2">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 2 · 8</div>
+        <div class="step-title">你的網站需要哪些頁面？</div>
+        <div class="step-subtitle">點 <strong>?</strong> 可展開說明，了解每個頁面包含什麼。</div>
+      </div>
+      <div id="pagesContainer"></div>
+      <div class="step-actions">
+        <button class="btn btn-ghost" onclick="prevStep()">← 上一步</button>
+        <button class="btn btn-primary" onclick="nextStep()">下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 3: 會員功能 ── -->
+    <div data-step="3">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 3 · 8</div>
+        <div class="step-title">你的網站需要讓使用者登入嗎？</div>
+        <div class="step-subtitle">包含帳號註冊、第三方登入、個人中心等。若不需要，可直接跳過。</div>
+      </div>
+
+      <div class="question-block">
+        <div class="yn-row">
+          <div class="yn-btn" id="memberYes" onclick="toggleQuestion('member', true)">✦ 需要會員功能</div>
+          <div class="yn-btn" id="memberNo" onclick="toggleQuestion('member', false)">不需要，跳過</div>
+        </div>
+        <div class="sub-features" id="memberFeatures"></div>
+      </div>
+
+      <div class="step-actions">
+        <button class="btn btn-ghost" onclick="prevStep()">← 上一步</button>
+        <button class="btn btn-primary" onclick="nextStep()">下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 4: 電商功能 ── -->
+    <div data-step="4">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 4 · 8</div>
+        <div class="step-title">你的網站需要線上付款嗎？</div>
+        <div class="step-subtitle">包含購物車、結帳流程、金流串接等電商完整機制。</div>
+      </div>
+
+      <div class="question-block">
+        <div class="yn-row">
+          <div class="yn-btn" id="ecomYes" onclick="toggleQuestion('ecom', true)">✦ 需要電商功能</div>
+          <div class="yn-btn" id="ecomNo" onclick="toggleQuestion('ecom', false)">不需要，跳過</div>
+        </div>
+        <div class="sub-features" id="ecomFeatures"></div>
+      </div>
+
+      <div class="step-actions">
+        <button class="btn btn-ghost" onclick="prevStep()">← 上一步</button>
+        <button class="btn btn-primary" onclick="nextStep()">下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 5: CMS 後台 ── -->
+    <div data-step="5">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 5 · 8</div>
+        <div class="step-title">你需要自己管理網站內容嗎？</div>
+        <div class="step-subtitle">後台管理系統讓你不需要工程師，就能自行更新文章、商品、Banner 等。</div>
+      </div>
+      <div class="question-block">
+        <div class="yn-row">
+          <div class="yn-btn" id="cmsYes" onclick="toggleQuestion('cms', true)">✦ 需要後台管理</div>
+          <div class="yn-btn" id="cmsNo" onclick="toggleQuestion('cms', false)">不需要，跳過</div>
+        </div>
+        <div class="sub-features" id="cmsFeatures"></div>
+      </div>
+      <div class="step-actions">
+        <button class="btn btn-ghost" onclick="prevStep()">← 上一步</button>
+        <button class="btn btn-primary" onclick="nextStep()">下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 6: 第三方串接 ── -->
+    <div data-step="6">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 6 · 8</div>
+        <div class="step-title">你需要哪些第三方工具串接？</div>
+        <div class="step-subtitle">這些工具可以讓你追蹤數據、提升效能、擴充功能。點 ? 可查看每個工具的說明。</div>
+      </div>
+      <div id="integrationsContainer"></div>
+      <div class="step-actions">
+        <button class="btn btn-ghost" onclick="prevStep()">← 上一步</button>
+        <button class="btn btn-primary" onclick="nextStep()">下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 7: 額外需求 ── -->
+    <div data-step="7">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 7 · 8</div>
+        <div class="step-title">還有其他需要一起處理的嗎？</div>
+        <div class="step-subtitle">設計、文案、SEO、部署等專業服務，都可以一起整合規劃。</div>
+      </div>
+      <div id="extrasContainer"></div>
+      <div class="step-actions">
+        <button class="btn btn-ghost" onclick="prevStep()">← 上一步</button>
+        <button class="btn btn-primary" onclick="nextStep()">下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 8: 開發條件 ── -->
+    <div data-step="8">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 8 · 8</div>
+        <div class="step-title">開發條件</div>
+        <div class="step-subtitle">最後幾個選項會影響專案的費用與時程。</div>
+      </div>
+
+      <div class="conditions-grid">
+        <div class="condition-group">
+          <div class="condition-label">交件時間</div>
+          <div class="condition-options" id="cond-timeline">
+            <div class="condition-option selected" data-value="normal" onclick="selectCondition('timeline',this,0)">一般時程 <span class="modifier">標準</span></div>
+            <div class="condition-option" data-value="rush" onclick="selectCondition('timeline',this,.2)">急件 <span class="modifier">+20%</span></div>
+          </div>
+        </div>
+        <div class="condition-group">
+          <div class="condition-label">修改次數</div>
+          <div class="condition-options" id="cond-revisions">
+            <div class="condition-option selected" data-value="r2" onclick="selectCondition('revisions',this,0)">2 次 <span class="modifier">內含</span></div>
+            <div class="condition-option" data-value="r5" onclick="selectCondition('revisions',this,.08)">5 次 <span class="modifier">+8%</span></div>
+            <div class="condition-option" data-value="hourly" onclick="selectCondition('revisions',this,0)">超過 5 次 <span class="modifier">另行按時計費</span></div>
+          </div>
+        </div>
+        <div class="condition-group">
+          <div class="condition-label">保固期</div>
+          <div class="condition-options" id="cond-warranty">
+            <div class="condition-option selected" data-value="d30" onclick="selectConditionFlat('warranty',this,0)">30 天 <span class="modifier">內含</span></div>
+            <div class="condition-option" data-value="m3" onclick="selectConditionFlat('warranty',this,5000)">3 個月 <span class="modifier">+NT$5,000</span></div>
+            <div class="condition-option" data-value="m6" onclick="selectConditionFlat('warranty',this,10000)">6 個月 <span class="modifier">+NT$10,000</span></div>
+          </div>
+        </div>
+        <div class="condition-group">
+          <div class="condition-label">維護方案</div>
+          <div class="condition-options" id="cond-maintenance">
+            <div class="condition-option selected" data-value="none" onclick="selectCondition('maintenance',this,0)">不需要</div>
+            <div class="condition-option" data-value="monthly" onclick="selectCondition('maintenance',this,3000)">每月維護 <span class="modifier">+$3,000/月</span></div>
+            <div class="condition-option" data-value="quarterly" onclick="selectCondition('maintenance',this,7500)">每季維護 <span class="modifier">+$7,500/季</span></div>
+            <div class="condition-option" data-value="yearly" onclick="selectCondition('maintenance',this,24000)">年度維護 <span class="modifier">+$24,000/年</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:32px">
+        <div class="step-title" style="font-size:18px;margin-bottom:20px">你的聯絡資訊</div>
+        <div class="contact-grid">
+          <div class="form-group">
+            <label class="form-label">姓名 *</label>
+            <input class="form-input" id="f-name" type="text" placeholder="王小明">
+          </div>
+          <div class="form-group">
+            <label class="form-label">公司 / 品牌</label>
+            <input class="form-input" id="f-company" type="text" placeholder="ABC 有限公司">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email *</label>
+            <input class="form-input" id="f-email" type="email" placeholder="hello@example.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">電話</label>
+            <input class="form-input" id="f-phone" type="tel" placeholder="0912-345-678">
+          </div>
+          <div class="form-group">
+            <label class="form-label">LINE ID</label>
+            <input class="form-input" id="f-line" type="text" placeholder="@yourline">
+          </div>
+          <div class="form-group">
+            <label class="form-label">預算區間</label>
+            <select class="form-input" id="f-budget">
+              <option value="">不確定</option>
+              <option value="2-4萬">NT$2 萬 – 4 萬</option>
+              <option value="4-8萬">NT$4 萬 – 8 萬</option>
+              <option value="8-15萬">NT$8 萬 – 15 萬</option>
+              <option value="15萬以上">NT$15 萬以上</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">預計上線時間</label>
+            <input class="form-input" id="f-launch" type="text" placeholder="3 個月內、2026 Q3...">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">補充說明</label>
+            <textarea class="form-textarea" id="f-notes" placeholder="有任何特殊需求、參考網站、設計風格偏好，都可以在這裡說明。"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button class="btn btn-ghost" onclick="prevStep()">← 上一步</button>
+        <button class="btn btn-primary" onclick="goToSummary()">查看估價結果 →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 9: Summary ── -->
+    <div data-step="9">
+      <div class="step-header">
+        <div class="step-eyebrow">估價摘要</div>
+        <div class="step-title">你的需求估算結果</div>
+        <div class="step-subtitle">以下為系統自動估算，正式報價仍需進一步需求訪談確認。</div>
+      </div>
+      <div id="finalSummaryContent"></div>
+      <div class="step-actions">
+        <button class="btn btn-ghost" onclick="prevStep()">← 返回修改</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="downloadHTML()">⬇ 下載需求書</button>
+          <button class="btn btn-primary" onclick="submitQuote()">送出需求 →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Success ── -->
+    <div class="success-screen" id="successScreen">
+      <div class="success-icon">✓</div>
+      <div class="success-title">需求已送出！</div>
+      <div class="success-sub">感謝你的填寫。<br>我們會在 1–2 個工作天內與你聯繫，進行正式需求訪談。</div>
+      <div class="success-id" id="successQuoteId"></div>
+      <div class="success-actions">
+        <button class="btn btn-ghost btn-download" onclick="downloadHTML()">⬇ 下載需求書 HTML</button>
+        <button class="btn btn-primary" onclick="location.reload()">重新填寫</button>
+      </div>
+    </div>
+
+  </div><!-- /form-area -->
+
+  <!-- Summary Sidebar -->
+  <aside class="summary-sidebar">
+    <div class="summary-card">
+      <div class="summary-title">目前需求</div>
+      <div class="summary-items" id="summaryItems">
+        <div class="summary-empty">尚未選擇任何功能</div>
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-total-label">預估總價</div>
+      <div class="summary-total-price" id="summaryPrice">NT$0</div>
+      <div class="summary-range" id="summaryRange">—</div>
+      <div class="summary-duration">
+        <div class="summary-duration-label">預估工期</div>
+        <div class="summary-duration-value" id="summaryDuration">—</div>
+      </div>
+      <div class="summary-quote-id" id="summaryQuoteId"></div>
+    </div>
+  </aside>
+
+</div><!-- /main-wrap -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+const PAGES = [
+  { id:'home', name:'首頁', baseMin:5000, baseMax:8000, badge:'must', desc:'網站入口，包含 Hero Banner、品牌訴求、主要功能導覽。通常是最費心設計的頁面。' },
+  { id:'about', name:'關於我們', baseMin:2000, baseMax:3500, badge:'rec', desc:'公司介紹、創辦人故事、核心價值，建立品牌信任感。' },
+  { id:'contact', name:'聯絡我們', baseMin:2000, baseMax:3000, badge:'must', desc:'聯絡表單、地圖、電話、Email，讓訪客可快速聯繫你。' },
+  { id:'faq', name:'FAQ 常見問答', baseMin:2500, baseMax:4000, badge:'rec', desc:'整理常見問題，降低客服負擔，也有助 SEO。' },
+  { id:'news', name:'最新消息列表', baseMin:2000, baseMax:3500, badge:'rec', desc:'文章/公告列表頁，支援分頁、搜尋、分類篩選。' },
+  { id:'newsDetail', name:'最新消息內頁', baseMin:1500, baseMax:2500, badge:'rec', desc:'單篇文章詳細內容頁，含 OG 分享與結構化資料。' },
+  { id:'productList', name:'商品列表', baseMin:4000, baseMax:7000, badge:'opt', desc:'商品卡片展示、分類篩選、排序、分頁，電商必備。' },
+  { id:'productDetail', name:'商品詳細頁', baseMin:4000, baseMax:6000, badge:'opt', desc:'商品圖、規格選擇、加入購物車、評價，轉換率關鍵頁。' },
+  { id:'search', name:'搜尋功能', baseMin:3000, baseMax:5000, badge:'rec', desc:'全站搜尋，含關鍵字高亮、即時建議。' },
+  { id:'category', name:'分類頁', baseMin:2000, baseMax:3500, badge:'opt', desc:'依類別展示內容或商品，配合 SEO 結構規劃。' },
+  { id:'multilang', name:'多語系', baseMin:8000, baseMax:15000, badge:'opt', desc:'i18n 多國語言切換，適合有海外市場需求的品牌。' },
+  { id:'seo', name:'SEO 基本設定', baseMin:3000, baseMax:5000, badge:'must', desc:'包含 Meta、OG 標籤、Sitemap、robots.txt、Schema 結構化資料基本配置。' },
+  { id:'blog', name:'部落格', baseMin:4000, baseMax:7000, badge:'rec', desc:'長期內容經營，支援標籤分類、留言、作者頁，有助自然流量成長。' },
+  { id:'privacy', name:'隱私權政策', baseMin:500, baseMax:1000, badge:'must', desc:'GDPR、個資法合規所需頁面，直接提供條款模板。' },
+  { id:'terms', name:'使用條款', baseMin:500, baseMax:1000, badge:'rec', desc:'服務規範頁面，降低法律風險。' },
+];
+
+const MEMBER_FEATURES = [
+  { id:'register', name:'註冊 / 登入', baseMin:5000, baseMax:8000, badge:'must', desc:'基本 Email 帳號註冊與登入，含信箱驗證流程。' },
+  { id:'google-login', name:'Google 登入', baseMin:3000, baseMax:5000, badge:'rec', desc:'OAuth 2.0 整合，讓使用者用 Google 帳號一鍵登入。' },
+  { id:'line-login', name:'LINE 登入', baseMin:3000, baseMax:5000, badge:'rec', desc:'台灣用戶最常用的第三方登入，可串接 LINE 推播。' },
+  { id:'apple-login', name:'Apple 登入', baseMin:3000, baseMax:5000, badge:'opt', desc:'iOS 生態必備，Apple Store 審核要求之一。' },
+  { id:'forget-pwd', name:'忘記密碼', baseMin:1500, baseMax:2500, badge:'must', desc:'發送重設密碼信件，完整的帳號安全機制。' },
+  { id:'profile', name:'個人資料管理', baseMin:2000, baseMax:3500, badge:'rec', desc:'修改姓名、頭像、聯絡資訊。' },
+  { id:'wishlist', name:'收藏 / 願望清單', baseMin:2000, baseMax:3500, badge:'rec', desc:'讓使用者收藏商品或文章，提升回訪率。' },
+  { id:'order-history', name:'訂單查詢', baseMin:2500, baseMax:4000, badge:'rec', desc:'查看歷史訂單、狀態追蹤。' },
+  { id:'address', name:'地址管理', baseMin:1500, baseMax:2500, badge:'opt', desc:'儲存多組收件地址，結帳時快速選用。' },
+  { id:'member-level', name:'會員等級', baseMin:5000, baseMax:9000, badge:'opt', desc:'銅銀金白金等分級機制，搭配不同折扣或權益。' },
+  { id:'points', name:'點數系統', baseMin:6000, baseMax:10000, badge:'opt', desc:'消費累積點數，點數折抵購物，提升忠誠度。' },
+  { id:'push', name:'推播通知', baseMin:5000, baseMax:9000, badge:'ent', desc:'Web Push 或 LINE 推播，主動通知訂單、活動資訊。' },
+];
+
+const ECOM_FEATURES = [
+  { id:'product-mgmt', name:'商品管理', baseMin:5000, baseMax:8000, badge:'must', desc:'商品上架、下架、庫存管理基礎功能。' },
+  { id:'variants', name:'商品規格', baseMin:4000, baseMax:7000, badge:'must', desc:'顏色、尺寸、款式等多規格選擇與庫存分開管理。' },
+  { id:'categories', name:'商品分類', baseMin:2000, baseMax:3500, badge:'must', desc:'多層分類架構，方便使用者瀏覽。' },
+  { id:'cart', name:'購物車', baseMin:5000, baseMax:8000, badge:'must', desc:'加入購物車、數量修改、小計計算、保留購物車記錄。' },
+  { id:'coupon', name:'優惠券', baseMin:4000, baseMax:7000, badge:'rec', desc:'輸入折扣碼享優惠，可設定使用期限與限制條件。' },
+  { id:'discount', name:'折扣活動', baseMin:4000, baseMax:7000, badge:'rec', desc:'滿額折、限時優惠、買一送一等促銷機制。' },
+  { id:'checkout', name:'結帳流程', baseMin:5000, baseMax:9000, badge:'must', desc:'完整的訂單確認、填寫資訊、付款確認流程。' },
+  { id:'payment', name:'金流串接', baseMin:12000, baseMax:20000, badge:'must', desc:'信用卡、LINE Pay、街口支付等主流金流串接，含測試環境建置。' },
+  { id:'logistics', name:'物流串接', baseMin:10000, baseMax:16000, badge:'must', desc:'黑貓、超商取貨（711/全家）、郵局等物流串接。' },
+  { id:'invoice', name:'電子發票', baseMin:5000, baseMax:9000, badge:'rec', desc:'整合綠界或歐付寶電子發票，符合台灣稅務法規。' },
+  { id:'bonus', name:'紅利折抵', baseMin:3000, baseMax:5000, badge:'opt', desc:'結帳時使用點數折抵部分金額。' },
+  { id:'returns', name:'退換貨', baseMin:4000, baseMax:7000, badge:'rec', desc:'申請退換貨流程、退款機制、後台審核。' },
+  { id:'reviews', name:'商品評價', baseMin:3500, baseMax:6000, badge:'rec', desc:'購買後可留下評分與文字評價，提升轉換率。' },
+  { id:'recent-viewed', name:'最近瀏覽', baseMin:2000, baseMax:3500, badge:'opt', desc:'記錄使用者瀏覽過的商品，方便找回。' },
+  { id:'recommendations', name:'推薦商品', baseMin:4000, baseMax:7000, badge:'rec', desc:'相關商品、你可能喜歡等算法推薦區塊。' },
+  { id:'bestsellers', name:'熱銷商品', baseMin:2000, baseMax:3500, badge:'opt', desc:'依銷量排序展示熱銷品，有助推動轉換。' },
+];
+
+const CMS_FEATURES = [
+  { id:'banner-mgmt', name:'Banner 管理', baseMin:3000, baseMax:5000, badge:'rec', desc:'後台上傳、排序首頁輪播圖，不需前端工程師即可更新。' },
+  { id:'home-content', name:'首頁內容管理', baseMin:3500, baseMax:6000, badge:'rec', desc:'動態編輯首頁各區塊文字、圖片。' },
+  { id:'product-backend', name:'商品管理後台', baseMin:5000, baseMax:8000, badge:'opt', desc:'商品 CRUD、庫存調整、上下架控制。' },
+  { id:'order-mgmt', name:'訂單管理', baseMin:5000, baseMax:9000, badge:'opt', desc:'查看、搜尋、更新訂單狀態，出貨標籤列印。' },
+  { id:'member-mgmt', name:'會員管理', baseMin:4000, baseMax:7000, badge:'rec', desc:'查詢會員資料、消費記錄、停用帳號。' },
+  { id:'news-mgmt', name:'最新消息管理', baseMin:3000, baseMax:5000, badge:'rec', desc:'富文本編輯器撰寫文章，支援圖片上傳、預覽。' },
+  { id:'faq-mgmt', name:'FAQ 管理', baseMin:2000, baseMax:3500, badge:'rec', desc:'自行新增修改常見問答，免改程式碼。' },
+  { id:'contact-form', name:'聯絡表單收件', baseMin:1500, baseMax:2500, badge:'must', desc:'後台查看訪客送出的聯絡表單記錄。' },
+  { id:'file-mgmt', name:'檔案管理', baseMin:2500, baseMax:4000, badge:'rec', desc:'圖片、PDF 等媒體檔案統一上傳管理。' },
+  { id:'permission', name:'權限管理', baseMin:5000, baseMax:9000, badge:'ent', desc:'多角色後台帳號，可設定不同功能存取權限。' },
+  { id:'admin-login', name:'後台登入', baseMin:2000, baseMax:3500, badge:'must', desc:'獨立後台登入，含 2FA 雙因素驗證選配。' },
+  { id:'dashboard', name:'Dashboard', baseMin:5000, baseMax:9000, badge:'rec', desc:'數據儀表板，快速掌握流量、訂單、會員成長趨勢。' },
+];
+
+const INTEGRATIONS = [
+  { id:'ga', name:'Google Analytics 4', baseMin:1500, baseMax:2500, badge:'must', desc:'追蹤流量來源、使用者行為、目標轉換，規劃後續 SEO 與廣告策略的基礎。' },
+  { id:'gtm', name:'Google Tag Manager', baseMin:1500, baseMax:2500, badge:'rec', desc:'統一管理所有追蹤碼，不需改程式碼即可部署 GA、Pixel 等。' },
+  { id:'gsc', name:'Google Search Console', baseMin:1000, baseMax:1500, badge:'must', desc:'監控網站在 Google 的搜尋表現、關鍵字排名與爬蟲狀態。' },
+  { id:'maps', name:'Google Maps', baseMin:2000, baseMax:3500, badge:'opt', desc:'嵌入互動地圖顯示公司位置，支援 Places API 地址自動填入。' },
+  { id:'firebase', name:'Firebase', baseMin:5000, baseMax:9000, badge:'rec', desc:'Google 後端服務，含即時資料庫、雲端儲存、推播通知 (FCM)。' },
+  { id:'supabase', name:'Supabase', baseMin:4000, baseMax:7000, badge:'rec', desc:'開源 Firebase 替代方案，提供 PostgreSQL、身份驗證、即時訂閱。' },
+  { id:'emailjs', name:'Email 通知', baseMin:2000, baseMax:3500, badge:'rec', desc:'表單送出、訂單確認等自動寄信機制，整合 SMTP 或 EmailJS。' },
+  { id:'line-notify', name:'LINE Notify', baseMin:2500, baseMax:4000, badge:'rec', desc:'訂單成立、庫存異常等事件，自動推播訊息到指定 LINE 群組。' },
+  { id:'fb-pixel', name:'Facebook Pixel', baseMin:2000, baseMax:3000, badge:'rec', desc:'追蹤廣告轉換、建立再行銷受眾，Facebook / Instagram 廣告必備。' },
+  { id:'recaptcha', name:'reCAPTCHA', baseMin:1000, baseMax:2000, badge:'rec', desc:'防止機器人垃圾表單送出，保護聯絡表單與登入頁面。' },
+  { id:'cloudflare', name:'Cloudflare', baseMin:2000, baseMax:4000, badge:'rec', desc:'CDN 加速、DDoS 防護、SSL 憑證、DNS 管理整合設定。' },
+  { id:'ai-api', name:'AI API 整合', baseMin:8000, baseMax:18000, badge:'ent', desc:'串接 OpenAI / Claude / Gemini API，實現智慧客服、文案生成、推薦系統等。' },
+  { id:'erp', name:'ERP 串接', baseMin:15000, baseMax:35000, badge:'ent', desc:'與現有 ERP 系統雙向同步庫存、訂單、財務資料。' },
+  { id:'pos', name:'POS 系統串接', baseMin:10000, baseMax:20000, badge:'ent', desc:'線上線下訂單統一管理，整合實體收銀系統。' },
+  { id:'crm', name:'CRM 整合', baseMin:10000, baseMax:20000, badge:'ent', desc:'將客戶資料同步至 HubSpot、Salesforce 等 CRM 平台。' },
+];
+
+const EXTRAS = [
+  { id:'ui-design', name:'UI 設計', baseMin:15000, baseMax:35000, badge:'rec', desc:'頁面視覺設計稿（Figma），含色系、元件、版型規劃。' },
+  { id:'logo', name:'LOGO 設計', baseMin:8000, baseMax:20000, badge:'opt', desc:'品牌識別設計，含黑白稿、應用規範。' },
+  { id:'banner', name:'Banner 設計', baseMin:3000, baseMax:6000, badge:'opt', desc:'首頁輪播圖、活動視覺設計。' },
+  { id:'illustration', name:'插畫', baseMin:8000, baseMax:25000, badge:'opt', desc:'客製插圖元素，打造獨特品牌個性。' },
+  { id:'copywriting', name:'文案撰寫', baseMin:5000, baseMax:15000, badge:'opt', desc:'品牌故事、頁面文字、行銷標語撰寫。' },
+  { id:'photography', name:'商品拍攝', baseMin:10000, baseMax:30000, badge:'opt', desc:'專業攝影棚拍攝商品或形象照片。' },
+  { id:'img-optimize', name:'圖片優化', baseMin:2000, baseMax:4000, badge:'rec', desc:'圖片壓縮、WebP 轉換、Lazy Load 設定，提升頁面載入速度。' },
+  { id:'seo-consult', name:'SEO 顧問', baseMin:8000, baseMax:20000, badge:'rec', desc:'關鍵字研究、競品分析、頁面優化建議、內容策略規劃。' },
+  { id:'ga-analysis', name:'GA 分析報告', baseMin:5000, baseMax:12000, badge:'rec', desc:'上線後分析流量與轉換數據，提供優化建議報告。' },
+  { id:'training', name:'教育訓練', baseMin:5000, baseMax:10000, badge:'rec', desc:'後台操作教學，可錄製影片教材。' },
+  { id:'manual', name:'操作手冊', baseMin:3000, baseMax:6000, badge:'rec', desc:'PDF 文件格式的後台使用說明書。' },
+  { id:'api-doc', name:'API 文件', baseMin:3000, baseMax:6000, badge:'opt', desc:'Swagger 格式的 API 規格書，方便第三方串接。' },
+  { id:'deploy', name:'部署服務', baseMin:3000, baseMax:6000, badge:'rec', desc:'正式環境設定、CI/CD Pipeline、Docker 容器化部署。' },
+  { id:'hosting', name:'主機代管', baseMin:3000, baseMax:12000, badge:'rec', desc:'AWS / GCP / Vercel / Zeabur 等主機方案選擇與設定，每年費用另計。' },
+  { id:'ssl', name:'SSL 憑證', baseMin:1000, baseMax:2000, badge:'must', desc:'HTTPS 加密憑證申請與設定，現代網站必備。' },
+  { id:'domain', name:'網域設定', baseMin:1000, baseMax:2000, badge:'must', desc:'網域購買建議、DNS 設定、Email 代管設定。' },
+  { id:'dns', name:'DNS 管理', baseMin:1000, baseMax:2000, badge:'opt', desc:'DNS 記錄設定、子網域配置、郵件 SPF/DKIM 設定。' },
+];
+
+// Type presets — 只自動勾選「必要」項目，其他讓客戶自行選擇
+const TYPE_PRESETS = {
+  'brand-image': {
+    pages: ['home','about','contact','privacy','seo'],
+    member: [],
+    ecom: [],
+    cms: ['contact-form','admin-login'],
+    integrations: [],
+    extras: ['ssl','domain'],
+  },
+  'brand-cms': {
+    pages: ['home','about','contact','news','newsDetail','privacy','seo'],
+    member: [],
+    ecom: [],
+    cms: ['contact-form','admin-login','news-mgmt'],
+    integrations: [],
+    extras: ['ssl','domain'],
+  },
+  'ecommerce': {
+    pages: ['home','contact','productList','productDetail','privacy','seo'],
+    member: ['register','forget-pwd'],
+    ecom: ['product-mgmt','cart','checkout','payment','logistics'],
+    cms: ['contact-form','admin-login','order-mgmt'],
+    integrations: [],
+    extras: ['ssl','domain'],
+  },
+  'custom': {
+    pages: ['home','about','contact','privacy','seo'],
+    member: ['register','forget-pwd'],
+    ecom: [],
+    cms: ['contact-form','admin-login'],
+    integrations: [],
+    extras: ['ssl','domain'],
+  },
+};
+
+// State
+const state = {
+  currentStep: 1,
+  totalSteps: 9,
+  projectType: null,
+  selected: { pages:new Set(), member:new Set(), ecom:new Set(), cms:new Set(), integrations:new Set(), extras:new Set() },
+  conditions: { timeline: 0, revisions: 0, warranty: 0, maintenance: 0 },
+  contact: {},
+  quoteId: generateQuoteId(),
+  memberEnabled: null,
+  ecomEnabled: null,
+  cmsEnabled: null,
+};
+
+function generateQuoteId() {
+  const now = new Date();
+  const date = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  const seq = String(Math.floor(Math.random()*900)+100);
+  return `Q-${date}-${seq}`;
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  renderStepNav();
+  renderPages();
+  renderMemberFeatures();
+  renderEcomFeatures();
+  renderCmsFeatures();
+  renderIntegrations();
+  renderExtras();
+  document.getElementById('summaryQuoteId').textContent = state.quoteId;
+  updateSummary();
+});
+
+// ─── Step Nav ─────────────────────────────────────────────────────────────────
+function renderStepNav() {
+  const nav = document.getElementById('stepNav');
+  nav.innerHTML = '';
+  const labels = ['類型','頁面','會員','電商','後台','串接','額外','條件','摘要'];
+  for (let i=1; i<=9; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'step-dot' + (i===state.currentStep?' active':i<state.currentStep?' done':'');
+    dot.title = labels[i-1];
+    if (i < state.currentStep) dot.onclick = () => goToStep(i);
+    nav.appendChild(dot);
+    if (i<9) { const line=document.createElement('div'); line.style.cssText='flex:1;height:1px;background:var(--gray-200);'; nav.appendChild(line); }
+  }
+}
+
+function goToStep(n) {
+  const steps = document.querySelectorAll('[data-step]');
+  steps.forEach(s => s.classList.remove('active'));
+  document.querySelector(`[data-step="${n}"]`).classList.add('active');
+  state.currentStep = n;
+  renderStepNav();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function nextStep() { goToStep(Math.min(state.currentStep+1, state.totalSteps)); }
+function prevStep() { goToStep(Math.max(state.currentStep-1, 1)); }
+
+function step1Next() {
+  if (!state.projectType) { showToast('請先選擇一種專案類型'); return; }
+  nextStep();
+}
+
+// ─── Step 1 ──────────────────────────────────────────────────────────────────
+function selectType(el, type) {
+  document.querySelectorAll('.option-card[data-type]').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.projectType = type;
+
+  // Enable next button
+  const btn = document.getElementById('btn1');
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+
+  // Apply preset
+  const preset = TYPE_PRESETS[type];
+  if (preset) {
+    Object.keys(state.selected).forEach(k => state.selected[k].clear());
+    Object.keys(preset).forEach(k => {
+      if (state.selected[k]) preset[k].forEach(id => state.selected[k].add(id));
+    });
+    // Sync UI
+    syncCheckboxUI();
+    // Enable sections if preset has items
+    if (preset.member && preset.member.length > 0) {
+      state.memberEnabled = true;
+      const yes = document.getElementById('memberYes');
+      const no = document.getElementById('memberNo');
+      if (yes && no) {
+        yes.classList.add('selected-yes'); no.classList.remove('selected-no');
+        document.getElementById('memberFeatures').classList.add('open');
+      }
+    } else {
+      state.memberEnabled = false;
+    }
+    if (preset.ecom && preset.ecom.length > 0) {
+      state.ecomEnabled = true;
+      const yes = document.getElementById('ecomYes');
+      const no = document.getElementById('ecomNo');
+      if (yes && no) {
+        yes.classList.add('selected-yes'); no.classList.remove('selected-no');
+        document.getElementById('ecomFeatures').classList.add('open');
+      }
+    } else {
+      state.ecomEnabled = false;
+    }
+    if (preset.cms && preset.cms.length > 0) {
+      state.cmsEnabled = true;
+      const yes = document.getElementById('cmsYes');
+      const no = document.getElementById('cmsNo');
+      if (yes && no) {
+        yes.classList.add('selected-yes'); no.classList.remove('selected-no');
+        document.getElementById('cmsFeatures').classList.add('open');
+      }
+    } else {
+      state.cmsEnabled = false;
+    }
+  }
+
+  updateSummary();
+}
+
+function syncCheckboxUI() {
+  ['pages','member','ecom','cms','integrations','extras'].forEach(group => {
+    document.querySelectorAll(`[data-group="${group}"]`).forEach(item => {
+      const id = item.dataset.id;
+      if (state.selected[group].has(id)) item.classList.add('selected');
+      else item.classList.remove('selected');
+    });
+  });
+}
+
+// ─── Feature Rendering ────────────────────────────────────────────────────────
+function badgeHTML(badge) {
+  const map = { must:['badge-must','必要'], rec:['badge-rec','建議'], opt:['badge-opt','選配'], ent:['badge-ent','企業'] };
+  const [cls, label] = map[badge] || ['badge-opt','選配'];
+  return `<span class="feature-badge ${cls}">${label}</span>`;
+}
+
+function renderFeatureList(items, group, container) {
+  let html = '<div class="feature-list">';
+  items.forEach(item => {
+    const sel = state.selected[group].has(item.id);
+    const priceLabel = `${(item.baseMin/1000).toFixed(0)}k–${(item.baseMax/1000).toFixed(0)}k`;
+    html += `
+      <div class="feature-item${sel?' selected':''}" data-group="${group}" data-id="${item.id}">
+        <div class="feature-row" onclick="toggleFeature('${group}','${item.id}',event)">
+          <div class="feature-checkbox"></div>
+          <div class="feature-main">
+            <span class="feature-name">${item.name}${badgeHTML(item.badge)}</span>
+          </div>
+          <span class="feature-price-range">${priceLabel}</span>
+          <div class="feature-info-btn" onclick="toggleInfo('${group}-${item.id}',event)">?</div>
+        </div>
+        <div class="feature-expand" id="info-${group}-${item.id}">
+          ${item.desc}
+        </div>
+      </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderGroupedFeatureList(sections, container) {
+  let html = '';
+  sections.forEach(s => {
+    html += `<div class="feature-section"><div class="feature-section-title">${s.label}</div><div class="feature-list">`;
+    s.items.forEach(item => {
+      const group = s.group;
+      const sel = state.selected[group].has(item.id);
+      const priceLabel = `${(item.baseMin/1000).toFixed(0)}k–${(item.baseMax/1000).toFixed(0)}k`;
+      html += `
+        <div class="feature-item${sel?' selected':''}" data-group="${group}" data-id="${item.id}">
+          <div class="feature-row" onclick="toggleFeature('${group}','${item.id}',event)">
+            <div class="feature-checkbox"></div>
+            <div class="feature-main">
+              <span class="feature-name">${item.name}${badgeHTML(item.badge)}</span>
+            </div>
+            <span class="feature-price-range">${priceLabel}</span>
+            <div class="feature-info-btn" onclick="toggleInfo('${group}-${item.id}',event)">?</div>
+          </div>
+          <div class="feature-expand" id="info-${group}-${item.id}">${item.desc}</div>
+        </div>`;
+    });
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+function renderPages() {
+  const c = document.getElementById('pagesContainer');
+  const sections = [
+    { label:'基本頁面', group:'pages', items: PAGES.filter(p => ['home','about','contact','faq','privacy','terms'].includes(p.id)) },
+    { label:'內容 / 新聞', group:'pages', items: PAGES.filter(p => ['news','newsDetail','blog'].includes(p.id)) },
+    { label:'電商頁面', group:'pages', items: PAGES.filter(p => ['productList','productDetail','search','category'].includes(p.id)) },
+    { label:'技術 / 國際化', group:'pages', items: PAGES.filter(p => ['seo','multilang'].includes(p.id)) },
+  ];
+  renderGroupedFeatureList(sections, c);
+}
+
+function renderMemberFeatures() {
+  const c = document.getElementById('memberFeatures');
+  renderFeatureList(MEMBER_FEATURES, 'member', c);
+}
+
+function renderEcomFeatures() {
+  const c = document.getElementById('ecomFeatures');
+  renderFeatureList(ECOM_FEATURES, 'ecom', c);
+}
+
+function renderCmsFeatures() {
+  const c = document.getElementById('cmsFeatures');
+  renderFeatureList(CMS_FEATURES, 'cms', c);
+}
+
+function renderIntegrations() {
+  const c = document.getElementById('integrationsContainer');
+  const sections = [
+    { label:'分析 / 追蹤', group:'integrations', items: INTEGRATIONS.filter(i => ['ga','gtm','gsc','fb-pixel'].includes(i.id)) },
+    { label:'後端 / 基礎建設', group:'integrations', items: INTEGRATIONS.filter(i => ['firebase','supabase','cloudflare'].includes(i.id)) },
+    { label:'通知 / 溝通', group:'integrations', items: INTEGRATIONS.filter(i => ['emailjs','line-notify','maps','recaptcha'].includes(i.id)) },
+    { label:'進階 / 企業', group:'integrations', items: INTEGRATIONS.filter(i => ['ai-api','erp','pos','crm'].includes(i.id)) },
+  ];
+  renderGroupedFeatureList(sections, c);
+}
+
+function renderExtras() {
+  const c = document.getElementById('extrasContainer');
+  const sections = [
+    { label:'設計 / 視覺', group:'extras', items: EXTRAS.filter(e => ['ui-design','logo','banner','illustration','copywriting','photography','img-optimize'].includes(e.id)) },
+    { label:'SEO / 行銷', group:'extras', items: EXTRAS.filter(e => ['seo-consult','ga-analysis'].includes(e.id)) },
+    { label:'文件 / 訓練', group:'extras', items: EXTRAS.filter(e => ['training','manual','api-doc'].includes(e.id)) },
+    { label:'部署 / 維運', group:'extras', items: EXTRAS.filter(e => ['deploy','hosting','ssl','domain','dns'].includes(e.id)) },
+  ];
+  renderGroupedFeatureList(sections, c);
+}
+
+// ─── Toggle Feature ───────────────────────────────────────────────────────────
+function toggleFeature(group, id, event) {
+  if (event.target.classList.contains('feature-info-btn')) return;
+  const set = state.selected[group];
+  if (set.has(id)) set.delete(id);
+  else set.add(id);
+
+  const item = document.querySelector(`[data-group="${group}"][data-id="${id}"]`);
+  if (item) item.classList.toggle('selected', set.has(id));
+
+  updateSummary();
+}
+
+function toggleInfo(key, event) {
+  event.stopPropagation();
+  const el = document.getElementById(`info-${key}`);
+  if (el) el.classList.toggle('open');
+}
+
+// ─── Question Toggle ──────────────────────────────────────────────────────────
+function toggleQuestion(type, enabled) {
+  const yes = document.getElementById(`${type}Yes`);
+  const no = document.getElementById(`${type}No`);
+  const sub = document.getElementById(`${type}Features`);
+
+  yes.classList.toggle('selected-yes', enabled);
+  yes.classList.toggle('selected-no', !enabled);
+  no.classList.toggle('selected-yes', !enabled);
+  no.classList.toggle('selected-no', enabled);
+  sub.classList.toggle('open', enabled);
+
+  if (type === 'member') {
+    state.memberEnabled = enabled;
+    if (!enabled) state.selected.member.clear();
+  } else if (type === 'ecom') {
+    state.ecomEnabled = enabled;
+    if (!enabled) state.selected.ecom.clear();
+  } else if (type === 'cms') {
+    state.cmsEnabled = enabled;
+    if (!enabled) state.selected.cms.clear();
+  }
+
+  updateSummary();
+}
+
+// ─── Conditions ───────────────────────────────────────────────────────────────
+function selectCondition(group, el, value) {
+  document.querySelectorAll(`#cond-${group} .condition-option`).forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  state.conditions[group] = value;
+  updateSummary();
+}
+
+// For flat-fee fields (warranty)
+function selectConditionFlat(group, el, flatValue) {
+  document.querySelectorAll(`#cond-${group} .condition-option`).forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  state.conditions[group + 'Flat'] = flatValue;
+  updateSummary();
+}
+
+// ─── Price Calculation ────────────────────────────────────────────────────────
+const ALL_ITEMS = {
+  pages: PAGES, member: MEMBER_FEATURES, ecom: ECOM_FEATURES,
+  cms: CMS_FEATURES, integrations: INTEGRATIONS, extras: EXTRAS
+};
+
+// ─── Project type config ──────────────────────────────────────────────────────
+const TYPE_CONFIG = {
+  'brand-image': { mgmtMin: 8000,  mgmtMax: 12000, rwdRate: 0.15 },
+  'brand-cms':   { mgmtMin: 12000, mgmtMax: 18000, rwdRate: 0.18 },
+  'ecommerce':   { mgmtMin: 18000, mgmtMax: 25000, rwdRate: 0.20 },
+  'custom':      { mgmtMin: 25000, mgmtMax: 40000, rwdRate: 0.225 },
+};
+
+function calcPrice() {
+  // No project type selected → return null to signal "not started"
+  if (!state.projectType) return null;
+
+  const typeCfg = TYPE_CONFIG[state.projectType];
+
+  let minTotal = typeCfg.mgmtMin;
+  let maxTotal = typeCfg.mgmtMax;
+  const breakdown = [{ name:'專案管理費', min: typeCfg.mgmtMin, max: typeCfg.mgmtMax }];
+
+  Object.keys(ALL_ITEMS).forEach(group => {
+    state.selected[group].forEach(id => {
+      const item = ALL_ITEMS[group].find(i => i.id === id);
+      if (item) {
+        minTotal += item.baseMin;
+        maxTotal += item.baseMax;
+        breakdown.push({ name: item.name, min: item.baseMin, max: item.baseMax });
+      }
+    });
+  });
+
+  // RWD multiplier (by project type)
+  minTotal = Math.round(minTotal * (1 + typeCfg.rwdRate));
+  maxTotal = Math.round(maxTotal * (1 + typeCfg.rwdRate));
+
+  // Condition multipliers (percentage-based: timeline, revisions)
+  let multiplier = 1;
+  multiplier += state.conditions.timeline;
+  multiplier += state.conditions.revisions;
+  minTotal = Math.round(minTotal * multiplier);
+  maxTotal = Math.round(maxTotal * multiplier);
+
+  // Flat additions: warranty, maintenance
+  const flatAdd = (state.conditions.warrantyFlat || 0) + (state.conditions.maintenance || 0);
+  minTotal += flatAdd;
+  maxTotal += flatAdd;
+
+  // Duration estimate (days)
+  const featureCount = Object.values(state.selected).reduce((a,s) => a+s.size, 0);
+  const baseDays = 20 + featureCount * 1.8;
+  const minDays = Math.round(baseDays * 0.85);
+  const maxDays = Math.round(baseDays * 1.2);
+
+  return { min: minTotal, max: maxTotal, mid: Math.round((minTotal+maxTotal)/2), breakdown, minDays, maxDays };
+}
+
+// ─── Animated Counter ─────────────────────────────────────────────────────────
+let animFrame = null;
+let displayedPrice = 0;
+
+function animatePrice(target) {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  const start = displayedPrice;
+  const duration = 400;
+  const startTime = performance.now();
+  const el = document.getElementById('summaryPrice');
+
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const ease = 1 - Math.pow(1-progress, 3);
+    const current = Math.round(start + (target - start) * ease);
+    displayedPrice = current;
+    el.textContent = `NT$${current.toLocaleString()}`;
+    if (progress < 1) animFrame = requestAnimationFrame(step);
+    else { el.classList.add('price-change'); setTimeout(()=>el.classList.remove('price-change'),300); }
+  }
+  animFrame = requestAnimationFrame(step);
+}
+
+// ─── Update Summary ───────────────────────────────────────────────────────────
+function updateSummary() {
+  const result = calcPrice();
+
+  // No project type yet → reset sidebar to zero state
+  if (!result) {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    displayedPrice = 0;
+    document.getElementById('summaryPrice').textContent = 'NT$0';
+    document.getElementById('summaryRange').textContent = '請先選擇專案類型';
+    document.getElementById('summaryDuration').textContent = '—';
+    document.getElementById('summaryItems').innerHTML = '<div class="summary-empty">尚未選擇任何功能</div>';
+    return;
+  }
+
+  const { min, max, mid, minDays, maxDays } = result;
+  animatePrice(mid);
+
+  const rangeEl = document.getElementById('summaryRange');
+  rangeEl.textContent = `參考範圍 NT$${min.toLocaleString()} – NT$${max.toLocaleString()}`;
+
+  const durEl = document.getElementById('summaryDuration');
+  durEl.textContent = `約 ${minDays}–${maxDays} 個工作天`;
+
+  // Summary items
+  const container = document.getElementById('summaryItems');
+  const allSelected = [];
+  Object.keys(ALL_ITEMS).forEach(group => {
+    state.selected[group].forEach(id => {
+      const item = ALL_ITEMS[group].find(i => i.id === id);
+      if (item) allSelected.push({ name: item.name, min: item.baseMin, max: item.baseMax });
+    });
+  });
+
+  if (allSelected.length === 0) {
+    container.innerHTML = '<div class="summary-empty">尚未選擇任何功能</div>';
+  } else {
+    container.innerHTML = allSelected.map(i =>
+      `<div class="summary-item">
+        <span class="summary-item-name">✓ ${i.name}</span>
+        <span class="summary-item-price">${(i.min/1000).toFixed(0)}k</span>
+      </div>`
+    ).join('');
+  }
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ─── Form Validation ─────────────────────────────────────────────────────────
+function validateContact() {
+  let ok = true;
+
+  const nameEl = document.getElementById('f-name');
+  const nameGroup = nameEl.closest('.form-group');
+  if (!nameEl.value.trim()) {
+    nameGroup.classList.add('has-error');
+    if (!nameGroup.querySelector('.form-error-msg')) {
+      const e = document.createElement('div'); e.className='form-error-msg'; e.textContent='請填寫姓名';
+      nameGroup.appendChild(e);
+    }
+    nameGroup.querySelector('.form-error-msg').style.display='block';
+    ok = false;
+  } else {
+    nameGroup.classList.remove('has-error');
+    const em = nameGroup.querySelector('.form-error-msg'); if(em) em.style.display='none';
+  }
+
+  const emailEl = document.getElementById('f-email');
+  const emailGroup = emailEl.closest('.form-group');
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value.trim());
+  if (!emailEl.value.trim() || !emailOk) {
+    emailGroup.classList.add('has-error');
+    if (!emailGroup.querySelector('.form-error-msg')) {
+      const e = document.createElement('div'); e.className='form-error-msg'; e.textContent='請填寫正確的 Email 格式';
+      emailGroup.appendChild(e);
+    }
+    emailGroup.querySelector('.form-error-msg').style.display='block';
+    ok = false;
+  } else {
+    emailGroup.classList.remove('has-error');
+    const em = emailGroup.querySelector('.form-error-msg'); if(em) em.style.display='none';
+  }
+
+  if (!ok) showToast('請填寫必填欄位後再繼續');
+  return ok;
+}
+
+// ─── Go to Summary ────────────────────────────────────────────────────────────
+function goToSummary() {
+  if (!validateContact()) return;
+
+  state.contact = {
+    name: document.getElementById('f-name').value.trim(),
+    company: document.getElementById('f-company').value.trim(),
+    email: document.getElementById('f-email').value.trim(),
+    phone: document.getElementById('f-phone').value.trim(),
+    line: document.getElementById('f-line').value.trim(),
+    budget: document.getElementById('f-budget').value,
+    launch: document.getElementById('f-launch').value.trim(),
+    notes: document.getElementById('f-notes').value.trim(),
+  };
+
+  renderFinalSummary();
+  goToStep(9);
+}
+
+function renderFinalSummary() {
+  const result = calcPrice();
+  const { min, max, mid, minDays, maxDays } = result || { min:0, max:0, mid:0, minDays:0, maxDays:0 };
+  const c = document.getElementById('finalSummaryContent');
+
+  const allSelected = [];
+  Object.keys(ALL_ITEMS).forEach(group => {
+    state.selected[group].forEach(id => {
+      const item = ALL_ITEMS[group].find(i => i.id === id);
+      if (item) allSelected.push(item.name);
+    });
+  });
+
+  const typeNames = { 'brand-image':'形象網站', 'brand-cms':'品牌網站+CMS', 'ecommerce':'電商網站', 'custom':'客製化系統' };
+
+  c.innerHTML = `
+    <div class="quote-banner">
+      <div>
+        <div class="quote-banner-id">${state.quoteId}</div>
+        <div class="quote-banner-note">報價單編號 · 請記下此編號以便後續追蹤</div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4)">${new Date().toLocaleDateString('zh-TW')}</div>
+    </div>
+
+    <div class="final-summary">
+      <div class="final-section">
+        <div class="final-section-title">估算結果</div>
+        <div class="final-price-block">
+          <div class="final-price-label">預估價格</div>
+          <div class="final-price-main">NT$${mid.toLocaleString()}</div>
+          <div class="final-price-range">參考範圍 NT$${min.toLocaleString()} – NT$${max.toLocaleString()}</div>
+          <div class="final-price-note">正式報價仍需需求訪談確認，實際費用依詳細規格調整</div>
+          <div class="final-duration">預估工期：${minDays}–${maxDays} 個工作天</div>
+        </div>
+      </div>
+
+      <div class="final-section">
+        <div class="final-section-title">專案類型</div>
+        <div style="font-size:15px;font-weight:600;color:var(--gray-800)">${typeNames[state.projectType] || '—'}</div>
+      </div>
+
+      <div class="final-section">
+        <div class="final-section-title">選擇的功能（${allSelected.length} 項）</div>
+        <div class="final-features">
+          ${allSelected.map(n=>`<span class="final-feature-tag">${n}</span>`).join('')}
+        </div>
+      </div>
+
+      ${state.contact.name ? `
+      <div class="final-section">
+        <div class="final-section-title">聯絡資訊</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px;color:var(--gray-600)">
+          ${state.contact.name?`<div>姓名：<strong>${state.contact.name}</strong></div>`:''}
+          ${state.contact.company?`<div>公司：<strong>${state.contact.company}</strong></div>`:''}
+          ${state.contact.email?`<div>Email：<strong>${state.contact.email}</strong></div>`:''}
+          ${state.contact.phone?`<div>電話：<strong>${state.contact.phone}</strong></div>`:''}
+        </div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
+// ─── Submit via EmailJS ───────────────────────────────────────────────────────
+const EMAILJS_SERVICE_ID  = 'service_96z6415';
+const EMAILJS_TEMPLATE_ID = 'template_hmic2ff';
+const EMAILJS_PUBLIC_KEY  = '6ErXVriFfrV0WgH1C';
+
+function submitQuote() {
+  const btn = document.querySelector('[onclick="submitQuote()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '送出中…'; }
+
+  const result = calcPrice();
+  const { min, max, mid, minDays, maxDays } = result || { min:0, max:0, mid:0, minDays:0, maxDays:0 };
+
+  const allSelected = [];
+  Object.keys(ALL_ITEMS).forEach(group => {
+    state.selected[group].forEach(id => {
+      const item = ALL_ITEMS[group].find(i => i.id === id);
+      if (item) allSelected.push(item.name);
+    });
+  });
+
+  const typeNames = { 'brand-image':'形象網站', 'brand-cms':'品牌網站+CMS', 'ecommerce':'電商網站', 'custom':'客製化系統' };
+  const c = state.contact;
+
+  const templateParams = {
+    to_email:       'nicoliu930226@gmail.com',   // 你的收件信箱
+    quote_id:       state.quoteId,
+    name:           c.name,
+    company:        c.company || '—',
+    email:          c.email,
+    phone:          c.phone || '—',
+    line_id:        c.line || '—',
+    budget:         c.budget || '不確定',
+    launch_date:    c.launch || '—',
+    project_type:   typeNames[state.projectType] || '—',
+    features_list:  allSelected.join('\n'),
+    price_mid:      `NT$${mid.toLocaleString()}`,
+    price_range:    `NT$${min.toLocaleString()} – NT$${max.toLocaleString()}`,
+    duration:       `${minDays}–${maxDays} 個工作天`,
+    message:        c.notes || '無',
+    submit_date:    new Date().toLocaleDateString('zh-TW'),
+  };
+
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+    .then(() => {
+      showSuccess();
+    })
+    .catch((err) => {
+      // Show detailed error for debugging
+      const status = err && err.status ? err.status : '—';
+      const text   = err && err.text   ? err.text   : (err && err.message ? err.message : String(err));
+      console.error(`EmailJS 失敗 status=${status}:`, text, err);
+
+      const msg = text + String(err);
+      // Sandboxed preview: fetch is blocked
+      if (msg.includes('fetch') || msg.includes('Failed to fetch')) {
+        showSuccess();
+        return;
+      }
+      showToast(`⚠ 寄信失敗 (${status})：${text}`);
+      if (btn) { btn.disabled = false; btn.textContent = '送出需求 →'; }
+    });
+}
+
+function showSuccess() {
+  document.querySelectorAll('[data-step]').forEach(s => s.style.display='none');
+  const success = document.getElementById('successScreen');
+  success.classList.add('show');
+  document.getElementById('successQuoteId').textContent = `報價編號：${state.quoteId}`;
+}
+
+// ─── Download HTML 需求書 ─────────────────────────────────────────────────────
+function downloadHTML() {
+  const result = calcPrice();
+  const { min, max, mid, minDays, maxDays } = result || { min:0, max:0, mid:0, minDays:0, maxDays:0 };
+  const allItems = [];
+  Object.keys(ALL_ITEMS).forEach(group => {
+    state.selected[group].forEach(id => {
+      const item = ALL_ITEMS[group].find(i => i.id === id);
+      if (item) allItems.push(item);
+    });
+  });
+
+  const typeCfg = TYPE_CONFIG[state.projectType] || { mgmtMin:10000, mgmtMax:15000, rwdRate:0.15 };
+  const typeNames = { 'brand-image':'形象網站', 'brand-cms':'品牌網站+CMS', 'ecommerce':'電商網站', 'custom':'客製化系統' };
+  const today = new Date().toLocaleDateString('zh-TW', {year:'numeric',month:'long',day:'numeric'});
+  const c = state.contact;
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>網站開發需求書 ${state.quoteId}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Noto Sans TC',sans-serif;font-size:13px;color:#1f2937;background:#fff;padding:40px;max-width:800px;margin:0 auto}
+  .header{border-bottom:2px solid #111827;padding-bottom:20px;margin-bottom:28px}
+  .logo{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:8px}
+  .doc-title{font-size:24px;font-weight:800;color:#111827;letter-spacing:-1px}
+  .meta{display:flex;gap:24px;margin-top:10px;font-size:12px;color:#6b7280}
+  .section{margin-bottom:24px}
+  .section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #f3f4f6}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .info-item{padding:8px 12px;background:#f9fafb;border-radius:6px}
+  .info-label{font-size:11px;color:#9ca3af;margin-bottom:2px}
+  .info-value{font-size:13px;font-weight:600;color:#111827}
+  .price-block{background:#111827;color:#fff;border-radius:12px;padding:24px;text-align:center;margin:20px 0}
+  .price-label{font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+  .price-main{font-size:32px;font-weight:800;letter-spacing:-1px}
+  .price-range{font-size:13px;color:rgba(255,255,255,.5);margin-top:4px}
+  .price-duration{font-size:13px;color:rgba(255,255,255,.6);margin-top:8px}
+  .features-grid{display:flex;flex-wrap:wrap;gap:5px}
+  .feature-tag{font-size:11px;padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#4b5563}
+  .footer{margin-top:40px;padding-top:16px;border-top:1px solid #f3f4f6;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}
+  .disclaimer{background:#fffbeb;border-left:3px solid #f59e0b;padding:12px 16px;border-radius:0 6px 6px 0;font-size:12px;color:#92400e;margin-top:20px}
+  table{width:100%;border-collapse:collapse}
+  td{padding:7px 10px;border-bottom:1px solid #f3f4f6;font-size:12px}
+  td:first-child{color:#6b7280}
+  td:last-child{text-align:right;font-weight:500;font-size:11px;color:#9ca3af}
+  .table-header td{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;border-bottom:2px solid #f3f4f6}
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Website Development Quotation</div>
+    <div class="doc-title">網站開發需求書</div>
+    <div class="meta">
+      <span>報價編號：${state.quoteId}</span>
+      <span>製作日期：${today}</span>
+      ${c.company?`<span>客戶：${c.company}</span>`:''}
+    </div>
+  </div>
+
+  ${c.name||c.email ? `
+  <div class="section">
+    <div class="section-title">客戶資訊</div>
+    <div class="info-grid">
+      ${c.name?`<div class="info-item"><div class="info-label">姓名</div><div class="info-value">${c.name}</div></div>`:''}
+      ${c.company?`<div class="info-item"><div class="info-label">公司</div><div class="info-value">${c.company}</div></div>`:''}
+      ${c.email?`<div class="info-item"><div class="info-label">Email</div><div class="info-value">${c.email}</div></div>`:''}
+      ${c.phone?`<div class="info-item"><div class="info-label">電話</div><div class="info-value">${c.phone}</div></div>`:''}
+      ${c.launch?`<div class="info-item"><div class="info-label">預計上線</div><div class="info-value">${c.launch}</div></div>`:''}
+      ${c.budget?`<div class="info-item"><div class="info-label">預算區間</div><div class="info-value">${c.budget}</div></div>`:''}
+    </div>
+  </div>` : ''}
+
+  <div class="section">
+    <div class="section-title">專案類型</div>
+    <div style="font-size:16px;font-weight:700;color:#111827">${typeNames[state.projectType]||'—'}</div>
+  </div>
+
+  <div class="price-block">
+    <div class="price-label">預估價格</div>
+    <div class="price-main">NT$${mid.toLocaleString()}</div>
+    <div class="price-range">參考範圍 NT$${min.toLocaleString()} – NT$${max.toLocaleString()}</div>
+    <div class="price-duration">預估工期：${minDays}–${maxDays} 個工作天</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">功能明細（${allItems.length} 項）</div>
+    <table>
+      <tr class="table-header"><td>功能名稱</td><td style="text-align:right">估算區間</td></tr>
+      <tr><td style="color:#9ca3af">專案管理費（基礎）</td><td style="text-align:right">NT$${typeCfg.mgmtMin.toLocaleString()} – NT$${typeCfg.mgmtMax.toLocaleString()}</td></tr>
+      ${allItems.map(i=>`<tr><td>${i.name}</td><td>NT$${i.baseMin.toLocaleString()} – NT$${i.baseMax.toLocaleString()}</td></tr>`).join('')}
+      <tr style="border-top:2px solid #111827"><td style="font-weight:700;color:#111827">RWD 響應式設計（×${Math.round(typeCfg.rwdRate*100)}%）</td><td style="font-weight:700">自動計算</td></tr>
+    </table>
+  </div>
+
+  ${c.notes ? `<div class="section"><div class="section-title">補充說明</div><div style="color:#4b5563;line-height:1.6">${c.notes}</div></div>` : ''}
+
+  <div class="disclaimer">
+    ⚠ 本估價單為系統自動估算，僅供參考。實際報價需經正式需求訪談確認後提供，可能因功能細節、技術複雜度、第三方費用等因素有所調整。
+  </div>
+
+  <div class="footer">
+    <span>報價編號：${state.quoteId}</span>
+    <span>本文件由網站開發估價系統自動產生</span>
+  </div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `網站需求書_${state.quoteId}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
