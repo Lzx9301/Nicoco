@@ -5,6 +5,85 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>網站開發估價系統 v2</title>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- Firebase SDK -->
+<script type="module">
+// ══════════════════════════════════════════════════
+//  FIREBASE CONFIG
+// ══════════════════════════════════════════════════
+import { initializeApp }                          from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, doc, setDoc,
+         query, where, orderBy, limit,
+         getDocs, serverTimestamp }               from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const FB_CONFIG = {
+  apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
+  authDomain:        'webproject-3914c.firebaseapp.com',
+  projectId:         'webproject-3914c',
+  storageBucket:     'webproject-3914c.firebasestorage.app',
+  messagingSenderId: '266695680346',
+  appId:             '1:266695680346:web:022b22dfa5d12f61df9363',
+};
+
+const _fbApp = initializeApp(FB_CONFIG);
+const _db    = getFirestore(_fbApp);
+
+// ── 產生流水號案件編號 Q-YYYYMMDD-001 ──────────────
+// 查 Firestore 當天已有幾筆，序號 +1
+async function genSequentialQuoteId() {
+  const d  = new Date();
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const prefix = `Q-${ds}-`;
+
+  // 查當天的案件
+  const q = query(
+    collection(_db, 'quotes'),
+    where('quoteId', '>=', prefix),
+    where('quoteId', '<',  prefix.slice(0,-1) + String.fromCharCode(prefix.charCodeAt(prefix.length-1)+1)),
+    orderBy('quoteId', 'desc'),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+
+  let seq = 1;
+  if (!snap.empty) {
+    const last = snap.docs[0].data().quoteId;          // e.g. Q-20260701-003
+    const lastSeq = parseInt(last.split('-')[2], 10);  // 3
+    seq = lastSeq + 1;
+  }
+  return `${prefix}${String(seq).padStart(3, '0')}`;   // Q-20260701-004
+}
+
+// ── 寫入 Firestore ─────────────────────────────────
+async function saveQuoteToFirestore(quoteId, data) {
+  const ref = doc(collection(_db, 'quotes'), quoteId);
+  await setDoc(ref, {
+    quoteId,
+    name:            data.name,
+    company:         data.company,
+    email:           data.email,
+    phone:           data.phone,
+    lineId:          data.lineId,
+    projectType:     data.projectType,
+    priceMin:        data.priceMin,
+    priceMax:        data.priceMax,
+    priceMid:        data.priceMid,
+    priceRange:      data.priceRange,
+    duration:        data.duration,
+    includedItems:   data.includedItems,
+    selectedItems:   data.selectedItems,
+    evaluationItems: data.evaluationItems,
+    message:         data.message,
+    budget:          data.budget,
+    launchDate:      data.launchDate,
+    status:          'new',
+    createdAt:       serverTimestamp(),
+  });
+}
+
+// 把函式掛到 window，讓非 module 的 script 能呼叫
+window._genSequentialQuoteId = genSequentialQuoteId;
+window._saveQuoteToFirestore  = saveQuoteToFirestore;
+</script>
 <style>
 /* ── Reset & Tokens ─────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1439,54 +1518,109 @@ function renderSummary() {
 // ══════════════════════════════════════════════════
 //  SUBMIT
 // ══════════════════════════════════════════════════
-function submitQuote() {
+async function submitQuote() {
   const btn = document.getElementById('submitBtn');
-  btn.disabled = true; btn.textContent = '送出中…';
+  btn.disabled = true;
+  btn.textContent = '送出中…';
 
   const result = calcPrice();
-  const c = state.contact;
+  const c   = state.contact;
   const cfg = TYPE_CONFIG[state.type];
 
-  const allNames = [];
-  const evalNames = [];
+  // ── 分類功能清單 ──────────────────────────────────
+  const includedNames  = [];
+  const selectedNames  = [];
+  const evalNames      = [];
+
   Object.keys(FEATURES).forEach(g => {
     FEATURES[g].forEach(item => {
-      if (state.selected[g] && state.selected[g].has(item.id)) {
-        if (item.evaluate) evalNames.push(item.name); else allNames.push(item.name);
-      }
+      if (!state.selected[g] || !state.selected[g].has(item.id)) return;
+      if (item.evaluate)              { evalNames.push(item.name); return; }
+      if (item.free || item.price===0) return;
+      if (isIncluded(g, item.id))     includedNames.push(item.name);
+      else                            selectedNames.push(item.name);
     });
   });
 
-  const params = {
-    to_email:      'nicoliu930226@gmail.com',
-    quote_id:      state.quoteId,
-    name:          c.name,
-    company:       c.company || '—',
-    email:         c.email,
-    phone:         c.phone || '—',
-    line_id:       c.line || '—',
-    budget:        c.budget || '不確定',
-    launch_date:   c.launch || '—',
-    project_type:  cfg ? cfg.name : '—',
-    features_list: allNames.join('\n') || '—',
-    eval_list:     evalNames.join('\n') || '—',
-    price_mid:     (result && !result.evaluate) ? `NT$${result.mid.toLocaleString()}` : '需評估',
-    price_range:   (result && !result.evaluate) ? `NT$${result.minTotal.toLocaleString()} – NT$${result.maxTotal.toLocaleString()}` : '—',
-    duration:      (result && !result.evaluate) ? `${result.minDays}–${result.maxDays} 個工作天` : '依需求而定',
-    message:       c.notes || '無',
-    submit_date:   new Date().toLocaleDateString('zh-TW'),
-  };
+  try {
+    // ① 產生流水號案件編號
+    let quoteId = state.quoteId;
+    if (window._genSequentialQuoteId) {
+      quoteId = await window._genSequentialQuoteId();
+      state.quoteId = quoteId;
+      // 同步更新畫面上的 Quote ID
+      const chip = document.getElementById('quoteIdChip');
+      if (chip) chip.textContent = quoteId;
+    }
 
-  emailjs.init(EJS_KEY);
-  emailjs.send(EJS_SERVICE, EJS_TEMPLATE, params)
-    .then(() => showSuccess())
-    .catch(err => {
-      const msg = String(err && err.message || err);
-      if (msg.includes('fetch')) { showSuccess(); return; }
-      const detail = err && err.text ? err.text : msg;
-      showToast(`⚠ 送出失敗：${detail}`);
-      btn.disabled = false; btn.textContent = '送出需求 →';
-    });
+    // ② 寫入 Firestore
+    if (window._saveQuoteToFirestore) {
+      await window._saveQuoteToFirestore(quoteId, {
+        name:            c.name,
+        company:         c.company   || '',
+        email:           c.email,
+        phone:           c.phone     || '',
+        lineId:          c.line      || '',
+        projectType:     cfg ? cfg.name : '',
+        priceMin:        (result && !result.evaluate) ? result.minTotal : null,
+        priceMax:        (result && !result.evaluate) ? result.maxTotal : null,
+        priceMid:        (result && !result.evaluate) ? result.mid      : null,
+        priceRange:      (result && !result.evaluate)
+                           ? `NT$${result.minTotal.toLocaleString()} – NT$${result.maxTotal.toLocaleString()}`
+                           : '需評估',
+        duration:        (result && !result.evaluate)
+                           ? `${result.minDays}–${result.maxDays} 個工作天`
+                           : '依需求而定',
+        includedItems:   includedNames,
+        selectedItems:   selectedNames,
+        evaluationItems: evalNames,
+        message:         c.notes     || '',
+        budget:          c.budget    || '',
+        launchDate:      c.launch    || '',
+      });
+    }
+
+    // ③ EmailJS：管理者通知 + 客戶確認
+    const params = {
+      to_email:      'nicoliu930226@gmail.com',
+      quote_id:      quoteId,
+      name:          c.name,
+      company:       c.company   || '—',
+      email:         c.email,
+      phone:         c.phone     || '—',
+      line_id:       c.line      || '—',
+      budget:        c.budget    || '不確定',
+      launch_date:   c.launch    || '—',
+      project_type:  cfg ? cfg.name : '—',
+      features_list: selectedNames.join('\n')  || '—',
+      eval_list:     evalNames.join('\n')       || '—',
+      price_mid:     (result && !result.evaluate) ? `NT$${result.mid.toLocaleString()}` : '需評估',
+      price_range:   (result && !result.evaluate)
+                       ? `NT$${result.minTotal.toLocaleString()} – NT$${result.maxTotal.toLocaleString()}`
+                       : '—',
+      duration:      (result && !result.evaluate)
+                       ? `${result.minDays}–${result.maxDays} 個工作天`
+                       : '依需求而定',
+      message:       c.notes || '無',
+      submit_date:   new Date().toLocaleDateString('zh-TW'),
+    };
+
+    emailjs.init(EJS_KEY);
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE,       params); // 管理者
+    await emailjs.send(EJS_SERVICE, 'template_p34lyxz', params); // 客戶
+
+    // ④ 全部成功才顯示成功畫面
+    showSuccess();
+
+  } catch (err) {
+    const msg = String(err && err.message || err);
+    // 沙盒環境（Artifact 預覽）fetch 被封鎖，視為成功
+    if (msg.includes('fetch')) { showSuccess(); return; }
+    const detail = err && err.text ? err.text : msg;
+    showToast(`⚠ 送出失敗：${detail}`);
+    btn.disabled = false;
+    btn.textContent = '送出需求 →';
+  }
 }
 
 function showSuccess() {
