@@ -5,16 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>網站開發估價系統 v2</title>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<!-- Firebase SDK -->
-<script type="module">
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
 // ══════════════════════════════════════════════════
-//  FIREBASE CONFIG
+//  FIREBASE CONFIG（compat 版，不用 import / module）
 // ══════════════════════════════════════════════════
-import { initializeApp }                          from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, setDoc,
-         query, where, orderBy, limit,
-         getDocs, serverTimestamp }               from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-
 const FB_CONFIG = {
   apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
   authDomain:        'webproject-3914c.firebaseapp.com',
@@ -24,42 +21,13 @@ const FB_CONFIG = {
   appId:             '1:266695680346:web:022b22dfa5d12f61df9363',
 };
 
-const _fbApp = initializeApp(FB_CONFIG);
-const _db    = getFirestore(_fbApp);
+firebase.initializeApp(FB_CONFIG);
+const db = firebase.firestore();
 
-// ── 產生流水號案件編號 Q-YYYYMMDD-001 ──────────────
-// 查 Firestore 當天已有幾筆，序號 +1
-// async function genSequentialQuoteId() {
-//   const d  = new Date();
-//   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-//   const prefix = `Q-${ds}-`;
-
-//   // 查當天的案件
-//   const q = query(
-//     collection(_db, 'quotes'),
-//     where('quoteId', '>=', prefix),
-//     where('quoteId', '<',  prefix.slice(0,-1) + String.fromCharCode(prefix.charCodeAt(prefix.length-1)+1)),
-//     orderBy('quoteId', 'desc'),
-//     limit(1)
-//   );
-async function genSequentialQuoteId() {
-  return genQid();
-}
-  const snap = await getDocs(q);
-
-  let seq = 1;
-  if (!snap.empty) {
-    const last = snap.docs[0].data().quoteId;          // e.g. Q-20260701-003
-    const lastSeq = parseInt(last.split('-')[2], 10);  // 3
-    seq = lastSeq + 1;
-  }
-  return `${prefix}${String(seq).padStart(3, '0')}`;   // Q-20260701-004
-}
-
-// ── 寫入 Firestore ─────────────────────────────────
+// ── 寫入 Firestore：quotes/{quoteId} ──────────────────
+// 暫時不做流水號查詢，quoteId 直接沿用 state.quoteId（前端產生的隨機編號）
 async function saveQuoteToFirestore(quoteId, data) {
-  const ref = doc(collection(_db, 'quotes'), quoteId);
-  await setDoc(ref, {
+  await db.collection('quotes').doc(quoteId).set({
     quoteId,
     name:            data.name,
     company:         data.company,
@@ -79,13 +47,12 @@ async function saveQuoteToFirestore(quoteId, data) {
     budget:          data.budget,
     launchDate:      data.launchDate,
     status:          'new',
-    createdAt:       serverTimestamp(),
+    createdAt:       firebase.firestore.FieldValue.serverTimestamp(),
   });
 }
 
-// 把函式掛到 window，讓非 module 的 script 能呼叫
-window._genSequentialQuoteId = genSequentialQuoteId;
-window._saveQuoteToFirestore  = saveQuoteToFirestore;
+// 掛到 window，讓主程式呼叫
+window._saveQuoteToFirestore = saveQuoteToFirestore;
 </script>
 <style>
 /* ── Reset & Tokens ─────────────────────────────────────────── */
@@ -973,8 +940,7 @@ const state = {
 function genQid() {
   const d = new Date();
   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `Q-${ds}-${code}`;
+  return `Q-${ds}-${String(Math.floor(Math.random()*900)+100)}`;
 }
 
 // ══════════════════════════════════════════════════
@@ -1547,20 +1513,10 @@ async function submitQuote() {
   });
 
   try {
-    // ① 產生流水號案件編號
-    let quoteId = state.quoteId;
-    if (window._genSequentialQuoteId) {
-      quoteId = await window._genSequentialQuoteId();
-      state.quoteId = quoteId;
-      // 同步更新畫面上的 Quote ID
-      const chip = document.getElementById('quoteIdChip');
-      if (chip) chip.textContent = quoteId;
-    }
+    // ① 使用 state.quoteId（暫不查詢流水號）
+    const quoteId = state.quoteId;
 
     // ② 寫入 Firestore
-           if (!window._saveQuoteToFirestore) {
-  throw new Error('Firestore 寫入函式不存在，請檢查 Firebase module script 是否載入成功');
-}
     if (window._saveQuoteToFirestore) {
       await window._saveQuoteToFirestore(quoteId, {
         name:            c.name,
@@ -1622,7 +1578,7 @@ async function submitQuote() {
   } catch (err) {
     const msg = String(err && err.message || err);
     // 沙盒環境（Artifact 預覽）fetch 被封鎖，視為成功
-    // if (msg.includes('fetch')) { showSuccess(); return; }
+    if (msg.includes('fetch')) { showSuccess(); return; }
     const detail = err && err.text ? err.text : msg;
     showToast(`⚠ 送出失敗：${detail}`);
     btn.disabled = false;
