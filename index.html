@@ -29,19 +29,22 @@ const _db    = getFirestore(_fbApp);
 
 // ── 產生流水號案件編號 Q-YYYYMMDD-001 ──────────────
 // 查 Firestore 當天已有幾筆，序號 +1
-async function genSequentialQuoteId() {
-  const d  = new Date();
-  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  const prefix = `Q-${ds}-`;
+// async function genSequentialQuoteId() {
+//   const d  = new Date();
+//   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+//   const prefix = `Q-${ds}-`;
 
-  // 查當天的案件
-  const q = query(
-    collection(_db, 'quotes'),
-    where('quoteId', '>=', prefix),
-    where('quoteId', '<',  prefix.slice(0,-1) + String.fromCharCode(prefix.charCodeAt(prefix.length-1)+1)),
-    orderBy('quoteId', 'desc'),
-    limit(1)
-  );
+//   // 查當天的案件
+//   const q = query(
+//     collection(_db, 'quotes'),
+//     where('quoteId', '>=', prefix),
+//     where('quoteId', '<',  prefix.slice(0,-1) + String.fromCharCode(prefix.charCodeAt(prefix.length-1)+1)),
+//     orderBy('quoteId', 'desc'),
+//     limit(1)
+//   );
+         async function genSequentialQuoteId() {
+    return "Q-TEST-001";
+}
   const snap = await getDocs(q);
 
   let seq = 1;
