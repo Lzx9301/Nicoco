@@ -42,8 +42,8 @@ const _db    = getFirestore(_fbApp);
 //     orderBy('quoteId', 'desc'),
 //     limit(1)
 //   );
-         async function genSequentialQuoteId() {
-    return "Q-TEST-001";
+async function genSequentialQuoteId() {
+  return genQid();
 }
   const snap = await getDocs(q);
 
@@ -973,7 +973,8 @@ const state = {
 function genQid() {
   const d = new Date();
   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  return `Q-${ds}-${String(Math.floor(Math.random()*900)+100)}`;
+  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `Q-${ds}-${code}`;
 }
 
 // ══════════════════════════════════════════════════
