@@ -204,6 +204,76 @@ body {
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ── Activity Timeline ──────────────────────────────────────── */
+.timeline-form {
+  display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.timeline-type-select {
+  width: 140px; flex-shrink: 0;
+  padding: 9px 12px; border: 1.5px solid var(--ink-10); border-radius: var(--r-sm);
+  font-size: 13px; color: var(--ink); font-family: var(--font);
+  background: var(--white); outline: none; cursor: pointer;
+}
+.timeline-type-select:focus { border-color: var(--ink); }
+.timeline-content-input {
+  flex: 1; min-width: 200px;
+  padding: 9px 12px; border: 1.5px solid var(--ink-10); border-radius: var(--r-sm);
+  font-size: 13px; color: var(--ink); font-family: var(--font);
+  background: var(--white); outline: none; resize: vertical; min-height: 38px;
+}
+.timeline-content-input:focus { border-color: var(--ink); }
+.timeline-add-btn {
+  flex-shrink: 0; padding: 9px 20px; border-radius: var(--r-sm); border: none;
+  background: var(--ink); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background var(--t);
+}
+.timeline-add-btn:hover { background: #2a2d38; }
+.timeline-add-btn:disabled { background: var(--ink-30); cursor: not-allowed; }
+
+.timeline-list { display: flex; flex-direction: column; gap: 0; }
+.timeline-entry {
+  display: flex; gap: 12px; padding: 14px 0;
+  border-bottom: 1px solid var(--ink-10);
+}
+.timeline-entry:last-child { border-bottom: none; padding-bottom: 0; }
+.timeline-dot-col {
+  display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 8px;
+}
+.timeline-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--ink-30); margin-top: 6px; flex-shrink: 0;
+}
+.timeline-dot.type-contact      { background: var(--accent); }
+.timeline-dot.type-meeting      { background: var(--amber); }
+.timeline-dot.type-quote        { background: #0891b2; }
+.timeline-dot.type-payment      { background: var(--green); }
+.timeline-dot.type-development  { background: #ea580c; }
+.timeline-dot.type-note         { background: var(--ink-30); }
+.timeline-line { flex: 1; width: 1px; background: var(--ink-10); margin-top: 4px; }
+
+.timeline-body { flex: 1; min-width: 0; }
+.timeline-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.timeline-type-tag {
+  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.timeline-type-tag.type-contact      { background: var(--accent-light); color: var(--accent); }
+.timeline-type-tag.type-meeting      { background: var(--amber-light); color: var(--amber); }
+.timeline-type-tag.type-quote        { background: #ecfeff; color: #0891b2; }
+.timeline-type-tag.type-payment      { background: var(--green-light); color: var(--green); }
+.timeline-type-tag.type-development  { background: #fff7ed; color: #ea580c; }
+.timeline-type-tag.type-note         { background: var(--ink-10); color: var(--ink-60); }
+.timeline-time { font-size: 11px; color: var(--ink-30); }
+.timeline-by   { font-size: 11px; color: var(--ink-30); }
+.timeline-content { font-size: 13px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; }
+.timeline-delete-btn {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  border: none; background: transparent; color: var(--ink-30);
+  font-size: 13px; cursor: pointer; transition: all var(--t);
+  display: flex; align-items: center; justify-content: center;
+}
+.timeline-delete-btn:hover { background: #fef2f2; color: var(--red); }
+.timeline-empty { font-size: 13px; color: var(--ink-30); padding: 8px 0; }
+
 /* ── RWD ────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
   .info-grid, .field-row { grid-template-columns: 1fr; }
@@ -248,6 +318,16 @@ const PRIORITY_ORDER  = ['low','normal','high'];
 
 const SOURCE_OPTIONS = ['website','referral','facebook','instagram','google','other'];
 const SOURCE_LABELS  = { website:'官網表單', referral:'介紹', facebook:'Facebook', instagram:'Instagram', google:'Google 搜尋', other:'其他' };
+
+const ACTIVITY_TYPE_LABELS = {
+  contact:     '聯絡紀錄',
+  meeting:     '需求訪談',
+  quote:       '報價紀錄',
+  payment:     '付款紀錄',
+  development: '開發進度',
+  note:        '一般備註',
+};
+const ACTIVITY_TYPE_ORDER = ['contact','meeting','quote','payment','development','note'];
 
 let currentId = null;
 let currentData = null;
@@ -358,6 +438,23 @@ function renderDetail() {
       </div>
     </div>
 
+    <!-- ── Phase 4.5：案件紀錄 Timeline ── -->
+    <div class="card">
+      <div class="card-title">案件紀錄 Timeline</div>
+
+      <div class="timeline-form">
+        <select class="timeline-type-select" id="timelineType">
+          ${ACTIVITY_TYPE_ORDER.map(t => `<option value="${t}">${ACTIVITY_TYPE_LABELS[t]}</option>`).join('')}
+        </select>
+        <textarea class="timeline-content-input" id="timelineContent" rows="1" placeholder="輸入這次的紀錄內容…"></textarea>
+        <button class="timeline-add-btn" id="timelineAddBtn" onclick="addActivityLog()">新增紀錄</button>
+      </div>
+
+      <div class="timeline-list" id="timelineList">
+        ${renderTimelineList(q.activityLogs || [])}
+      </div>
+    </div>
+
     <!-- ── Phase 4：可編輯的營運欄位 ── -->
     <div class="card">
       <div class="card-title">案件管理</div>
@@ -448,6 +545,115 @@ function renderDetail() {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', () => markDirty());
     });
+}
+
+// ══════════════════════════════════════════════════
+//  ACTIVITY TIMELINE
+// ══════════════════════════════════════════════════
+function genActivityId() {
+  return 'act_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+function fmtTimelineTime(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' }) +
+         ' ' + d.toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
+}
+
+function renderTimelineList(logs) {
+  if (!logs || logs.length === 0) {
+    return '<div class="timeline-empty">尚無紀錄，新增第一筆吧。</div>';
+  }
+
+  // 由新到舊排序（依 createdAt，Firestore Timestamp 物件需轉成 millis 比較）
+  const sorted = [...logs].sort((a, b) => {
+    const ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+    const tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+    return tb - ta;
+  });
+
+  return sorted.map((log, idx) => `
+    <div class="timeline-entry">
+      <div class="timeline-dot-col">
+        <div class="timeline-dot type-${log.type}"></div>
+        ${idx < sorted.length - 1 ? '<div class="timeline-line"></div>' : ''}
+      </div>
+      <div class="timeline-body">
+        <div class="timeline-meta">
+          <span class="timeline-type-tag type-${log.type}">${ACTIVITY_TYPE_LABELS[log.type] || log.type}</span>
+          <span class="timeline-time">${fmtTimelineTime(log.createdAt)}</span>
+          <span class="timeline-by">by ${escapeHtml(log.createdBy || 'me')}</span>
+        </div>
+        <div class="timeline-content">${escapeHtml(log.content || '')}</div>
+      </div>
+      <button class="timeline-delete-btn" onclick="deleteActivityLog('${log.id}')" title="刪除這筆紀錄">✕</button>
+    </div>`).join('');
+}
+
+// ── 新增紀錄：讀取現有 activityLogs 後合併，不覆蓋原資料 ──
+async function addActivityLog() {
+  if (!currentId) return;
+
+  const typeEl    = document.getElementById('timelineType');
+  const contentEl = document.getElementById('timelineContent');
+  const btn       = document.getElementById('timelineAddBtn');
+
+  const content = contentEl.value.trim();
+  if (!content) { showToast('請輸入紀錄內容'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '新增中…';
+
+  const newEntry = {
+    id:        genActivityId(),
+    type:      typeEl.value,
+    content:   content,
+    createdAt: firebase.firestore.Timestamp.now(),  // client timestamp（陣列內無法用 serverTimestamp）
+    createdBy: 'me',
+  };
+
+  try {
+    // 用 arrayUnion 合併寫入，不影響文件其他欄位
+    await db.collection('quotes').doc(currentId).update({
+      activityLogs: firebase.firestore.FieldValue.arrayUnion(newEntry),
+    });
+
+    // 同步更新本地快取與畫面
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newEntry);
+    document.getElementById('timelineList').innerHTML = renderTimelineList(currentData.activityLogs);
+
+    contentEl.value = '';
+    showToast('✓ 已新增紀錄');
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 新增失敗：${err.message || err}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '新增紀錄';
+  }
+}
+
+// ── 刪除紀錄：用 arrayRemove 需要完整物件比對，改用「讀取全部 → 過濾 → 整批寫回」較穩定 ──
+async function deleteActivityLog(logId) {
+  if (!currentId) return;
+  if (!confirm('確定要刪除這筆紀錄嗎？')) return;
+
+  const updatedLogs = (currentData.activityLogs || []).filter(log => log.id !== logId);
+
+  try {
+    await db.collection('quotes').doc(currentId).update({
+      activityLogs: updatedLogs,
+    });
+
+    currentData.activityLogs = updatedLogs;
+    document.getElementById('timelineList').innerHTML = renderTimelineList(currentData.activityLogs);
+    showToast('✓ 已刪除紀錄');
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 刪除失敗：${err.message || err}`);
+  }
 }
 
 function onProgressInput(val) {
