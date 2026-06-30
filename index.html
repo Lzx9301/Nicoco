@@ -1558,6 +1558,9 @@ async function submitQuote() {
     }
 
     // ② 寫入 Firestore
+           if (!window._saveQuoteToFirestore) {
+  throw new Error('Firestore 寫入函式不存在，請檢查 Firebase module script 是否載入成功');
+}
     if (window._saveQuoteToFirestore) {
       await window._saveQuoteToFirestore(quoteId, {
         name:            c.name,
