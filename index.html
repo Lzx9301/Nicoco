@@ -1619,7 +1619,7 @@ async function submitQuote() {
   } catch (err) {
     const msg = String(err && err.message || err);
     // 沙盒環境（Artifact 預覽）fetch 被封鎖，視為成功
-    if (msg.includes('fetch')) { showSuccess(); return; }
+    // if (msg.includes('fetch')) { showSuccess(); return; }
     const detail = err && err.text ? err.text : msg;
     showToast(`⚠ 送出失敗：${detail}`);
     btn.disabled = false;
