@@ -476,6 +476,7 @@ function renderDetail(q) {
         ${STATUS_ORDER.map(s => `<option value="${s}" ${q.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}
       </select>
       <span class="status-saving" id="saving-${q.id}"></span>
+      <a href="quote-detail.html?id=${encodeURIComponent(q.id)}" style="margin-left:auto;font-size:12px;font-weight:600;color:var(--accent);text-decoration:none">查看完整案件 →</a>
     </div>`;
 }
 
