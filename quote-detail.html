@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>案件詳情</title>
+
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+const FB_CONFIG = {
+  apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
+  authDomain:        'webproject-3914c.firebaseapp.com',
+  projectId:         'webproject-3914c',
+  storageBucket:     'webproject-3914c.firebasestorage.app',
+  messagingSenderId: '266695680346',
+  appId:             '1:266695680346:web:022b22dfa5d12f61df9363',
+};
+firebase.initializeApp(FB_CONFIG);
+const db = firebase.firestore();
+</script>
+
+<style>
+/* ── Tokens（沿用同一套設計語言）─────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:      #0f1117;
+  --ink-60:   #60636e;
+  --ink-30:   #b8bac4;
+  --ink-10:   #f0f1f4;
+  --white:    #ffffff;
+  --accent:   #2563eb;
+  --accent-light: #eff6ff;
+  --green:    #16a34a;
+  --green-light: #f0fdf4;
+  --amber:    #d97706;
+  --amber-light: #fffbeb;
+  --red:      #dc2626;
+  --purple:   #7c3aed;
+  --purple-light: #f5f3ff;
+
+  --r-sm: 6px;
+  --r:    10px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+
+  --shadow-sm: 0 1px 4px rgba(15,17,23,.06);
+  --shadow:    0 4px 16px rgba(15,17,23,.08);
+  --shadow-lg: 0 12px 40px rgba(15,17,23,.10);
+
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang TC', sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  --ease: cubic-bezier(.25,.46,.45,.94);
+  --t: 160ms;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--ink-10);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px; height: 56px;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--ink-10);
+}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.back-link {
+  font-size: 13px; color: var(--ink-60); text-decoration: none;
+  display: flex; align-items: center; gap: 4px;
+  transition: color var(--t);
+}
+.back-link:hover { color: var(--ink); }
+.header-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; font-weight: 600; color: var(--ink);
+}
+.header-logo-mark {
+  width: 28px; height: 28px; background: var(--ink);
+  border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px; font-weight: 700;
+}
+.header-note { font-size: 12px; color: var(--ink-30); font-family: var(--mono); }
+
+/* ── Layout ─────────────────────────────────────────────────── */
+.wrap { max-width: 840px; margin: 0 auto; padding: 32px 24px 100px; }
+
+/* ── Card ───────────────────────────────────────────────────── */
+.card {
+  background: var(--white); border: 1.5px solid var(--ink-10); border-radius: var(--r-xl);
+  padding: 24px; margin-bottom: 16px;
+}
+.card-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-30); margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--ink-10);
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+/* ── Quote header card ──────────────────────────────────────── */
+.quote-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.qh-id { font-family: var(--mono); font-size: 12px; color: var(--ink-30); margin-bottom: 4px; }
+.qh-name { font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -.5px; }
+.qh-meta { font-size: 13px; color: var(--ink-60); margin-top: 4px; }
+.status-badge {
+  display: inline-block; font-size: 12px; font-weight: 600;
+  padding: 5px 14px; border-radius: 20px; white-space: nowrap;
+}
+.status-new        { background: var(--accent-light); color: var(--accent); }
+.status-contacted   { background: var(--purple-light); color: var(--purple); }
+.status-meeting     { background: var(--amber-light); color: var(--amber); }
+.status-quoted      { background: #ecfeff; color: #0891b2; }
+.status-developing  { background: #fff7ed; color: #ea580c; }
+.status-done         { background: var(--green-light); color: var(--green); }
+.status-cancelled    { background: var(--ink-10); color: var(--ink-30); }
+
+/* ── Info grid ──────────────────────────────────────────────── */
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.info-box { padding: 10px 12px; background: var(--ink-10); border-radius: var(--r-sm); }
+.info-label { font-size: 10px; color: var(--ink-30); margin-bottom: 2px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.info-value { font-size: 13px; font-weight: 500; color: var(--ink); }
+.info-value.mono { font-family: var(--mono); font-size: 12px; }
+
+/* ── Tags ───────────────────────────────────────────────────── */
+.tag-section { margin-bottom: 14px; }
+.tag-section:last-child { margin-bottom: 0; }
+.tag-section-label { font-size: 11px; font-weight: 600; color: var(--ink-60); margin-bottom: 6px; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.dtag { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--ink-10); color: var(--ink-60); font-weight: 500; }
+.dtag.included { background: var(--green-light); color: var(--green); }
+.dtag.eval     { background: var(--amber-light); color: var(--amber); }
+.tag-empty { font-size: 12px; color: var(--ink-30); }
+
+/* ── Editable fields ────────────────────────────────────────── */
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.field-row:last-child { margin-bottom: 0; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field.full { grid-column: 1/-1; }
+.field-label { font-size: 12px; font-weight: 500; color: var(--ink-60); }
+.field-input, .field-select, .field-textarea {
+  padding: 9px 12px;
+  border: 1.5px solid var(--ink-10); border-radius: var(--r-sm);
+  font-size: 13px; color: var(--ink); font-family: var(--font);
+  background: var(--white); outline: none;
+  transition: border-color var(--t);
+}
+.field-input:focus, .field-select:focus, .field-textarea:focus { border-color: var(--ink); }
+.field-textarea { resize: vertical; min-height: 80px; }
+
+/* progress slider */
+.progress-row { display: flex; align-items: center; gap: 12px; }
+.progress-slider { flex: 1; accent-color: var(--ink); cursor: pointer; }
+.progress-value { font-size: 14px; font-weight: 700; color: var(--ink); width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.progress-track { height: 6px; background: var(--ink-10); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.progress-fill { height: 100%; background: var(--ink); border-radius: 4px; transition: width .25s var(--ease); }
+
+/* ── Save bar ───────────────────────────────────────────────── */
+.save-bar {
+  position: sticky; bottom: 20px;
+  display: flex; justify-content: flex-end; align-items: center; gap: 12px;
+  margin-top: 8px;
+}
+.save-status { font-size: 12px; color: var(--ink-30); }
+.save-status.saving  { color: var(--accent); }
+.save-status.saved   { color: var(--green); }
+.save-status.error   { color: var(--red); }
+.btn-save {
+  padding: 11px 26px; border-radius: var(--r-sm); border: none;
+  background: var(--ink); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background var(--t); box-shadow: var(--shadow);
+}
+.btn-save:hover { background: #2a2d38; }
+.btn-save:disabled { background: var(--ink-30); cursor: not-allowed; }
+
+/* ── Loading / Error ────────────────────────────────────────── */
+.loading-state, .error-state {
+  text-align: center; padding: 100px 0; color: var(--ink-30); font-size: 14px;
+}
+.loading-state .spinner {
+  width: 24px; height: 24px; border: 2.5px solid var(--ink-10); border-top-color: var(--ink);
+  border-radius: 50%; margin: 0 auto 14px; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ──────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(16px);
+  background: var(--ink); color: #fff; font-size: 13px;
+  padding: 11px 20px; border-radius: var(--r); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: all .25s var(--ease); z-index: 999;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── RWD ────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .info-grid, .field-row { grid-template-columns: 1fr; }
+  .quote-header { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <a class="back-link" href="quote-admin.html">← 返回列表</a>
+  </div>
+  <div class="header-logo">
+    <div class="header-logo-mark">W</div>
+    案件詳情
+  </div>
+  <div class="header-note" id="headerQuoteId"></div>
+</header>
+
+<div class="wrap" id="wrap">
+  <div class="loading-state"><div class="spinner"></div>載入案件中…</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════
+const STATUS_LABELS = {
+  new: '新案件', contacted: '已聯絡', meeting: '需求訪談',
+  quoted: '已報價', developing: '開發中', done: '完成', cancelled: '取消',
+};
+const STATUS_ORDER = ['new','contacted','meeting','quoted','developing','done','cancelled'];
+
+const PAYMENT_LABELS = { unpaid: '未付款', deposit: '已收訂金', paid: '已全額付清' };
+const PAYMENT_ORDER  = ['unpaid','deposit','paid'];
+
+const PRIORITY_LABELS = { low: '低', normal: '一般', high: '高' };
+const PRIORITY_ORDER  = ['low','normal','high'];
+
+const SOURCE_OPTIONS = ['website','referral','facebook','instagram','google','other'];
+const SOURCE_LABELS  = { website:'官網表單', referral:'介紹', facebook:'Facebook', instagram:'Instagram', google:'Google 搜尋', other:'其他' };
+
+let currentId = null;
+let currentData = null;
+let dirty = false;
+
+// ══════════════════════════════════════════════════
+//  GET ?id= FROM URL
+// ══════════════════════════════════════════════════
+function getIdFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('id');
+}
+
+// ══════════════════════════════════════════════════
+//  LOAD
+// ══════════════════════════════════════════════════
+async function loadDetail() {
+  currentId = getIdFromUrl();
+  const wrap = document.getElementById('wrap');
+
+  if (!currentId) {
+    wrap.innerHTML = '<div class="error-state">⚠ 網址缺少案件 id 參數（例如 ?id=Q-20260701-123）</div>';
+    return;
+  }
+
+  try {
+    const docSnap = await db.collection('quotes').doc(currentId).get();
+    if (!docSnap.exists) {
+      wrap.innerHTML = `<div class="error-state">⚠ 找不到案件：${escapeHtml(currentId)}</div>`;
+      return;
+    }
+    currentData = docSnap.data();
+    document.getElementById('headerQuoteId').textContent = currentData.quoteId || currentId;
+    renderDetail();
+  } catch (err) {
+    console.error(err);
+    wrap.innerHTML = `<div class="error-state">⚠ 讀取失敗：${escapeHtml(err.message || String(err))}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════
+function fmtDate(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' }) +
+         ' ' + d.toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
+}
+
+function fmtPriceRange(q) {
+  if (q.priceMid === null || q.priceMid === undefined) return '需評估';
+  return `NT$${Number(q.priceMid).toLocaleString()}（${q.priceRange || '—'}）`;
+}
+
+function renderDetail() {
+  const q = currentData;
+  const wrap = document.getElementById('wrap');
+
+  const includedTags = (q.includedItems || []).map(n => `<span class="dtag included">✓ ${escapeHtml(n)}</span>`).join('');
+  const selectedTags = (q.selectedItems || []).map(n => `<span class="dtag">${escapeHtml(n)}</span>`).join('');
+  const evalTags      = (q.evaluationItems || []).map(n => `<span class="dtag eval">◆ ${escapeHtml(n)}</span>`).join('');
+
+  const statusClass = `status-${q.status || 'new'}`;
+  const statusLabel = STATUS_LABELS[q.status] || q.status || '新案件';
+
+  wrap.innerHTML = `
+    <!-- 基本資訊（唯讀，來自估價系統） -->
+    <div class="card">
+      <div class="quote-header">
+        <div>
+          <div class="qh-id">${escapeHtml(q.quoteId || currentId)}</div>
+          <div class="qh-name">${escapeHtml(q.name || '—')}　${q.company ? `<span style="font-size:14px;color:var(--ink-60);font-weight:500">／ ${escapeHtml(q.company)}</span>` : ''}</div>
+          <div class="qh-meta">${escapeHtml(q.projectType || '—')} ・ 建立於 ${fmtDate(q.createdAt)}</div>
+        </div>
+        <span class="status-badge ${statusClass}">${statusLabel}</span>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-box"><div class="info-label">Email</div><div class="info-value">${escapeHtml(q.email || '—')}</div></div>
+        <div class="info-box"><div class="info-label">電話</div><div class="info-value">${escapeHtml(q.phone || '—')}</div></div>
+        <div class="info-box"><div class="info-label">LINE</div><div class="info-value">${escapeHtml(q.lineId || '—')}</div></div>
+        <div class="info-box"><div class="info-label">預算</div><div class="info-value">${escapeHtml(q.budget || '—')}</div></div>
+        <div class="info-box"><div class="info-label">預計上線</div><div class="info-value">${escapeHtml(q.launchDate || '—')}</div></div>
+        <div class="info-box"><div class="info-label">預估工期</div><div class="info-value">${escapeHtml(q.duration || '—')}</div></div>
+        <div class="info-box" style="grid-column:1/-1"><div class="info-label">系統預估價格</div><div class="info-value">${fmtPriceRange(q)}</div></div>
+      </div>
+    </div>
+
+    <!-- 功能明細（唯讀） -->
+    <div class="card">
+      <div class="card-title">功能明細</div>
+      <div class="tag-section">
+        <div class="tag-section-label">方案已包含</div>
+        ${includedTags ? `<div class="tags">${includedTags}</div>` : '<div class="tag-empty">無</div>'}
+      </div>
+      <div class="tag-section">
+        <div class="tag-section-label">加選功能</div>
+        ${selectedTags ? `<div class="tags">${selectedTags}</div>` : '<div class="tag-empty">無</div>'}
+      </div>
+      <div class="tag-section">
+        <div class="tag-section-label">需評估功能</div>
+        ${evalTags ? `<div class="tags">${evalTags}</div>` : '<div class="tag-empty">無</div>'}
+      </div>
+      <div class="tag-section">
+        <div class="tag-section-label">客戶補充說明</div>
+        <div style="font-size:13px;color:var(--ink-60);line-height:1.6">${escapeHtml(q.message || '無')}</div>
+      </div>
+    </div>
+
+    <!-- ── Phase 4：可編輯的營運欄位 ── -->
+    <div class="card">
+      <div class="card-title">案件管理</div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">正式報價（officialPrice）</label>
+          <input class="field-input" id="f-officialPrice" type="number" placeholder="輸入正式議定金額"
+                 value="${q.officialPrice ?? ''}">
+        </div>
+        <div class="field">
+          <label class="field-label">付款狀態（paymentStatus）</label>
+          <select class="field-select" id="f-paymentStatus">
+            ${PAYMENT_ORDER.map(p => `<option value="${p}" ${(q.paymentStatus||'unpaid')===p?'selected':''}>${PAYMENT_LABELS[p]}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field full">
+          <label class="field-label">專案進度（progress）</label>
+          <div class="progress-row">
+            <input class="progress-slider" id="f-progress" type="range" min="0" max="100" step="5"
+                   value="${q.progress ?? 0}" oninput="onProgressInput(this.value)">
+            <div class="progress-value" id="progressValue">${q.progress ?? 0}%</div>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:${q.progress ?? 0}%"></div></div>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field full">
+          <label class="field-label">內部備註（notes）</label>
+          <textarea class="field-textarea" id="f-notes" placeholder="記錄聯絡內容、報價調整原因、客戶特殊要求等…">${escapeHtml(q.notes || '')}</textarea>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">案件狀態（status）</label>
+          <select class="field-select" id="f-status">
+            ${STATUS_ORDER.map(s => `<option value="${s}" ${q.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label">優先度（priority）</label>
+          <select class="field-select" id="f-priority">
+            ${PRIORITY_ORDER.map(p => `<option value="${p}" ${(q.priority||'normal')===p?'selected':''}>${PRIORITY_LABELS[p]}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">案件來源（source）</label>
+          <select class="field-select" id="f-source">
+            <option value="">未設定</option>
+            ${SOURCE_OPTIONS.map(s => `<option value="${s}" ${(q.source||'')===s?'selected':''}>${SOURCE_LABELS[s]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label">負責人（assignedTo）</label>
+          <input class="field-input" id="f-assignedTo" type="text" placeholder="例如：me" value="${escapeHtml(q.assignedTo || '')}">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field full">
+          <label class="field-label">最後聯絡時間（lastContactAt）</label>
+          <input class="field-input" id="f-lastContactAt" type="datetime-local"
+                 value="${tsToLocalInput(q.lastContactAt)}">
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--ink-30);margin-top:4px">
+        最後更新：${fmtDate(q.updatedAt)}
+      </div>
+    </div>
+
+    <div class="save-bar">
+      <span class="save-status" id="saveStatus"></span>
+      <button class="btn-save" id="saveBtn" onclick="saveChanges()">儲存變更</button>
+    </div>`;
+
+  // 監聽欄位變動，標記 dirty
+  ['f-officialPrice','f-paymentStatus','f-notes','f-status','f-priority','f-source','f-assignedTo','f-lastContactAt']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => markDirty());
+    });
+}
+
+function onProgressInput(val) {
+  document.getElementById('progressValue').textContent = `${val}%`;
+  document.getElementById('progressFill').style.width = `${val}%`;
+  markDirty();
+}
+
+function markDirty() {
+  dirty = true;
+  const s = document.getElementById('saveStatus');
+  if (s) { s.textContent = '尚未儲存'; s.className = 'save-status'; }
+}
+
+// ══════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════
+function tsToLocalInput(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// ══════════════════════════════════════════════════
+//  SAVE
+// ══════════════════════════════════════════════════
+async function saveChanges() {
+  if (!currentId) return;
+  const btn = document.getElementById('saveBtn');
+  const statusEl = document.getElementById('saveStatus');
+
+  btn.disabled = true;
+  statusEl.textContent = '儲存中…';
+  statusEl.className = 'save-status saving';
+
+  const officialPriceRaw = document.getElementById('f-officialPrice').value;
+  const lastContactRaw   = document.getElementById('f-lastContactAt').value;
+
+  const payload = {
+    officialPrice: officialPriceRaw === '' ? null : Number(officialPriceRaw),
+    progress:      Number(document.getElementById('f-progress').value),
+    paymentStatus: document.getElementById('f-paymentStatus').value,
+    notes:         document.getElementById('f-notes').value,
+    status:        document.getElementById('f-status').value,
+    priority:      document.getElementById('f-priority').value,
+    source:        document.getElementById('f-source').value,
+    assignedTo:    document.getElementById('f-assignedTo').value,
+    lastContactAt: lastContactRaw ? firebase.firestore.Timestamp.fromDate(new Date(lastContactRaw)) : null,
+    updatedAt:     firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    await db.collection('quotes').doc(currentId).update(payload);
+    dirty = false;
+    statusEl.textContent = '✓ 已儲存';
+    statusEl.className = 'save-status saved';
+    setTimeout(() => { if (!dirty) statusEl.textContent = ''; }, 2500);
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = '⚠ 儲存失敗';
+    statusEl.className = 'save-status error';
+    showToast(`⚠ 儲存失敗：${err.message || err}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// 離開頁面前若有未儲存變更，提醒一下
+window.addEventListener('beforeunload', (e) => {
+  if (dirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+loadDetail();
+</script>
+</body>
+</html>
