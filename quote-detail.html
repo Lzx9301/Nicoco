@@ -127,6 +127,15 @@ body {
 .status-done         { background: var(--green-light); color: var(--green); }
 .status-cancelled    { background: var(--ink-10); color: var(--ink-30); }
 
+.btn-quotation-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 7px 16px; border-radius: 20px;
+  background: var(--ink); color: #fff;
+  font-size: 12px; font-weight: 600; text-decoration: none;
+  transition: background var(--t);
+}
+.btn-quotation-link:hover { background: #2a2d38; }
+
 /* ── Info grid ──────────────────────────────────────────────── */
 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .info-box { padding: 10px 12px; background: var(--ink-10); border-radius: var(--r-sm); }
@@ -403,7 +412,12 @@ function renderDetail() {
           <div class="qh-name">${escapeHtml(q.name || '—')}　${q.company ? `<span style="font-size:14px;color:var(--ink-60);font-weight:500">／ ${escapeHtml(q.company)}</span>` : ''}</div>
           <div class="qh-meta">${escapeHtml(q.projectType || '—')} ・ 建立於 ${fmtDate(q.createdAt)}</div>
         </div>
-        <span class="status-badge ${statusClass}">${statusLabel}</span>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="status-badge ${statusClass}">${statusLabel}</span>
+          <a href="quote-edit.html?id=${encodeURIComponent(currentId)}" class="btn-quotation-link">
+            ${q.quotationTotal ? '查看 / 編輯正式報價' : '建立正式報價'} →
+          </a>
+        </div>
       </div>
 
       <div class="info-grid">
