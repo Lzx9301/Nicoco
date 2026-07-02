@@ -106,7 +106,7 @@ const ALLOWED_EMAILS = ['nicoliu930226@gmail.com'];
 // 若已登入且是管理員，直接跳轉（避免管理員每次都看到登入頁）
 firebase.auth().onAuthStateChanged(user => {
   if (user && ALLOWED_EMAILS.includes(user.email)) {
-    const next = new URLSearchParams(window.location.search).get('next') || 'quote-admin.html';
+    const next = new URLSearchParams(window.location.search).get('next') || 'dashboard.html';
     window.location.replace(next);
   }
 });
@@ -134,7 +134,7 @@ async function signInWithGoogle() {
     }
 
     // 合法管理員：跳轉
-    const next = new URLSearchParams(window.location.search).get('next') || 'quote-admin.html';
+    const next = new URLSearchParams(window.location.search).get('next') || 'dashboard.html';
     window.location.replace(next);
 
   } catch (err) {
