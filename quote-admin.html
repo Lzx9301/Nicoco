@@ -8,6 +8,7 @@
 <!-- Firebase SDK (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script>
 const FB_CONFIG = {
   apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
@@ -18,7 +19,9 @@ const FB_CONFIG = {
   appId:             '1:266695680346:web:022b22dfa5d12f61df9363',
 };
 firebase.initializeApp(FB_CONFIG);
-const db = firebase.firestore();
+const db   = firebase.firestore();
+const auth = firebase.auth();
+const ALLOWED_EMAILS = ['nicoliu930226@gmail.com'];
 </script>
 
 <style>
@@ -265,7 +268,8 @@ body {
     <div class="header-logo-mark">W</div>
     案件管理後台
   </div>
-  <div class="header-note">Quotes CRM v1</div>
+  <div class="header-note" id="headerUserEmail"></div>
+  <button onclick="signOut()" style="font-size:12px;color:var(--ink-60);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px" onmouseover="this.style.color='var(--ink)'" onmouseout="this.style.color='var(--ink-60)'">登出</button>
 </header>
 
 <div class="wrap">
@@ -545,7 +549,31 @@ document.getElementById('statusFilter').addEventListener('change', renderList);
 // ══════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════
-loadQuotes();
+// ══════════════════════════════════════════════════
+//  AUTH GUARD
+// ══════════════════════════════════════════════════
+function guardAdmin(onPass) {
+  auth.onAuthStateChanged(user => {
+    if (!user) {
+      window.location.replace(`admin-login.html?next=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
+    if (!ALLOWED_EMAILS.includes(user.email)) {
+      auth.signOut();
+      window.location.replace('admin-login.html');
+      return;
+    }
+    const emailEl = document.getElementById('headerUserEmail');
+    if (emailEl) emailEl.textContent = user.email;
+    onPass();
+  });
+}
+async function signOut() {
+  await auth.signOut();
+  window.location.replace('admin-login.html');
+}
+
+guardAdmin(loadQuotes);
 </script>
 </body>
 </html>
