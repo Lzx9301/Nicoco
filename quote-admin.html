@@ -80,10 +80,11 @@ body {
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--ink-10);
 }
+.header-left { display: flex; align-items: center; gap: 18px; }
 .header-logo {
   display: flex; align-items: center; gap: 10px;
   font-size: 14px; font-weight: 600; color: var(--ink);
-  letter-spacing: -.2px;
+  letter-spacing: -.2px; text-decoration: none;
 }
 .header-logo-mark {
   width: 28px; height: 28px; background: var(--ink);
@@ -91,7 +92,21 @@ body {
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 12px; font-weight: 700; letter-spacing: -.5px;
 }
-.header-note { font-size: 12px; color: var(--ink-30); }
+.nav-link {
+  font-size: 13px; color: var(--ink-60); text-decoration: none;
+  padding: 4px 0; border-bottom: 1.5px solid transparent;
+  transition: color var(--t);
+}
+.nav-link:hover { color: var(--ink); }
+.nav-link.active { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.header-email { font-size: 12px; color: var(--ink-30); }
+.signout-btn {
+  font-size: 12px; color: var(--ink-60); background: none; border: none;
+  cursor: pointer; padding: 4px 8px; border-radius: var(--r-sm);
+  transition: all var(--t); font-family: var(--font);
+}
+.signout-btn:hover { color: var(--ink); background: var(--ink-10); }
 
 /* ── Layout ─────────────────────────────────────────────────── */
 .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 100px; }
@@ -264,12 +279,20 @@ body {
 <body>
 
 <header class="header">
-  <div class="header-logo">
-    <div class="header-logo-mark">W</div>
-    案件管理後台
+  <div class="header-left">
+    <a class="header-logo" href="dashboard.html">
+      <div class="header-logo-mark">W</div>
+      Website CRM
+    </a>
+    <nav style="display:flex;gap:16px">
+      <a class="nav-link" href="dashboard.html">Dashboard</a>
+      <a class="nav-link active" href="quote-admin.html">案件</a>
+    </nav>
   </div>
-  <div class="header-note" id="headerUserEmail"></div>
-  <button onclick="signOut()" style="font-size:12px;color:var(--ink-60);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px" onmouseover="this.style.color='var(--ink)'" onmouseout="this.style.color='var(--ink-60)'">登出</button>
+  <div class="header-right">
+    <span class="header-email" id="headerUserEmail"></span>
+    <button class="signout-btn" onclick="signOut()">登出</button>
+  </div>
 </header>
 
 <div class="wrap">
