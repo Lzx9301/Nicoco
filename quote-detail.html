@@ -80,16 +80,11 @@ body {
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--ink-10);
 }
-.header-left { display: flex; align-items: center; gap: 14px; }
-.back-link {
-  font-size: 13px; color: var(--ink-60); text-decoration: none;
-  display: flex; align-items: center; gap: 4px;
-  transition: color var(--t);
-}
-.back-link:hover { color: var(--ink); }
+.header-left { display: flex; align-items: center; gap: 18px; }
 .header-logo {
   display: flex; align-items: center; gap: 10px;
   font-size: 14px; font-weight: 600; color: var(--ink);
+  text-decoration: none;
 }
 .header-logo-mark {
   width: 28px; height: 28px; background: var(--ink);
@@ -97,7 +92,43 @@ body {
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 12px; font-weight: 700;
 }
-.header-note { font-size: 12px; color: var(--ink-30); font-family: var(--mono); }
+.nav-link {
+  font-size: 13px; color: var(--ink-60); text-decoration: none;
+  padding: 4px 0; border-bottom: 1.5px solid transparent;
+  transition: color var(--t);
+}
+.nav-link:hover { color: var(--ink); }
+.nav-link.active { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.header-email { font-size: 12px; color: var(--ink-30); }
+.signout-btn {
+  font-size: 12px; color: var(--ink-60); background: none; border: none;
+  cursor: pointer; padding: 4px 8px; border-radius: var(--r-sm);
+  transition: all var(--t); font-family: var(--font);
+}
+.signout-btn:hover { color: var(--ink); background: var(--ink-10); }
+
+/* ── Breadcrumb ──────────────────────────────────────────────── */
+.breadcrumb {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--ink-30); margin-bottom: 14px; flex-wrap: wrap;
+}
+.breadcrumb a {
+  color: var(--ink-60); text-decoration: none; transition: color var(--t);
+}
+.breadcrumb a:hover { color: var(--ink); }
+.breadcrumb-sep { color: var(--ink-30); user-select: none; }
+.breadcrumb-current { color: var(--ink); font-weight: 500; }
+
+/* ── Back buttons ────────────────────────────────────────────── */
+.back-buttons { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.back-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--ink-10); background: var(--white); color: var(--ink-60);
+  text-decoration: none; cursor: pointer; transition: all var(--t); font-family: var(--font);
+}
+.back-btn:hover { border-color: var(--ink-30); color: var(--ink); background: var(--ink-10); }
 
 /* ── Layout ─────────────────────────────────────────────────── */
 .wrap { max-width: 840px; margin: 0 auto; padding: 32px 24px 100px; }
@@ -297,14 +328,19 @@ body {
 
 <header class="header">
   <div class="header-left">
-    <a class="back-link" href="quote-admin.html">← 返回列表</a>
+    <a class="header-logo" href="dashboard.html">
+      <div class="header-logo-mark">W</div>
+      Website CRM
+    </a>
+    <nav style="display:flex;gap:16px">
+      <a class="nav-link" href="dashboard.html">Dashboard</a>
+      <a class="nav-link active" href="quote-admin.html">案件</a>
+    </nav>
   </div>
-  <div class="header-logo">
-    <div class="header-logo-mark">W</div>
-    案件詳情
+  <div class="header-right">
+    <span class="header-email" id="headerEmail"></span>
+    <button class="signout-btn" onclick="signOut()">登出</button>
   </div>
-  <div class="header-note" id="headerQuoteId"></div>
-  <button onclick="signOut()" style="font-size:12px;color:var(--ink-60);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px" onmouseover="this.style.color='var(--ink)'" onmouseout="this.style.color='var(--ink-60)'">登出</button>
 </header>
 
 <div class="wrap" id="wrap">
@@ -373,7 +409,6 @@ async function loadDetail() {
       return;
     }
     currentData = docSnap.data();
-    document.getElementById('headerQuoteId').textContent = currentData.quoteId || currentId;
     renderDetail();
   } catch (err) {
     console.error(err);
@@ -408,6 +443,24 @@ function renderDetail() {
   const statusLabel = STATUS_LABELS[q.status] || q.status || '新案件';
 
   wrap.innerHTML = `
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb">
+      <span>🏠</span>
+      <a href="dashboard.html">Dashboard</a>
+      <span class="breadcrumb-sep">/</span>
+      <span>📋</span>
+      <a href="quote-admin.html">案件管理</a>
+      <span class="breadcrumb-sep">/</span>
+      <span>📄</span>
+      <span class="breadcrumb-current">案件詳情</span>
+    </nav>
+
+    <!-- Back buttons -->
+    <div class="back-buttons">
+      <a class="back-btn" href="quote-admin.html">← 返回案件列表</a>
+      <a class="back-btn" href="dashboard.html">🏠 返回工作台</a>
+    </div>
+
     <!-- 基本資訊（唯讀，來自估價系統） -->
     <div class="card">
       <div class="quote-header">
@@ -774,6 +827,8 @@ function guardAdmin(onPass) {
       window.location.replace('admin-login.html');
       return;
     }
+    const emailEl = document.getElementById('headerEmail');
+    if (emailEl) emailEl.textContent = user.email;
     onPass();
   });
 }
