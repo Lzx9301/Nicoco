@@ -326,24 +326,33 @@ function showToast(msg) {
 // ══════════════════════════════════════════════════
 //  LOAD
 // ══════════════════════════════════════════════════
-let currentId   = null;
-let currentData = null;
+let currentId    = null;
+let currentData  = null;
+let currentToken = null;   // URL から読み取った token
 
 async function loadQuotation() {
-  currentId = new URLSearchParams(window.location.search).get('id');
+  const params = new URLSearchParams(window.location.search);
+  currentId    = params.get('id');
+  currentToken = params.get('token');
 
-  if (!currentId) {
-    showError('網址缺少報價單 id 參數（例如 ?id=Q-20260701-001）');
+  if (!currentId || !currentToken) {
+    showError('連結無效或已失效。請向業務人員索取最新的報價連結。');
     return;
   }
 
   try {
     const snap = await db.collection('quotes').doc(currentId).get();
     if (!snap.exists) {
-      showError(`找不到此報價單（${escapeHtml(currentId)}）。請確認連結是否正確。`);
+      showError('連結無效或已失效。請向業務人員索取最新的報價連結。');
       return;
     }
     currentData = snap.data();
+
+    // ── Token 驗證 ──────────────────────────────────
+    if (!currentData.clientToken || currentData.clientToken !== currentToken) {
+      showError('連結無效或已失效。請向業務人員索取最新的報價連結。');
+      return;
+    }
 
     // Must have quotationItems to be a valid quotation
     if (!currentData.quotationItems || currentData.quotationItems.length === 0) {
@@ -541,6 +550,12 @@ function renderLockedAction(status) {
 // ══════════════════════════════════════════════════
 async function handleAction(newStatus) {
   if (!currentId) return;
+
+  // ── 再次驗證 token（防止 DOM 操作繞過）──────────────
+  if (!currentToken || !currentData || currentData.clientToken !== currentToken) {
+    showToast('⚠ 連結無效，無法執行此操作');
+    return;
+  }
 
   const acceptBtn = document.getElementById('btnAccept');
   const rejectBtn = document.getElementById('btnReject');
