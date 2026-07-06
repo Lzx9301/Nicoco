@@ -664,11 +664,26 @@ function showToast(msg) {
 function markDirty() { dirty = true; }
 
 // ══════════════════════════════════════════════════
+//  TOKEN
+// ══════════════════════════════════════════════════
+function generateClientToken() {
+  // 32 字元隨機 hex（128-bit entropy）
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ══════════════════════════════════════════════════
 //  COPY QUOTATION LINK
 // ══════════════════════════════════════════════════
 function copyQuotationLink() {
+  const token = currentData && currentData.clientToken;
+  if (!token) {
+    showToast('⚠ 請先儲存正式報價，才能複製客戶連結');
+    return;
+  }
   const base = window.location.href.replace(/\/[^/]*(\?.*)?$/, '/');
-  const url  = `${base}quotation.html?id=${encodeURIComponent(currentId)}`;
+  const url  = `${base}quotation.html?id=${encodeURIComponent(currentId)}&token=${encodeURIComponent(token)}`;
   navigator.clipboard.writeText(url).then(() => {
     showToast('✓ 客戶連結已複製到剪貼簿');
   }).catch(() => {
@@ -710,6 +725,10 @@ async function saveQuotation() {
     subtotal: (Number(i.qty) || 0) * (Number(i.unitPrice) || 0),
   }));
 
+  // ── Token：若尚未產生則新增，否則沿用現有的 ──────────────────
+  const existingToken = currentData && currentData.clientToken;
+  const clientToken   = existingToken || generateClientToken();
+
   const payload = {
     quotationItems:     cleanItems,
     quotationSubtotal:  subtotal,
@@ -721,6 +740,7 @@ async function saveQuotation() {
     validUntil:         validUntilRaw ? firebase.firestore.Timestamp.fromDate(new Date(validUntilRaw)) : null,
     quotationNote:      document.getElementById('f-quotationNote').value,
     quotationUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    clientToken:        clientToken,
   };
 
   // 同時在 activityLogs 新增一筆紀錄
@@ -737,6 +757,9 @@ async function saveQuotation() {
       ...payload,
       activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog),
     });
+
+    // 同步本地 currentData（讓 copyQuotationLink 能立即取到 token）
+    if (currentData) currentData.clientToken = clientToken;
 
     dirty = false;
     statusEl.textContent = '✓ 已儲存';
