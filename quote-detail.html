@@ -827,12 +827,16 @@ window.addEventListener('beforeunload', (e) => {
 //  COPY QUOTATION LINK
 // ══════════════════════════════════════════════════
 function copyQuotationLink() {
-  const base = window.location.href.replace(/\/[^/]*$/, '/');
-  const url  = `${base}quotation.html?id=${encodeURIComponent(currentId)}`;
+  const token = currentData && currentData.clientToken;
+  if (!token) {
+    showToast('⚠ 此案件尚未產生客戶連結，請先在「正式報價」頁面儲存一次報價');
+    return;
+  }
+  const base = window.location.href.replace(/\/[^/]*(\?.*)?$/, '/');
+  const url  = `${base}quotation.html?id=${encodeURIComponent(currentId)}&token=${encodeURIComponent(token)}`;
   navigator.clipboard.writeText(url).then(() => {
     showToast('✓ 客戶連結已複製到剪貼簿');
   }).catch(() => {
-    // Fallback for older browsers
     prompt('請手動複製此連結：', url);
   });
 }
