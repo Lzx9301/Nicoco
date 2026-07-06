@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正式報價單</title>
+
+<!-- Firebase SDK (compat) — read + update only, no auth required for this page -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+const FB_CONFIG = {
+  apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
+  authDomain:        'webproject-3914c.firebaseapp.com',
+  projectId:         'webproject-3914c',
+  storageBucket:     'webproject-3914c.firebasestorage.app',
+  messagingSenderId: '266695680346',
+  appId:             '1:266695680346:web:022b22dfa5d12f61df9363',
+};
+firebase.initializeApp(FB_CONFIG);
+const db = firebase.firestore();
+</script>
+
+<style>
+/* ── Reset & Tokens ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:    #0f1117; --ink-60: #60636e; --ink-30: #b8bac4; --ink-10: #f0f1f4;
+  --white:  #ffffff;
+  --accent: #2563eb; --accent-light: #eff6ff;
+  --green:  #16a34a; --green-light:  #f0fdf4;
+  --amber:  #d97706; --amber-light:  #fffbeb;
+  --red:    #dc2626; --red-light:    #fef2f2;
+
+  --r-sm: 6px; --r: 10px; --r-lg: 16px; --r-xl: 20px;
+  --shadow-sm: 0 1px 4px rgba(15,17,23,.06);
+  --shadow:    0 4px 16px rgba(15,17,23,.08);
+  --shadow-lg: 0 20px 60px rgba(15,17,23,.10);
+
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang TC', sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --ease: cubic-bezier(.25,.46,.45,.94); --t: 160ms;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font); font-size: 14px; color: var(--ink);
+  background: var(--ink-10); -webkit-font-smoothing: antialiased; min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 40px; height: 60px;
+  background: var(--white); border-bottom: 1px solid var(--ink-10);
+}
+.header-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; font-weight: 700; color: var(--ink); letter-spacing: -.2px;
+}
+.header-logo-mark {
+  width: 30px; height: 30px; background: var(--ink); border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 13px; font-weight: 800;
+}
+.header-tagline { font-size: 12px; color: var(--ink-30); }
+
+/* ── Layout ─────────────────────────────────────────────────── */
+.wrap {
+  max-width: 780px; margin: 0 auto;
+  padding: 40px 24px 100px;
+}
+
+/* ── Document card ───────────────────────────────────────────── */
+.doc-card {
+  background: var(--white); border: 1px solid var(--ink-10);
+  border-radius: var(--r-xl); overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+/* ── Doc top band ────────────────────────────────────────────── */
+.doc-band {
+  background: var(--ink); padding: 28px 32px; color: #fff;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  flex-wrap: wrap; gap: 16px;
+}
+.doc-brand { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.5); margin-bottom: 6px; }
+.doc-title { font-size: 26px; font-weight: 800; letter-spacing: -.8px; }
+.doc-qid   { font-family: var(--mono); font-size: 12px; color: rgba(255,255,255,.4); margin-top: 4px; }
+.doc-status-block { text-align: right; padding-top: 4px; }
+.status-badge {
+  display: inline-block; font-size: 12px; font-weight: 700;
+  padding: 6px 16px; border-radius: 20px; letter-spacing: .02em;
+}
+.sb-draft    { background: rgba(255,255,255,.12); color: rgba(255,255,255,.7); }
+.sb-sent     { background: var(--accent-light); color: var(--accent); }
+.sb-accepted { background: var(--green-light);  color: var(--green); }
+.sb-rejected { background: var(--red-light);    color: var(--red); }
+
+/* ── Doc meta grid ───────────────────────────────────────────── */
+.doc-meta {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0; border-bottom: 1px solid var(--ink-10);
+}
+.meta-block {
+  padding: 20px 32px; border-right: 1px solid var(--ink-10);
+}
+.meta-block:nth-child(even) { border-right: none; }
+.meta-block:nth-child(n+3)  { border-top: 1px solid var(--ink-10); }
+.meta-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-30); margin-bottom: 5px;
+}
+.meta-value { font-size: 14px; font-weight: 500; color: var(--ink); line-height: 1.5; }
+.meta-value.mono { font-family: var(--mono); font-size: 13px; }
+.meta-value.expired { color: var(--red); }
+
+/* ── Items table ─────────────────────────────────────────────── */
+.items-section { padding: 28px 32px; border-bottom: 1px solid var(--ink-10); }
+.items-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-30); margin-bottom: 16px;
+}
+.items-table { width: 100%; border-collapse: collapse; }
+.items-table thead th {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-30); text-align: left; padding: 0 10px 10px;
+  border-bottom: 1.5px solid var(--ink-10);
+}
+.items-table thead th.r { text-align: right; }
+.items-table tbody td {
+  padding: 12px 10px; border-bottom: 1px solid var(--ink-10);
+  vertical-align: top; font-size: 13px;
+}
+.items-table tbody tr:last-child td { border-bottom: none; }
+.item-name { font-weight: 600; color: var(--ink); margin-bottom: 3px; }
+.item-desc { font-size: 12px; color: var(--ink-60); line-height: 1.5; }
+.item-num  { text-align: right; color: var(--ink-60); font-variant-numeric: tabular-nums; }
+.item-subtotal { text-align: right; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ── Totals ──────────────────────────────────────────────────── */
+.totals-section { padding: 20px 32px; border-bottom: 1px solid var(--ink-10); }
+.totals-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 0; font-size: 13px;
+}
+.totals-row .t-label { color: var(--ink-60); }
+.totals-row .t-value { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.totals-row .t-value.discount { color: var(--green); }
+.totals-divider { height: 1px; background: var(--ink-10); margin: 8px 0; }
+.totals-grand {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 0 0;
+}
+.totals-grand .tg-label { font-size: 15px; font-weight: 700; color: var(--ink); }
+.totals-grand .tg-value {
+  font-size: 28px; font-weight: 800; color: var(--ink);
+  letter-spacing: -1px; font-variant-numeric: tabular-nums;
+}
+
+/* ── Note ────────────────────────────────────────────────────── */
+.note-section { padding: 20px 32px; border-bottom: 1px solid var(--ink-10); }
+.note-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-30); margin-bottom: 8px; }
+.note-text  { font-size: 13px; color: var(--ink-60); line-height: 1.7; white-space: pre-wrap; }
+
+/* ── Action section ──────────────────────────────────────────── */
+.action-section { padding: 28px 32px; }
+.action-title {
+  font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px;
+}
+.action-sub { font-size: 12px; color: var(--ink-60); margin-bottom: 20px; line-height: 1.6; }
+.action-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.btn-accept {
+  flex: 1; min-width: 140px; padding: 14px 24px; border-radius: var(--r);
+  background: var(--ink); color: #fff; border: none;
+  font-size: 14px; font-weight: 600; font-family: var(--font);
+  cursor: pointer; transition: background var(--t);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-accept:hover:not(:disabled) { background: #2a2d38; }
+
+.btn-reject {
+  flex: 1; min-width: 140px; padding: 14px 24px; border-radius: var(--r);
+  background: var(--white); color: var(--ink-60);
+  border: 1.5px solid var(--ink-10); font-size: 14px; font-weight: 500; font-family: var(--font);
+  cursor: pointer; transition: all var(--t);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-reject:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+
+.btn-accept:disabled,
+.btn-reject:disabled { opacity: 1; cursor: not-allowed; }
+.btn-accepted { background: var(--green) !important; }
+.btn-rejected { background: var(--red-light) !important; color: var(--red) !important; border-color: #fca5a5 !important; }
+
+/* status result banner */
+.result-banner {
+  border-radius: var(--r); padding: 14px 18px;
+  font-size: 13px; font-weight: 500; line-height: 1.5;
+  display: none; margin-top: 16px;
+}
+.result-banner.accepted { display: flex; gap: 10px; background: var(--green-light); color: var(--green); border: 1px solid #bbf7d0; }
+.result-banner.rejected { display: flex; gap: 10px; background: var(--red-light);   color: var(--red);   border: 1px solid #fca5a5; }
+.result-banner.processing { display: flex; gap: 10px; background: var(--ink-10); color: var(--ink-60); border: 1px solid var(--ink-10); }
+
+/* ── Footer ──────────────────────────────────────────────────── */
+.doc-footer {
+  padding: 18px 32px; background: var(--ink-10);
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+}
+.doc-footer-left  { font-size: 11px; color: var(--ink-30); }
+.doc-footer-right { font-size: 11px; color: var(--ink-30); font-family: var(--mono); }
+
+/* ── Loading / Error ─────────────────────────────────────────── */
+.loading-state { text-align: center; padding: 100px 0; color: var(--ink-30); font-size: 14px; }
+.loading-state .spinner {
+  width: 28px; height: 28px; border: 2.5px solid var(--ink-10); border-top-color: var(--ink);
+  border-radius: 50%; margin: 0 auto 16px; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-state { text-align: center; padding: 100px 0; color: var(--ink-60); font-size: 14px; }
+
+/* ── Toast ───────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(16px);
+  background: var(--ink); color: #fff; font-size: 13px;
+  padding: 11px 22px; border-radius: var(--r); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: all .25s var(--ease); z-index: 999;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── RWD ─────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .header { padding: 0 20px; }
+  .wrap { padding: 24px 16px 80px; }
+  .doc-band { padding: 22px 20px; }
+  .doc-meta { grid-template-columns: 1fr; }
+  .meta-block { border-right: none !important; }
+  .meta-block:nth-child(n+2) { border-top: 1px solid var(--ink-10); }
+  .items-section, .totals-section, .note-section, .action-section { padding: 20px; }
+  .items-table thead { display: none; }
+  .items-table, .items-table tbody, .items-table tr, .items-table td { display: block; width: 100%; }
+  .items-table tbody tr { border-bottom: 1px solid var(--ink-10); padding: 12px 0; }
+  .items-table tbody td { border-bottom: none; padding: 3px 0; }
+  .item-num, .item-subtotal { text-align: left; }
+  .doc-footer { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+
+@media print {
+  .action-section, .header, .toast { display: none; }
+  body { background: white; }
+  .doc-card { box-shadow: none; border: none; }
+  .wrap { padding: 0; max-width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-logo">
+    <div class="header-logo-mark">W</div>
+    Website Studio
+  </div>
+  <div class="header-tagline">正式報價單</div>
+</header>
+
+<div class="wrap">
+  <div class="loading-state" id="loadingState">
+    <div class="spinner"></div>
+    載入報價單中…
+  </div>
+  <div id="docRoot"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════
+const QSTATUS_LABELS = {
+  draft:    '草稿',
+  sent:     '已送出報價',
+  accepted: '已接受',
+  rejected: '已拒絕',
+};
+const QSTATUS_BADGE = {
+  draft:    'sb-draft',
+  sent:     'sb-sent',
+  accepted: 'sb-accepted',
+  rejected: 'sb-rejected',
+};
+
+// ══════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function fmtMoney(n) {
+  const num = Number(n || 0);
+  return `NT$${num.toLocaleString()}`;
+}
+function fmtDate(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
+}
+function isExpired(ts) {
+  if (!ts) return false;
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d < new Date();
+}
+function genActivityId() {
+  return 'act_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// ══════════════════════════════════════════════════
+//  LOAD
+// ══════════════════════════════════════════════════
+let currentId   = null;
+let currentData = null;
+
+async function loadQuotation() {
+  currentId = new URLSearchParams(window.location.search).get('id');
+
+  if (!currentId) {
+    showError('網址缺少報價單 id 參數（例如 ?id=Q-20260701-001）');
+    return;
+  }
+
+  try {
+    const snap = await db.collection('quotes').doc(currentId).get();
+    if (!snap.exists) {
+      showError(`找不到此報價單（${escapeHtml(currentId)}）。請確認連結是否正確。`);
+      return;
+    }
+    currentData = snap.data();
+
+    // Must have quotationItems to be a valid quotation
+    if (!currentData.quotationItems || currentData.quotationItems.length === 0) {
+      showError('此案件尚未建立正式報價項目，請等待業務人員準備完成後再查看。');
+      return;
+    }
+
+    document.getElementById('loadingState').style.display = 'none';
+    renderQuotation(currentData);
+  } catch (err) {
+    console.error(err);
+    showError(`讀取失敗：${err.message || String(err)}`);
+  }
+}
+
+function showError(msg) {
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('docRoot').innerHTML =
+    `<div class="error-state">⚠ ${escapeHtml(msg)}</div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════
+function renderQuotation(q) {
+  const items    = q.quotationItems || [];
+  const subtotal = Number(q.quotationSubtotal || 0);
+  const discount = Number(q.quotationDiscount || 0);
+  const tax      = Number(q.quotationTax || 0);
+  const total    = Number(q.quotationTotal || subtotal - discount + tax);
+  const status   = q.quotationStatus || 'draft';
+  const isLocked = status === 'accepted' || status === 'rejected';
+  const expired  = isExpired(q.validUntil);
+  const today    = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
+
+  document.title = `報價單 ${q.quoteId || currentId} — ${q.name || ''}`;
+
+  document.getElementById('docRoot').innerHTML = `
+    <div class="doc-card">
+
+      <!-- Top band -->
+      <div class="doc-band">
+        <div>
+          <div class="doc-brand">正式報價單</div>
+          <div class="doc-title">${escapeHtml(q.name || '—')}${q.company ? `<span style="font-size:16px;font-weight:500;opacity:.6"> ／ ${escapeHtml(q.company)}</span>` : ''}</div>
+          <div class="doc-qid">${escapeHtml(q.quoteId || currentId)}</div>
+        </div>
+        <div class="doc-status-block">
+          <span class="status-badge ${QSTATUS_BADGE[status] || 'sb-draft'}" id="statusBadge">
+            ${QSTATUS_LABELS[status] || status}
+          </span>
+        </div>
+      </div>
+
+      <!-- Meta grid -->
+      <div class="doc-meta">
+        <div class="meta-block">
+          <div class="meta-label">專案類型</div>
+          <div class="meta-value">${escapeHtml(q.projectType || '—')}</div>
+        </div>
+        <div class="meta-block">
+          <div class="meta-label">建立日期</div>
+          <div class="meta-value">${fmtDate(q.quotationUpdatedAt || q.createdAt)}</div>
+        </div>
+        <div class="meta-block">
+          <div class="meta-label">報價有效期限</div>
+          <div class="meta-value${expired ? ' expired' : ''}">
+            ${q.validUntil ? fmtDate(q.validUntil) + (expired ? '（已過期）' : '') : '—'}
+          </div>
+        </div>
+        <div class="meta-block">
+          <div class="meta-label">付款條件</div>
+          <div class="meta-value">${escapeHtml(q.paymentTerms || '—')}</div>
+        </div>
+      </div>
+
+      <!-- Items table -->
+      <div class="items-section">
+        <div class="items-title">報價項目</div>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width:40%">項目</th>
+              <th>說明</th>
+              <th class="r" style="width:7%">數量</th>
+              <th class="r" style="width:13%">單價</th>
+              <th class="r" style="width:13%">小計</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map(item => `
+              <tr>
+                <td><div class="item-name">${escapeHtml(item.name || '—')}</div></td>
+                <td><div class="item-desc">${escapeHtml(item.description || '')}</div></td>
+                <td class="item-num">${Number(item.qty || 0).toLocaleString()}</td>
+                <td class="item-num">${fmtMoney(item.unitPrice)}</td>
+                <td class="item-subtotal">${fmtMoney(item.subtotal)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Totals -->
+      <div class="totals-section">
+        <div class="totals-row">
+          <span class="t-label">Subtotal</span>
+          <span class="t-value">${fmtMoney(subtotal)}</span>
+        </div>
+        ${discount > 0 ? `
+        <div class="totals-row">
+          <span class="t-label">Discount</span>
+          <span class="t-value discount">−${fmtMoney(discount)}</span>
+        </div>` : ''}
+        ${tax > 0 ? `
+        <div class="totals-row">
+          <span class="t-label">Tax</span>
+          <span class="t-value">${fmtMoney(tax)}</span>
+        </div>` : ''}
+        <div class="totals-divider"></div>
+        <div class="totals-grand">
+          <span class="tg-label">Total</span>
+          <span class="tg-value">${fmtMoney(total)}</span>
+        </div>
+      </div>
+
+      ${q.quotationNote ? `
+      <!-- Note -->
+      <div class="note-section">
+        <div class="note-label">備註</div>
+        <div class="note-text">${escapeHtml(q.quotationNote)}</div>
+      </div>` : ''}
+
+      <!-- Action -->
+      <div class="action-section">
+        ${isLocked
+          ? renderLockedAction(status)
+          : renderActionButtons(expired)}
+      </div>
+
+      <!-- Footer -->
+      <div class="doc-footer">
+        <span class="doc-footer-left">本報價單由 Website Studio 提供 ・ 如有疑問請直接聯繫業務</span>
+        <span class="doc-footer-right">${escapeHtml(q.quoteId || currentId)}</span>
+      </div>
+
+    </div>`;
+}
+
+function renderActionButtons(expired) {
+  if (expired) {
+    return `
+      <div class="action-title">此報價單已過有效期限</div>
+      <div class="action-sub">如需重新報價，請聯繫業務人員。</div>`;
+  }
+  return `
+    <div class="action-title">確認此份報價單</div>
+    <div class="action-sub">
+      請仔細確認上方報價內容後再按下接受或拒絕。<br>
+      接受後系統將自動通知業務人員，雙方確認後正式啟動專案。
+    </div>
+    <div class="action-btns">
+      <button class="btn-accept" id="btnAccept" onclick="handleAction('accepted')">
+        ✓ 接受報價
+      </button>
+      <button class="btn-reject" id="btnReject" onclick="handleAction('rejected')">
+        ✕ 拒絕報價
+      </button>
+    </div>
+    <div class="result-banner" id="resultBanner"></div>`;
+}
+
+function renderLockedAction(status) {
+  if (status === 'accepted') {
+    return `
+      <div class="result-banner accepted" style="display:flex">
+        <span style="font-size:18px">✓</span>
+        <div>
+          <div style="font-weight:600">您已接受此份報價</div>
+          <div style="font-size:12px;margin-top:2px;opacity:.8">業務人員將盡快與您聯繫，確認專案啟動細節。感謝您的信任。</div>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="result-banner rejected" style="display:flex">
+      <span style="font-size:18px">✕</span>
+      <div>
+        <div style="font-weight:600">您已拒絕此份報價</div>
+        <div style="font-size:12px;margin-top:2px;opacity:.8">如有任何疑問或希望重新議價，歡迎直接聯繫業務人員。</div>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  ACTIONS
+// ══════════════════════════════════════════════════
+async function handleAction(newStatus) {
+  if (!currentId) return;
+
+  const acceptBtn = document.getElementById('btnAccept');
+  const rejectBtn = document.getElementById('btnReject');
+  const banner    = document.getElementById('resultBanner');
+
+  // Lock buttons immediately to prevent double-click
+  if (acceptBtn) acceptBtn.disabled = true;
+  if (rejectBtn) rejectBtn.disabled = true;
+  if (banner)    { banner.className = 'result-banner processing'; banner.innerHTML = '處理中…'; }
+
+  const actionLabel = newStatus === 'accepted' ? '接受' : '拒絕';
+  const totalAmt    = Number(currentData.quotationTotal || 0);
+  const newLog = {
+    id:        genActivityId(),
+    type:      newStatus === 'accepted' ? 'payment' : 'note',
+    content:   newStatus === 'accepted'
+                 ? `客戶已接受報價，總金額 NT$${totalAmt.toLocaleString()}`
+                 : '客戶已拒絕報價',
+    createdAt: firebase.firestore.Timestamp.now(),
+    createdBy: 'client',
+  };
+
+  try {
+    await db.collection('quotes').doc(currentId).update({
+      quotationStatus:    newStatus,
+      quotationUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      activityLogs:       firebase.firestore.FieldValue.arrayUnion(newLog),
+    });
+
+    // Update local state
+    currentData.quotationStatus = newStatus;
+
+    // Swap buttons to locked state
+    const actionSection = document.querySelector('.action-section');
+    if (actionSection) actionSection.innerHTML = renderLockedAction(newStatus);
+
+    // Update status badge in header
+    const badge = document.getElementById('statusBadge');
+    if (badge) {
+      badge.className = `status-badge ${QSTATUS_BADGE[newStatus]}`;
+      badge.textContent = QSTATUS_LABELS[newStatus];
+    }
+
+    showToast(`✓ 已${actionLabel}報價，感謝您的回覆`);
+  } catch (err) {
+    console.error(err);
+    // Re-enable buttons on failure
+    if (acceptBtn) acceptBtn.disabled = false;
+    if (rejectBtn) rejectBtn.disabled = false;
+    if (banner)    { banner.className = 'result-banner'; banner.style.display = 'none'; }
+    showToast(`⚠ 操作失敗：${err.message || err}`);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+loadQuotation();
+</script>
+</body>
+</html>
