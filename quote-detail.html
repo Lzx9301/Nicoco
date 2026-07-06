@@ -169,6 +169,15 @@ body {
   transition: background var(--t);
 }
 .btn-quotation-link:hover { background: #2a2d38; }
+.btn-copy-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: 20px;
+  background: var(--white); color: var(--ink-60);
+  font-size: 12px; font-weight: 500;
+  border: 1.5px solid var(--ink-10); cursor: pointer;
+  transition: all var(--t); font-family: var(--font);
+}
+.btn-copy-link:hover { border-color: var(--ink-30); color: var(--ink); }
 
 /* ── Info grid ──────────────────────────────────────────────── */
 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -474,6 +483,7 @@ function renderDetail() {
           <a href="quote-edit.html?id=${encodeURIComponent(currentId)}" class="btn-quotation-link">
             ${q.quotationTotal ? '查看 / 編輯正式報價' : '建立正式報價'} →
           </a>
+          ${q.quotationTotal ? `<button class="btn-copy-link" onclick="copyQuotationLink()">🔗 複製客戶連結</button>` : ''}
         </div>
       </div>
 
@@ -813,6 +823,20 @@ window.addEventListener('beforeunload', (e) => {
 // ══════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  COPY QUOTATION LINK
+// ══════════════════════════════════════════════════
+function copyQuotationLink() {
+  const base = window.location.href.replace(/\/[^/]*$/, '/');
+  const url  = `${base}quotation.html?id=${encodeURIComponent(currentId)}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('✓ 客戶連結已複製到剪貼簿');
+  }).catch(() => {
+    // Fallback for older browsers
+    prompt('請手動複製此連結：', url);
+  });
+}
+
 // ══════════════════════════════════════════════════
 //  AUTH GUARD
 // ══════════════════════════════════════════════════
