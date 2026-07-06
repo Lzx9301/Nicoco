@@ -247,6 +247,15 @@ body {
 }
 .btn-save:hover { background: #2a2d38; }
 .btn-save:disabled { background: var(--ink-30); cursor: not-allowed; }
+.btn-copy-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 10px 18px; border-radius: var(--r-sm);
+  background: var(--white); color: var(--ink-60);
+  font-size: 13px; font-weight: 500;
+  border: 1.5px solid var(--ink-10); cursor: pointer;
+  transition: all var(--t); font-family: var(--font);
+}
+.btn-copy-link:hover { border-color: var(--ink-30); color: var(--ink); }
 
 /* ── Loading / Error ────────────────────────────────────────── */
 .loading-state, .error-state { text-align: center; padding: 100px 0; color: var(--ink-30); font-size: 14px; }
@@ -546,6 +555,7 @@ function renderPage() {
 
     <div class="save-bar">
       <span class="save-status" id="saveStatus"></span>
+      <button class="btn-copy-link" onclick="copyQuotationLink()" id="copyLinkBtn">🔗 複製客戶連結</button>
       <button class="btn-save" id="saveBtn" onclick="saveQuotation()">儲存正式報價</button>
     </div>`;
 
@@ -652,6 +662,19 @@ function showToast(msg) {
 }
 
 function markDirty() { dirty = true; }
+
+// ══════════════════════════════════════════════════
+//  COPY QUOTATION LINK
+// ══════════════════════════════════════════════════
+function copyQuotationLink() {
+  const base = window.location.href.replace(/\/[^/]*(\?.*)?$/, '/');
+  const url  = `${base}quotation.html?id=${encodeURIComponent(currentId)}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('✓ 客戶連結已複製到剪貼簿');
+  }).catch(() => {
+    prompt('請手動複製此連結：', url);
+  });
+}
 
 // ══════════════════════════════════════════════════
 //  SAVE
