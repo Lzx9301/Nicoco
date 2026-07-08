@@ -248,6 +248,23 @@ body {
   .doc-footer { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
 
+/* ── Contact / Bank info ─────────────────────────────────────── */
+.contact-section, .bank-section {
+  padding: 18px 32px; border-top: 1px solid var(--ink-10);
+}
+.info-section-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-30); margin-bottom: 10px;
+}
+.contact-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 24px;
+}
+.contact-item { font-size: 12px; color: var(--ink-60); display: flex; gap: 6px; }
+.contact-item-label { color: var(--ink-30); flex-shrink: 0; min-width: 36px; }
+.contact-item a { color: var(--accent); text-decoration: none; }
+.contact-item a:hover { text-decoration: underline; }
+.bank-text { font-size: 12px; color: var(--ink-60); line-height: 1.7; white-space: pre-wrap; }
+
 @media print {
   .action-section, .header, .toast { display: none; }
   body { background: white; }
@@ -260,8 +277,8 @@ body {
 
 <header class="header">
   <div class="header-logo">
-    <div class="header-logo-mark">W</div>
-    Website Studio
+    <div class="header-logo-mark" id="headerLogoMark">W</div>
+    <span id="headerStudioName">Website Studio</span>
   </div>
   <div class="header-tagline">正式報價單</div>
 </header>
@@ -300,6 +317,9 @@ function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c =>
     ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
+function escapeAttr(str) {
+  return String(str ?? '').replace(/"/g, '&quot;');
+}
 function fmtMoney(n) {
   const num = Number(n || 0);
   return `NT$${num.toLocaleString()}`;
@@ -328,7 +348,22 @@ function showToast(msg) {
 // ══════════════════════════════════════════════════
 let currentId    = null;
 let currentData  = null;
-let currentToken = null;   // URL から読み取った token
+let currentToken = null;
+let currentStudio = null;
+
+const STUDIO_DEFAULTS = {
+  studioName:      'Website Studio',
+  displayName:     'Website CRM',
+  logoText:        'W',
+  contactEmail:    'nicoliu930226@gmail.com',
+  phone:           '',
+  lineId:          '',
+  websiteUrl:      '',
+  quotationFooter: '本報價單由 Website Studio 提供，如有疑問請直接聯繫業務。',
+  bankInfo:        '',
+  taxId:           '',
+  address:         '',
+};
 
 async function loadQuotation() {
   const params = new URLSearchParams(window.location.search);
@@ -341,12 +376,18 @@ async function loadQuotation() {
   }
 
   try {
-    const snap = await db.collection('quotes').doc(currentId).get();
-    if (!snap.exists) {
+    // 並行讀取 quotes/{id} 和 settings/studio
+    const [quoteSnap, studioSnap] = await Promise.all([
+      db.collection('quotes').doc(currentId).get(),
+      db.collection('settings').doc('studio').get(),
+    ]);
+
+    if (!quoteSnap.exists) {
       showError('連結無效或已失效。請向業務人員索取最新的報價連結。');
       return;
     }
-    currentData = snap.data();
+    currentData   = quoteSnap.data();
+    currentStudio = { ...STUDIO_DEFAULTS, ...(studioSnap.exists ? studioSnap.data() : {}) };
 
     // ── Token 驗證 ──────────────────────────────────
     if (!currentData.clientToken || currentData.clientToken !== currentToken) {
@@ -359,6 +400,13 @@ async function loadQuotation() {
       showError('此案件尚未建立正式報價項目，請等待業務人員準備完成後再查看。');
       return;
     }
+
+    // 套用 Header（logoText + studioName）
+    const markEl = document.getElementById('headerLogoMark');
+    const nameEl = document.getElementById('headerStudioName');
+    if (markEl) markEl.textContent = currentStudio.logoText || 'W';
+    if (nameEl) nameEl.textContent = currentStudio.studioName || 'Website Studio';
+    document.title = `報價單 ${currentData.quoteId || currentId} — ${currentStudio.studioName || 'Website Studio'}`;
 
     document.getElementById('loadingState').style.display = 'none';
     renderQuotation(currentData);
@@ -388,7 +436,7 @@ function renderQuotation(q) {
   const expired  = isExpired(q.validUntil);
   const today    = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
 
-  document.title = `報價單 ${q.quoteId || currentId} — ${q.name || ''}`;
+  document.title = `報價單 ${q.quoteId || currentId} — ${currentStudio ? currentStudio.studioName : 'Website Studio'}`;
 
   document.getElementById('docRoot').innerHTML = `
     <div class="doc-card">
@@ -492,12 +540,44 @@ function renderQuotation(q) {
           : renderActionButtons(expired)}
       </div>
 
+      ${renderContactSection()}
+      ${renderBankSection(q)}
+
       <!-- Footer -->
       <div class="doc-footer">
-        <span class="doc-footer-left">本報價單由 Website Studio 提供 ・ 如有疑問請直接聯繫業務</span>
+        <span class="doc-footer-left">${escapeHtml(currentStudio ? currentStudio.quotationFooter : '本報價單由 Website Studio 提供，如有疑問請直接聯繫業務。')}</span>
         <span class="doc-footer-right">${escapeHtml(q.quoteId || currentId)}</span>
       </div>
 
+    </div>`;
+}
+
+// ── 聯絡資訊區塊 ────────────────────────────────────────────────
+function renderContactSection() {
+  if (!currentStudio) return '';
+  const { contactEmail, phone, lineId, websiteUrl } = currentStudio;
+  const rows = [
+    contactEmail ? `<div class="contact-item"><span class="contact-item-label">Email</span><a href="mailto:${escapeAttr(contactEmail)}">${escapeHtml(contactEmail)}</a></div>` : '',
+    phone        ? `<div class="contact-item"><span class="contact-item-label">電話</span>${escapeHtml(phone)}</div>` : '',
+    lineId       ? `<div class="contact-item"><span class="contact-item-label">LINE</span>${escapeHtml(lineId)}</div>` : '',
+    websiteUrl   ? `<div class="contact-item"><span class="contact-item-label">網站</span><a href="${escapeAttr(websiteUrl)}" target="_blank">${escapeHtml(websiteUrl)}</a></div>` : '',
+  ].filter(Boolean);
+  if (rows.length === 0) return '';
+  return `
+    <div class="contact-section">
+      <div class="info-section-label">聯絡資訊</div>
+      <div class="contact-grid">${rows.join('')}</div>
+    </div>`;
+}
+
+// ── 匯款資訊區塊 ────────────────────────────────────────────────
+function renderBankSection(q) {
+  const bankInfo = currentStudio && currentStudio.bankInfo;
+  if (!bankInfo) return '';
+  return `
+    <div class="bank-section">
+      <div class="info-section-label">匯款資訊</div>
+      <div class="bank-text">${escapeHtml(bankInfo)}</div>
     </div>`;
 }
 
