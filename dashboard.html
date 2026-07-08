@@ -537,6 +537,7 @@ function calcStats(all) {
     total, newCount, developing, done,
     needContact, waitingConfirm, inDev, waitingPayment, monthNew,
     kpiRevenue, kpiWon, avgDeal, closeRate,
+    hasQuotation, totalWonCount,
     pendingPayment, pendingPaymentCount, pendingQuote,
     qDraft, qSent, qAccepted, qRejected, qNone,
     overdueItems:    overdueItems.sort((a,b) => tsToMs(a.validUntil) - tsToMs(b.validUntil)).slice(0,5),
@@ -662,7 +663,7 @@ function render(all) {
           <span class="kpi-dot" style="background:var(--accent)"></span>成交率
         </div>
         <div class="kpi-value">${s.closeRate > 0 ? s.closeRate + '%' : '—'}</div>
-        <div class="kpi-sub">${s.closeRate > 0 ? `${totalWonCount(s)} 成交 / ${s.hasQuotation ?? '—'} 有報價` : '尚無報價資料'}</div>
+        <div class="kpi-sub">${s.closeRate > 0 ? `${s.totalWonCount} 成交 / ${s.hasQuotation} 有報價` : '尚無報價資料'}</div>
         ${s.closeRate > 0 ? `<span class="kpi-badge ${crBadge}">${s.closeRate >= 60 ? '✓ 良好' : s.closeRate >= 30 ? '△ 普通' : '↓ 偏低'}</span>` : ''}
       </div>
 
@@ -853,9 +854,6 @@ function render(all) {
     </div>
   </div>`;
 }
-
-// calcStats 內部用到 totalWonCount，用一個包裝讓 render 可取得
-function totalWonCount(s) { return s.kpiWon || 0; }
 
 // ══════════════════════════════════════════════════
 //  INIT
