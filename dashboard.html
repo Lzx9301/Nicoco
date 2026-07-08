@@ -33,7 +33,7 @@ const ALLOWED_EMAILS = ['nicoliu930226@gmail.com'];
   --accent: #2563eb; --accent-light: #eff6ff;
   --green:  #16a34a; --green-light:  #f0fdf4;
   --amber:  #d97706; --amber-light:  #fffbeb;
-  --red:    #dc2626;
+  --red:    #dc2626; --red-light:    #fef2f2;
   --purple: #7c3aed; --purple-light: #f5f3ff;
 
   --r-sm: 6px; --r: 10px; --r-lg: 16px; --r-xl: 20px;
@@ -68,7 +68,6 @@ body {
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 12px; font-weight: 700;
 }
-/* ② 導航改為「Dashboard」+「案件」 */
 .nav-link {
   font-size: 13px; color: var(--ink-60); text-decoration: none;
   transition: color var(--t); padding: 4px 0;
@@ -87,16 +86,15 @@ body {
 /* ── Wrap ───────────────────────────────────────────────────── */
 .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
 
-/* ── Page header + quick actions ─────────────────────────────── */
+/* ── Page header ─────────────────────────────────────────────── */
 .page-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
 }
-.page-header-text {}
 .page-title { font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -.5px; }
-.page-sub { font-size: 13px; color: var(--ink-60); margin-top: 4px; }
+.page-sub   { font-size: 13px; color: var(--ink-60); margin-top: 4px; }
 
-/* ⑤ 快捷功能按鈕群 */
+/* ── Quick Actions ───────────────────────────────────────────── */
 .quick-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .qa-btn {
   padding: 8px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 500;
@@ -104,12 +102,8 @@ body {
   text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--font);
 }
-.qa-btn-ghost {
-  background: var(--white); border: 1.5px solid var(--ink-10); color: var(--ink-60);
-}
+.qa-btn-ghost  { background: var(--white); border: 1.5px solid var(--ink-10); color: var(--ink-60); }
 .qa-btn-ghost:hover { border-color: var(--ink-30); color: var(--ink); }
-.qa-btn-primary { background: var(--ink); border: 1.5px solid var(--ink); color: #fff; }
-.qa-btn-primary:hover { background: #2a2d38; }
 .qa-btn-danger { background: var(--white); border: 1.5px solid var(--ink-10); color: var(--ink-60); }
 .qa-btn-danger:hover { border-color: var(--red); color: var(--red); }
 
@@ -118,10 +112,11 @@ body {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
   color: var(--ink-30); margin-bottom: 12px; margin-top: 28px;
 }
-.section-title:first-of-type { margin-top: 0; }
 
-/* ── Stat Grid ──────────────────────────────────────────────── */
+/* ── Stat / KPI Grid ────────────────────────────────────────── */
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi-grid   { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
 .stat-card {
   background: var(--white); border: 1.5px solid var(--ink-10); border-radius: var(--r-lg);
   padding: 18px 20px; transition: box-shadow var(--t);
@@ -132,20 +127,47 @@ body {
   font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
 }
 .stat-value {
-  font-size: 26px; font-weight: 800; color: var(--ink);
-  letter-spacing: -.8px; font-variant-numeric: tabular-nums;
+  font-size: 24px; font-weight: 800; color: var(--ink);
+  letter-spacing: -.8px; font-variant-numeric: tabular-nums; line-height: 1.1;
 }
-.stat-sub { font-size: 11px; color: var(--ink-30); margin-top: 4px; }
+.stat-sub  { font-size: 11px; color: var(--ink-30); margin-top: 4px; }
 .stat-accent .stat-value { color: var(--accent); }
 .stat-amber  .stat-value { color: var(--amber); }
 .stat-green  .stat-value { color: var(--green); }
 .stat-purple .stat-value { color: var(--purple); }
 .stat-red    .stat-value { color: var(--red); }
 
-/* ③ 今日工作 — 稍微凸出一點 */
-.today-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+/* KPI cards — 大一點的數字，有輔助線 */
+.kpi-card {
+  background: var(--white); border: 1.5px solid var(--ink-10); border-radius: var(--r-lg);
+  padding: 20px 22px; transition: box-shadow var(--t);
 }
+.kpi-card:hover { box-shadow: var(--shadow-sm); }
+.kpi-label {
+  font-size: 11px; color: var(--ink-30); margin-bottom: 10px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+  display: flex; align-items: center; gap: 6px;
+}
+.kpi-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.kpi-value {
+  font-size: 28px; font-weight: 800; letter-spacing: -1px;
+  font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.1;
+}
+.kpi-value.money { font-size: 22px; }
+.kpi-sub  { font-size: 11px; color: var(--ink-30); margin-top: 6px; }
+.kpi-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 20px; margin-top: 6px;
+}
+.kpi-badge-green  { background: var(--green-light);  color: var(--green); }
+.kpi-badge-amber  { background: var(--amber-light);  color: var(--amber); }
+.kpi-badge-red    { background: var(--red-light);    color: var(--red); }
+.kpi-badge-accent { background: var(--accent-light); color: var(--accent); }
+
+/* ── Today grid ──────────────────────────────────────────────── */
+.today-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .today-card {
   background: var(--white); border: 1.5px solid var(--ink-10); border-radius: var(--r-lg);
   padding: 16px 20px; transition: box-shadow var(--t), border-color var(--t);
@@ -166,8 +188,22 @@ body {
 .today-card.red    .today-value { color: var(--red); }
 .today-card.green  .today-value { color: var(--green); }
 
-/* ④ 需要處理 + 兩欄佈局 */
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+/* ── Layout cols ─────────────────────────────────────────────── */
+.two-col   { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* 報價狀態摘要 row */
+.status-summary { display: flex; flex-direction: column; gap: 8px; }
+.ss-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px; border-radius: var(--r-sm);
+  background: var(--ink-10); font-size: 13px;
+}
+.ss-label { color: var(--ink-60); font-weight: 500; }
+.ss-value { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ss-dot {
+  width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; flex-shrink: 0;
+}
 
 /* ── Card ───────────────────────────────────────────────────── */
 .card {
@@ -187,30 +223,32 @@ body {
 
 /* ── Quote rows ─────────────────────────────────────────────── */
 .quote-row {
-  display: grid; grid-template-columns: 110px 1fr 96px 80px;
+  display: grid; grid-template-columns: 110px 1fr 90px 90px;
   align-items: center; gap: 10px;
   padding: 9px 0; border-bottom: 1px solid var(--ink-10);
 }
 .quote-row:last-child { border-bottom: none; padding-bottom: 0; }
-.qr-id   { font-family: var(--mono); font-size: 10px; color: var(--ink-30); }
-.qr-name { font-size: 13px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qr-type { font-size: 11px; color: var(--ink-60); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qr-date { font-size: 11px; color: var(--ink-30); text-align: right; }
-.qr-link { text-decoration: none; color: inherit; display: contents; }
+.qr-id     { font-family: var(--mono); font-size: 10px; color: var(--ink-30); }
+.qr-name   { font-size: 13px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qr-type   { font-size: 11px; color: var(--ink-60); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qr-date   { font-size: 11px; color: var(--ink-30); text-align: right; }
+.qr-amount { font-size: 12px; font-weight: 600; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.qr-overdue{ font-size: 11px; color: var(--red); text-align: right; }
+.qr-link   { text-decoration: none; color: inherit; display: contents; }
 .quote-row:hover .qr-name { color: var(--accent); }
 
-/* ── Pill / status badge ────────────────────────────────────── */
+/* ── Pill / Badge ───────────────────────────────────────────── */
 .pill {
   display: inline-block; font-size: 10px; font-weight: 700;
   padding: 2px 8px; border-radius: 20px; white-space: nowrap;
 }
 .pill-new        { background: var(--accent-light); color: var(--accent); }
 .pill-contacted  { background: var(--purple-light); color: var(--purple); }
-.pill-meeting    { background: var(--amber-light); color: var(--amber); }
+.pill-meeting    { background: var(--amber-light);  color: var(--amber); }
 .pill-quoted     { background: #ecfeff; color: #0891b2; }
 .pill-developing { background: #fff7ed; color: #ea580c; }
-.pill-done       { background: var(--green-light); color: var(--green); }
-.pill-cancelled  { background: var(--ink-10); color: var(--ink-30); }
+.pill-done       { background: var(--green-light);  color: var(--green); }
+.pill-cancelled  { background: var(--ink-10);       color: var(--ink-30); }
 
 /* ── Timeline ───────────────────────────────────────────────── */
 .tl-entry {
@@ -236,9 +274,9 @@ body {
   text-transform: uppercase; letter-spacing: .04em;
 }
 .tl-type-tag.type-contact     { background: var(--accent-light); color: var(--accent); }
-.tl-type-tag.type-meeting     { background: var(--amber-light); color: var(--amber); }
+.tl-type-tag.type-meeting     { background: var(--amber-light);  color: var(--amber); }
 .tl-type-tag.type-quote       { background: #ecfeff; color: #0891b2; }
-.tl-type-tag.type-payment     { background: var(--green-light); color: var(--green); }
+.tl-type-tag.type-payment     { background: var(--green-light);  color: var(--green); }
 .tl-type-tag.type-development { background: #fff7ed; color: #ea580c; }
 .tl-type-tag.type-note        { background: var(--ink-10); color: var(--ink-60); }
 .tl-qid  { font-size: 10px; color: var(--accent); font-family: var(--mono); text-decoration: none; }
@@ -259,17 +297,26 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Toast ──────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(16px);
+  background: var(--ink); color: #fff; font-size: 13px;
+  padding: 11px 20px; border-radius: var(--r); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: all .25s var(--ease); z-index: 999;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 /* ── RWD ────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .stats-grid, .today-grid { grid-template-columns: 1fr 1fr; }
-  .two-col { grid-template-columns: 1fr; }
+  .stats-grid, .kpi-grid, .today-grid { grid-template-columns: 1fr 1fr; }
+  .two-col, .three-col { grid-template-columns: 1fr; }
   .quote-row { grid-template-columns: 1fr auto; row-gap: 2px; }
   .qr-id { display: none; }
 }
 @media (max-width: 600px) {
   .header { padding: 0 16px; }
   .wrap { padding: 20px 16px 60px; }
-  .quick-actions .qa-btn span.qa-label { display: none; }
+  .stats-grid, .kpi-grid, .today-grid { grid-template-columns: 1fr 1fr; }
 }
 </style>
 </head>
@@ -279,9 +326,8 @@ body {
   <div class="header-left">
     <div class="header-logo">
       <div class="header-logo-mark">W</div>
-      工作台
+      Website CRM
     </div>
-    <!-- ② 導航：Dashboard + 案件 -->
     <nav style="display:flex;gap:16px">
       <a class="nav-link active" href="dashboard.html">Dashboard</a>
       <a class="nav-link" href="quote-admin.html">案件</a>
@@ -321,9 +367,7 @@ function guardAdmin(onPass) {
       return;
     }
     if (!ALLOWED_EMAILS.includes(user.email)) {
-      auth.signOut();
-      window.location.replace('admin-login.html');
-      return;
+      auth.signOut(); window.location.replace('admin-login.html'); return;
     }
     document.getElementById('headerEmail').textContent = user.email;
     onPass();
@@ -356,10 +400,21 @@ function tsToMs(ts) {
   return ts.toMillis ? ts.toMillis() : new Date(ts).getTime();
 }
 function fmtMoney(n) { return `NT$${Number(n || 0).toLocaleString()}`; }
+function fmtMoneyShort(n) {
+  const v = Number(n || 0);
+  if (v >= 1000000) return `NT$${(v/1000000).toFixed(1)}M`;
+  if (v >= 1000)    return `NT$${(v/1000).toFixed(0)}K`;
+  return fmtMoney(v);
+}
 function fmtDate(ts) {
   if (!ts) return '—';
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleDateString('zh-TW', { month:'2-digit', day:'2-digit' });
+}
+function fmtDateFull(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' });
 }
 function fmtDatetime(ts) {
   if (!ts) return '—';
@@ -370,6 +425,19 @@ function fmtDatetime(ts) {
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c =>
     ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function isExpiredTs(ts) {
+  if (!ts) return false;
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d < new Date();
+}
+// 取案件的「成交日期」：quotationUpdatedAt → updatedAt → createdAt
+function wonMs(q) {
+  return tsToMs(q.quotationUpdatedAt) || tsToMs(q.updatedAt) || tsToMs(q.createdAt);
+}
+// 取案件的「金額」：quotationTotal → officialPrice
+function wonAmount(q) {
+  return Number(q.quotationTotal || q.officialPrice || 0);
 }
 
 // ══════════════════════════════════════════════════
@@ -384,62 +452,101 @@ function getMonthBounds() {
 
 function calcStats(all) {
   const { startMs, endMs } = getMonthBounds();
+  const now = new Date();
 
-  // 整體
-  let newCount   = 0, developing = 0, done = 0;
-  let monthNew   = 0;
-  // ③ 今日工作四項
-  let needContact    = 0;   // status: new | contacted
-  let waitingConfirm = 0;   // quotationStatus: sent
-  let inDev          = 0;   // status: developing
-  let waitingPayment = 0;   // quotationStatus: accepted && paymentStatus != paid
-  // ⑥ 本月成交（用 quotationUpdatedAt，沒有才退回 createdAt）
-  let monthRevenue   = 0, revenueCount = 0;
+  // ── 整體 ──────────────────────────────────────
+  let total = all.length, newCount = 0, developing = 0, done = 0;
+  // ── 今日工作 ──────────────────────────────────
+  let needContact = 0, waitingConfirm = 0, inDev = 0, waitingPayment = 0;
+  // ── 本月 ──────────────────────────────────────
+  let monthNew = 0, monthRevenue = 0, monthRevenueCount = 0;
+  // ── KPI ───────────────────────────────────────
+  let kpiRevenue = 0, kpiWon = 0;       // 本月成交
+  let totalWon = 0, totalWonCount = 0;  // 全部成交（算平均客單）
+  let hasQuotation = 0;                 // 有報價的案件（算成交率分母）
+  let pendingPayment = 0;               // 待收款金額
+  let pendingPaymentCount = 0;
+  let pendingQuote = 0;                 // 待處理報價數（sent）
+  // ── 報價狀態摘要 ──────────────────────────────
+  let qDraft = 0, qSent = 0, qAccepted = 0, qRejected = 0, qNone = 0;
+  // ── 逾期報價 ──────────────────────────────────
+  const overdueItems = [];
+  // ── 待收款列表 ────────────────────────────────
+  const pendingPayItems = [];
 
   all.forEach(q => {
-    const status = q.status || 'new';
+    const status  = q.status || 'new';
+    const qStatus = q.quotationStatus || '';
+    const amount  = wonAmount(q);
+    const createdMs = tsToMs(q.createdAt);
 
+    // 整體計數
     if (status === 'new')        newCount++;
     if (status === 'developing') developing++;
     if (status === 'done')       done++;
 
-    const createdMs = tsToMs(q.createdAt);
+    // 今日工作
+    if (status === 'new' || status === 'contacted') needContact++;
+    if (qStatus === 'sent')  waitingConfirm++;
+    if (status === 'developing') inDev++;
+    if (qStatus === 'accepted' && q.paymentStatus !== 'paid') {
+      waitingPayment++;
+      if (amount > 0) { pendingPayment += amount; pendingPaymentCount++; }
+      pendingPayItems.push(q);
+    }
+
+    // 本月新案件
     if (createdMs >= startMs && createdMs <= endMs) monthNew++;
 
-    // ③ 今日工作統計
-    if (status === 'new' || status === 'contacted')      needContact++;
-    if (q.quotationStatus === 'sent')                     waitingConfirm++;
-    if (status === 'developing')                           inDev++;
-    if (q.quotationStatus === 'accepted' && q.paymentStatus !== 'paid') waitingPayment++;
+    // 成交判定
+    const isWon = status === 'done' || qStatus === 'accepted';
 
-    // ⑥ 本月成交：用 quotationUpdatedAt（沒有才退回 createdAt）
-    const isWon  = status === 'done' || q.quotationStatus === 'accepted';
-    const amount = Number(q.quotationTotal || q.officialPrice || 0);
-    const wonMs  = tsToMs(q.quotationUpdatedAt) || createdMs;
-    if (isWon && amount > 0 && wonMs >= startMs && wonMs <= endMs) {
-      monthRevenue += amount;
-      revenueCount++;
+    // 全部成交（平均客單）
+    if (isWon && amount > 0) { totalWon += amount; totalWonCount++; }
+
+    // 本月成交（日期用 wonMs）
+    const wMs = wonMs(q);
+    if (isWon && amount > 0 && wMs >= startMs && wMs <= endMs) {
+      kpiRevenue += amount; kpiWon++;
+    }
+
+    // 有報價的案件（成交率分母）
+    const hasQ = (amount > 0) || ['sent','accepted','rejected'].includes(qStatus);
+    if (hasQ) hasQuotation++;
+
+    // 待處理報價
+    if (qStatus === 'sent') pendingQuote++;
+
+    // 報價狀態摘要
+    if (!qStatus || qStatus === '')   qNone++;
+    else if (qStatus === 'draft')     qDraft++;
+    else if (qStatus === 'sent')      qSent++;
+    else if (qStatus === 'accepted')  qAccepted++;
+    else if (qStatus === 'rejected')  qRejected++;
+
+    // 逾期報價：validUntil 已過 & status 是 sent 或 draft
+    if (isExpiredTs(q.validUntil) && (qStatus === 'sent' || qStatus === 'draft')) {
+      overdueItems.push(q);
     }
   });
 
-  const avgDeal = revenueCount > 0 ? Math.round(monthRevenue / revenueCount) : 0;
+  const avgDeal     = totalWonCount > 0 ? Math.round(totalWon / totalWonCount) : 0;
+  const closeRate   = hasQuotation > 0 ? Math.round((totalWonCount / hasQuotation) * 100) : 0;
 
   return {
-    total: all.length, newCount, developing, done,
-    monthNew, monthRevenue, avgDeal,
-    // 今日工作
-    needContact, waitingConfirm, inDev, waitingPayment,
+    total, newCount, developing, done,
+    needContact, waitingConfirm, inDev, waitingPayment, monthNew,
+    kpiRevenue, kpiWon, avgDeal, closeRate,
+    pendingPayment, pendingPaymentCount, pendingQuote,
+    qDraft, qSent, qAccepted, qRejected, qNone,
+    overdueItems:    overdueItems.sort((a,b) => tsToMs(a.validUntil) - tsToMs(b.validUntil)).slice(0,5),
+    pendingPayItems: pendingPayItems.sort((a,b) => wonAmount(b) - wonAmount(a)).slice(0,5),
   };
 }
 
-// ④ 最近需要處理（排除 done / cancelled，最多 5 筆，已依 createdAt desc 排列）
 function getActionItems(all) {
-  return all
-    .filter(q => q.status !== 'done' && q.status !== 'cancelled')
-    .slice(0, 5);
+  return all.filter(q => q.status !== 'done' && q.status !== 'cancelled').slice(0, 5);
 }
-
-// Timeline 彙整，取最新 10 筆
 function collectTimeline(all) {
   const logs = [];
   all.forEach(q => {
@@ -462,8 +569,8 @@ function render(all) {
   const now      = new Date();
   const monthStr = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月`;
 
-  // ── 渲染 quote-row ──────────────────────────────
-  function quoteRowHtml(q, showDate = true) {
+  // ── 通用 quote row ──────────────────────────────
+  function quoteRowHtml(q) {
     const statusClass = `pill-${q.status || 'new'}`;
     const statusLabel = STATUS_LABELS[q.status] || q.status || '新案件';
     return `
@@ -475,75 +582,216 @@ function render(all) {
             <div class="qr-type">${escapeHtml(q.projectType || '—')}</div>
           </div>
           <div><span class="pill ${statusClass}">${statusLabel}</span></div>
-          <div class="qr-date">${showDate ? fmtDate(q.createdAt) : ''}</div>
+          <div class="qr-date">${fmtDate(q.createdAt)}</div>
         </div>
       </a>`;
   }
 
+  // ── 待收款 row（顯示金額） ──────────────────────
+  function pendingPayRow(q) {
+    const amount = wonAmount(q);
+    return `
+      <a class="qr-link" href="quote-detail.html?id=${encodeURIComponent(q.id)}">
+        <div class="quote-row">
+          <div class="qr-id">${escapeHtml(q.quoteId || q.id)}</div>
+          <div>
+            <div class="qr-name">${escapeHtml(q.name || '—')}</div>
+            <div class="qr-type">${escapeHtml(q.projectType || '—')}</div>
+          </div>
+          <div class="qr-amount">${amount > 0 ? fmtMoney(amount) : '—'}</div>
+          <div class="qr-date">${fmtDate(q.createdAt)}</div>
+        </div>
+      </a>`;
+  }
+
+  // ── 逾期報價 row（顯示過期日） ──────────────────
+  function overdueRow(q) {
+    const qStatus = q.quotationStatus || '';
+    const pill = qStatus === 'sent'
+      ? `<span class="pill pill-quoted">已送出</span>`
+      : `<span class="pill" style="background:var(--ink-10);color:var(--ink-30)">草稿</span>`;
+    return `
+      <a class="qr-link" href="quote-detail.html?id=${encodeURIComponent(q.id)}">
+        <div class="quote-row">
+          <div class="qr-id">${escapeHtml(q.quoteId || q.id)}</div>
+          <div>
+            <div class="qr-name">${escapeHtml(q.name || '—')}</div>
+            <div class="qr-type">${escapeHtml(q.projectType || '—')}</div>
+          </div>
+          <div>${pill}</div>
+          <div class="qr-overdue">到期 ${fmtDateFull(q.validUntil)}</div>
+        </div>
+      </a>`;
+  }
+
+  // ── closeRate badge ─────────────────────────────
+  const crBadge = s.closeRate >= 60 ? 'kpi-badge-green'
+                : s.closeRate >= 30 ? 'kpi-badge-amber'
+                : 'kpi-badge-red';
+
   document.getElementById('wrap').innerHTML = `
   <div class="wrap">
 
-    <!-- Page header + ⑤ 快捷功能 -->
+    <!-- Page header -->
     <div class="page-header">
-      <div class="page-header-text">
+      <div>
         <div class="page-title">工作台</div>
-        <div class="page-sub">更新於 ${now.toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' })}</div>
+        <div class="page-sub">更新於 ${now.toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' })} ・ <span style="cursor:pointer;color:var(--accent)" onclick="location.reload()">重新整理</span></div>
       </div>
       <div class="quick-actions">
-        <a class="qa-btn qa-btn-ghost" href="quote-admin.html">
-          <span>📋</span><span class="qa-label">查看所有案件</span>
-        </a>
-        <a class="qa-btn qa-btn-ghost" href="quote-edit.html?id=">
-          <span>📝</span><span class="qa-label">新增正式報價</span>
-        </a>
-        <button class="qa-btn qa-btn-ghost" onclick="location.reload()">
-          <span>↻</span><span class="qa-label">重新整理</span>
-        </button>
-        <button class="qa-btn qa-btn-danger" onclick="signOut()">
-          <span>⎋</span><span class="qa-label">登出</span>
-        </button>
+        <a class="qa-btn qa-btn-ghost" href="quote-admin.html"><span>📋</span><span>查看所有案件</span></a>
+        <button class="qa-btn qa-btn-ghost" onclick="location.reload()"><span>↻</span><span>重新整理</span></button>
+        <button class="qa-btn qa-btn-danger" onclick="signOut()"><span>⎋</span><span>登出</span></button>
       </div>
     </div>
 
-    <!-- ③ 今日工作 -->
+    <!-- ① KPI 主要指標 -->
+    <div class="section-title">本月 KPI（${monthStr}）</div>
+    <div class="kpi-grid">
+
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <span class="kpi-dot" style="background:var(--green)"></span>本月營收
+        </div>
+        <div class="kpi-value money">${s.kpiRevenue > 0 ? fmtMoney(s.kpiRevenue) : '—'}</div>
+        <div class="kpi-sub">${s.kpiWon} 筆成交 ・ quotationUpdatedAt</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <span class="kpi-dot" style="background:var(--accent)"></span>成交率
+        </div>
+        <div class="kpi-value">${s.closeRate > 0 ? s.closeRate + '%' : '—'}</div>
+        <div class="kpi-sub">${s.closeRate > 0 ? `${totalWonCount(s)} 成交 / ${s.hasQuotation ?? '—'} 有報價` : '尚無報價資料'}</div>
+        ${s.closeRate > 0 ? `<span class="kpi-badge ${crBadge}">${s.closeRate >= 60 ? '✓ 良好' : s.closeRate >= 30 ? '△ 普通' : '↓ 偏低'}</span>` : ''}
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <span class="kpi-dot" style="background:var(--purple)"></span>平均客單
+        </div>
+        <div class="kpi-value money">${s.avgDeal > 0 ? fmtMoney(s.avgDeal) : '—'}</div>
+        <div class="kpi-sub">所有成交案件均價</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <span class="kpi-dot" style="background:var(--amber)"></span>待收款金額
+        </div>
+        <div class="kpi-value money">${s.pendingPayment > 0 ? fmtMoney(s.pendingPayment) : '—'}</div>
+        <div class="kpi-sub">${s.pendingPaymentCount} 筆 ・ accepted 未付清</div>
+        ${s.pendingPayment > 0 ? `<span class="kpi-badge kpi-badge-amber">待入帳</span>` : ''}
+      </div>
+
+    </div>
+
+    <!-- ② 今日工作 -->
     <div class="section-title">今日工作</div>
     <div class="today-grid">
-      <a class="today-card accent" href="quote-admin.html?filter=new">
+      <a class="today-card accent" href="quote-admin.html">
         <div class="today-label">待聯絡</div>
         <div class="today-value">${s.needContact}</div>
         <div class="today-hint">new + contacted</div>
       </a>
-      <a class="today-card amber" href="quote-admin.html?filter=quoted">
+      <a class="today-card amber" href="quote-admin.html">
         <div class="today-label">等待客戶確認</div>
         <div class="today-value">${s.waitingConfirm}</div>
         <div class="today-hint">quotationStatus = sent</div>
       </a>
-      <a class="today-card red" href="quote-admin.html?filter=developing">
+      <a class="today-card red" href="quote-admin.html">
         <div class="today-label">開發中</div>
         <div class="today-value">${s.inDev}</div>
         <div class="today-hint">status = developing</div>
       </a>
-      <a class="today-card green" href="quote-admin.html?filter=accepted">
+      <a class="today-card green" href="quote-admin.html">
         <div class="today-label">等待付款</div>
         <div class="today-value">${s.waitingPayment}</div>
         <div class="today-hint">accepted &amp; 未付清</div>
       </a>
     </div>
 
+    <!-- ③ 報價狀態摘要 + 待收款 + 逾期 -->
+    <div class="section-title">報價追蹤</div>
+    <div class="two-col" style="gap:16px">
+
+      <!-- 左：報價狀態摘要 + 逾期 -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+
+        <div class="card">
+          <div class="card-title">報價狀態摘要</div>
+          <div class="status-summary">
+            <div class="ss-row">
+              <span style="display:flex;align-items:center;gap:8px">
+                <span class="ss-dot" style="background:var(--ink-30)"></span>
+                <span class="ss-label">未報價</span>
+              </span>
+              <span class="ss-value">${s.qNone + s.qDraft} 件</span>
+            </div>
+            <div class="ss-row">
+              <span style="display:flex;align-items:center;gap:8px">
+                <span class="ss-dot" style="background:#0891b2"></span>
+                <span class="ss-label">已送出（等待客戶）</span>
+              </span>
+              <span class="ss-value">${s.qSent} 件</span>
+            </div>
+            <div class="ss-row">
+              <span style="display:flex;align-items:center;gap:8px">
+                <span class="ss-dot" style="background:var(--green)"></span>
+                <span class="ss-label">已接受</span>
+              </span>
+              <span class="ss-value">${s.qAccepted} 件</span>
+            </div>
+            <div class="ss-row">
+              <span style="display:flex;align-items:center;gap:8px">
+                <span class="ss-dot" style="background:var(--red)"></span>
+                <span class="ss-label">已拒絕</span>
+              </span>
+              <span class="ss-value">${s.qRejected} 件</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            逾期報價
+            ${s.overdueItems.length > 0 ? `<span style="font-size:10px;color:var(--red);font-weight:700;text-transform:none;letter-spacing:0">⚠ ${s.overdueItems.length} 件需處理</span>` : ''}
+          </div>
+          ${s.overdueItems.length === 0
+            ? '<div class="empty-row">✓ 無逾期報價</div>'
+            : s.overdueItems.map(q => overdueRow(q)).join('')
+          }
+        </div>
+
+      </div>
+
+      <!-- 右：待收款 -->
+      <div class="card">
+        <div class="card-title">
+          待收款案件
+          ${s.pendingPayment > 0 ? `<span style="font-size:11px;color:var(--amber);font-weight:700;text-transform:none;letter-spacing:0">${fmtMoney(s.pendingPayment)}</span>` : ''}
+        </div>
+        ${s.pendingPayItems.length === 0
+          ? '<div class="empty-row">✓ 無待收款案件</div>'
+          : s.pendingPayItems.map(q => pendingPayRow(q)).join('')
+        }
+        ${s.pendingPaymentCount > 5
+          ? `<div style="font-size:11px;color:var(--ink-30);margin-top:10px;text-align:center">顯示金額最高的 5 筆，共 ${s.pendingPaymentCount} 筆</div>`
+          : ''}
+      </div>
+
+    </div>
+
     <!-- ④ 最近需要處理 -->
     <div class="section-title">最近需要處理</div>
     <div class="card">
-      <div class="card-title">
-        進行中案件
-        <a href="quote-admin.html">查看全部 →</a>
-      </div>
+      <div class="card-title">進行中案件 <a href="quote-admin.html">查看全部 →</a></div>
       ${action5.length === 0
         ? '<div class="empty-row">🎉 目前沒有待處理的案件</div>'
         : action5.map(q => quoteRowHtml(q)).join('')
       }
     </div>
 
-    <!-- 整體概覽 -->
+    <!-- ⑤ 整體概覽 -->
     <div class="section-title">整體概覽</div>
     <div class="stats-grid">
       <div class="stat-card">
@@ -568,52 +816,18 @@ function render(all) {
       </div>
     </div>
 
-    <!-- 本月 -->
-    <div class="section-title">本月（${monthStr}）</div>
-    <div class="stats-grid">
-      <div class="stat-card stat-accent">
-        <div class="stat-label">新案件</div>
-        <div class="stat-value">${s.monthNew}</div>
-        <div class="stat-sub">本月新進案件</div>
-      </div>
-      <div class="stat-card stat-green">
-        <div class="stat-label">成交金額</div>
-        <div class="stat-value" style="font-size:${s.monthRevenue > 999999 ? '19px' : '26px'}">
-          ${s.monthRevenue > 0 ? fmtMoney(s.monthRevenue) : '—'}
-        </div>
-        <div class="stat-sub">以 quotationUpdatedAt 計算</div>
-      </div>
-      <div class="stat-card stat-purple">
-        <div class="stat-label">平均客單</div>
-        <div class="stat-value" style="font-size:${s.avgDeal > 999999 ? '19px' : '26px'}">
-          ${s.avgDeal > 0 ? fmtMoney(s.avgDeal) : '—'}
-        </div>
-        <div class="stat-sub">本月成交均價</div>
-      </div>
-      <div class="stat-card stat-amber">
-        <div class="stat-label">待聯絡</div>
-        <div class="stat-value">${s.needContact}</div>
-        <div class="stat-sub">new + contacted</div>
-      </div>
-    </div>
-
-    <!-- 動態：最近案件 + Timeline -->
+    <!-- ⑥ 動態 -->
     <div class="section-title">動態</div>
     <div class="two-col">
 
-      <!-- 最近 10 筆案件 -->
       <div class="card">
-        <div class="card-title">
-          最近案件
-          <a href="quote-admin.html">查看全部 →</a>
-        </div>
+        <div class="card-title">最近案件 <a href="quote-admin.html">查看全部 →</a></div>
         ${recent10.length === 0
           ? '<div class="empty-row">尚無案件</div>'
           : recent10.map(q => quoteRowHtml(q)).join('')
         }
       </div>
 
-      <!-- 最近 10 筆 Timeline -->
       <div class="card">
         <div class="card-title">最新活動紀錄</div>
         ${tl.length === 0
@@ -636,9 +850,12 @@ function render(all) {
         }
       </div>
 
-    </div><!-- /two-col -->
-  </div><!-- /wrap -->`;
+    </div>
+  </div>`;
 }
+
+// calcStats 內部用到 totalWonCount，用一個包裝讓 render 可取得
+function totalWonCount(s) { return s.kpiWon || 0; }
 
 // ══════════════════════════════════════════════════
 //  INIT
