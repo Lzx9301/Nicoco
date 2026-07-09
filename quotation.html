@@ -65,6 +65,16 @@ body {
   color: #fff; font-size: 13px; font-weight: 800;
 }
 .header-tagline { font-size: 12px; color: var(--ink-30); }
+.btn-pdf {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: var(--r-sm);
+  background: var(--ink); color: #fff; border: none;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: var(--font); transition: background var(--t), opacity var(--t);
+  opacity: .35;
+}
+.btn-pdf:hover:not(:disabled) { background: #2a2d38; }
+.btn-pdf:disabled { cursor: not-allowed; }
 
 /* ── Layout ─────────────────────────────────────────────────── */
 .wrap {
@@ -266,10 +276,96 @@ body {
 .bank-text { font-size: 12px; color: var(--ink-60); line-height: 1.7; white-space: pre-wrap; }
 
 @media print {
-  .action-section, .header, .toast { display: none; }
-  body { background: white; }
-  .doc-card { box-shadow: none; border: none; }
-  .wrap { padding: 0; max-width: 100%; }
+  /* ── 頁面尺寸與邊界 ──────────────────────────────────── */
+  @page {
+    size: A4 portrait;
+    margin: 14mm 16mm 14mm 16mm;
+  }
+
+  /* ── 隱藏非列印元素 ─────────────────────────────────── */
+  .header,
+  .action-section,
+  .toast,
+  .btn-pdf { display: none !important; }
+
+  /* ── 基礎重設 ────────────────────────────────────────── */
+  html, body {
+    background: #fff !important;
+    font-size: 11pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── 版面 ────────────────────────────────────────────── */
+  .wrap {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  .doc-card {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* ── 頂部 band 顏色保留 ───────────────────────────────── */
+  .doc-band {
+    background: #0f1117 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 18px 24px !important;
+  }
+  .doc-title { font-size: 20pt !important; }
+  .doc-brand, .doc-qid { color: rgba(255,255,255,.55) !important; }
+
+  /* ── Meta grid ───────────────────────────────────────── */
+  .doc-meta { page-break-inside: avoid; break-inside: avoid; }
+  .meta-block { padding: 12px 24px !important; }
+  .meta-value { font-size: 11pt !important; }
+
+  /* ── Items table — 防跨頁 ────────────────────────────── */
+  .items-section { padding: 16px 24px !important; }
+  .items-table { page-break-inside: auto; }
+  .items-table thead { display: table-header-group; }   /* 跨頁重複表頭 */
+  .items-table tbody tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .items-table td { font-size: 10pt !important; padding: 8px 8px !important; }
+  .items-table th { font-size: 9pt !important; }
+  .item-desc { font-size: 9pt !important; }
+
+  /* ── Totals — 整塊不跨頁 ─────────────────────────────── */
+  .totals-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    padding: 14px 24px !important;
+  }
+  .totals-grand .tg-value { font-size: 20pt !important; }
+
+  /* ── Note / Contact / Bank — 盡量不跨頁 ─────────────── */
+  .note-section,
+  .contact-section,
+  .bank-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    padding: 12px 24px !important;
+  }
+
+  /* ── Footer — 固定在最後，不跨頁 ────────────────────── */
+  .doc-footer {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-top: auto;
+    padding: 12px 24px !important;
+    background: #f0f1f4 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── 連結顏色 ─────────────────────────────────────────── */
+  a { color: inherit !important; text-decoration: none !important; }
+  .contact-item a { color: #2563eb !important; }
 }
 </style>
 </head>
@@ -280,7 +376,10 @@ body {
     <div class="header-logo-mark" id="headerLogoMark">W</div>
     <span id="headerStudioName">Website Studio</span>
   </div>
-  <div class="header-tagline">正式報價單</div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="header-tagline">正式報價單</div>
+    <button class="btn-pdf" id="btnPdf" onclick="downloadPDF()" disabled>⬇ 下載 PDF</button>
+  </div>
 </header>
 
 <div class="wrap">
@@ -410,6 +509,10 @@ async function loadQuotation() {
 
     document.getElementById('loadingState').style.display = 'none';
     renderQuotation(currentData);
+
+    // 資料載入完成後才啟用 PDF 按鈕
+    const pdfBtn = document.getElementById('btnPdf');
+    if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.style.opacity = '1'; }
   } catch (err) {
     console.error(err);
     showError(`讀取失敗：${err.message || String(err)}`);
@@ -579,6 +682,23 @@ function renderBankSection(q) {
       <div class="info-section-label">匯款資訊</div>
       <div class="bank-text">${escapeHtml(bankInfo)}</div>
     </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  PDF DOWNLOAD
+// ══════════════════════════════════════════════════
+function downloadPDF() {
+  const q         = currentData;
+  const qid       = (q && (q.quoteId || currentId)) || 'quotation';
+  const origTitle = document.title;
+
+  // 列印時 title 作為預設檔名
+  document.title = `Quotation_${qid}`;
+
+  window.print();
+
+  // print() 是同步的（或 beforeprint/afterprint），用 setTimeout 還原
+  setTimeout(() => { document.title = origTitle; }, 1000);
 }
 
 function renderActionButtons(expired) {
