@@ -646,14 +646,23 @@ async function handleAction(newStatus) {
   if (rejectBtn) rejectBtn.disabled = true;
   if (banner)    { banner.className = 'result-banner processing'; banner.innerHTML = '處理中…'; }
 
-  const actionLabel = newStatus === 'accepted' ? '接受' : '拒絕';
+  const isAccepted  = newStatus === 'accepted';
+  const actionLabel = isAccepted ? '接受' : '拒絕';
   const totalAmt    = Number(currentData.quotationTotal || 0);
+
+  // ── 自動同步案件狀態 ──────────────────────────────────
+  // 接受：status → developing，paymentStatus → unpaid，progress → 0
+  // 拒絕：status → cancelled
+  const statusPayload = isAccepted
+    ? { status: 'developing', paymentStatus: 'unpaid', progress: 0 }
+    : { status: 'cancelled' };
+
   const newLog = {
     id:        genActivityId(),
-    type:      newStatus === 'accepted' ? 'payment' : 'note',
-    content:   newStatus === 'accepted'
-                 ? `客戶已接受報價，總金額 NT$${totalAmt.toLocaleString()}`
-                 : '客戶已拒絕報價',
+    type:      isAccepted ? 'payment' : 'note',
+    content:   isAccepted
+                 ? `客戶已接受報價，總金額 NT$${totalAmt.toLocaleString()}，案件狀態已自動改為開發中`
+                 : '客戶已拒絕報價，案件狀態已自動改為取消',
     createdAt: firebase.firestore.Timestamp.now(),
     createdBy: 'client',
   };
@@ -663,16 +672,18 @@ async function handleAction(newStatus) {
       quotationStatus:    newStatus,
       quotationUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       activityLogs:       firebase.firestore.FieldValue.arrayUnion(newLog),
+      ...statusPayload,
     });
 
-    // Update local state
+    // 同步本地 currentData
     currentData.quotationStatus = newStatus;
+    Object.assign(currentData, statusPayload);
 
     // Swap buttons to locked state
     const actionSection = document.querySelector('.action-section');
     if (actionSection) actionSection.innerHTML = renderLockedAction(newStatus);
 
-    // Update status badge in header
+    // Update status badge in header band
     const badge = document.getElementById('statusBadge');
     if (badge) {
       badge.className = `status-badge ${QSTATUS_BADGE[newStatus]}`;

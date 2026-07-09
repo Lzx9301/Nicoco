@@ -475,6 +475,14 @@ function renderDetail() {
           <div class="qh-id">${escapeHtml(q.quoteId || currentId)}</div>
           <div class="qh-name">${escapeHtml(q.name || '—')}　${q.company ? `<span style="font-size:14px;color:var(--ink-60);font-weight:500">／ ${escapeHtml(q.company)}</span>` : ''}</div>
           <div class="qh-meta">${escapeHtml(q.projectType || '—')} ・ 建立於 ${fmtDate(q.createdAt)}</div>
+          ${q.quotationStatus === 'accepted' ? `
+          <div style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--green);background:var(--green-light);border:1px solid #bbf7d0;padding:5px 12px;border-radius:20px">
+            ✓ 客戶已接受報價
+          </div>` : ''}
+          ${q.quotationStatus === 'rejected' ? `
+          <div style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--red);background:#fef2f2;border:1px solid #fca5a5;padding:5px 12px;border-radius:20px">
+            ✕ 客戶已拒絕報價
+          </div>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span class="status-badge ${statusClass}">${statusLabel}</span>
