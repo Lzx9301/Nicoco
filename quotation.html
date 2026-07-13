@@ -223,6 +223,18 @@ body {
 .doc-footer-left  { font-size: 11px; color: var(--ink-30); }
 .doc-footer-right { font-size: 11px; color: var(--ink-30); font-family: var(--mono); }
 
+/* ── PDF Logo（doc-band 內，螢幕與列印都顯示）──────────── */
+.pdf-logo-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+.pdf-logo-mark {
+  width: 30px; height: 30px; border-radius: 6px;
+  background: rgba(255,255,255,.15); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; flex-shrink: 0;
+}
+.pdf-studio-name { font-size: 13px; font-weight: 700; color: rgba(255,255,255,.8); }
+
 /* ── Loading / Error ─────────────────────────────────────────── */
 .loading-state { text-align: center; padding: 100px 0; color: var(--ink-30); font-size: 14px; }
 .loading-state .spinner {
@@ -547,6 +559,10 @@ function renderQuotation(q) {
       <!-- Top band -->
       <div class="doc-band">
         <div>
+          <div class="pdf-logo-row">
+            <div class="pdf-logo-mark">${escapeHtml((currentStudio && currentStudio.logoText) || 'W')}</div>
+            <div class="pdf-studio-name">${escapeHtml((currentStudio && currentStudio.studioName) || 'Website Studio')}</div>
+          </div>
           <div class="doc-brand">正式報價單</div>
           <div class="doc-title">${escapeHtml(q.name || '—')}${q.company ? `<span style="font-size:16px;font-weight:500;opacity:.6"> ／ ${escapeHtml(q.company)}</span>` : ''}</div>
           <div class="doc-qid">${escapeHtml(q.quoteId || currentId)}</div>
@@ -692,13 +708,15 @@ function downloadPDF() {
   const qid       = (q && (q.quoteId || currentId)) || 'quotation';
   const origTitle = document.title;
 
-  // 列印時 title 作為預設檔名
   document.title = `Quotation_${qid}`;
 
-  window.print();
+  const restoreTitle = () => {
+    document.title = origTitle;
+    window.removeEventListener('afterprint', restoreTitle);
+  };
 
-  // print() 是同步的（或 beforeprint/afterprint），用 setTimeout 還原
-  setTimeout(() => { document.title = origTitle; }, 1000);
+  window.addEventListener('afterprint', restoreTitle);
+  window.print();
 }
 
 function renderActionButtons(expired) {
