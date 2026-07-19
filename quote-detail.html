@@ -397,7 +397,7 @@ const TASK_STATUS_LABELS = { not_started:'未開始', in_progress:'進行中', r
 const TASK_STATUS_ORDER  = ['not_started','in_progress','review','waiting_client','blocked','completed'];
 const TASK_STATUS_COLOR  = { not_started:'var(--ink-30)', in_progress:'var(--accent)', review:'#0891b2', waiting_client:'var(--amber)', blocked:'var(--red)', completed:'var(--green)' };
 
-const SCOPE_SOURCE_LABELS = { initial_scope:'初始 Scope', change_request:'需求變更 CR', internal:'內部技術項目' };
+const SCOPE_SOURCE_LABELS = { initial_scope:'原始 Scope', change_request:'CR', internal:'Internal' };
 
 const PHASES = [1,2,3];
 const PHASE_LABELS = { 1:'Phase 1・基礎架構與設計', 2:'Phase 2・核心功能開發', 3:'Phase 3・整合、驗收與上線' };
@@ -410,225 +410,225 @@ const MILESTONE_LABELS = { 1:'M1・專案啟動', 2:'M2・中期開發里程碑'
 // weight 為工作量／重要程度參考值，非價格占比；管理者可於生成後自由調整。
 const TASK_TEMPLATES = {
   brand_pages: [
-    { name:'頁面資訊架構規劃', weight:4, phase:1, milestone:1, category:'design' },
-    { name:'首頁製作',         weight:8, phase:2, milestone:2, category:'frontend' },
-    { name:'關於／品牌頁製作', weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'聯絡頁製作',       weight:4, phase:2, milestone:2, category:'frontend' },
-    { name:'導覽列與 Footer', weight:3, phase:2, milestone:2, category:'frontend' },
-    { name:'頁面測試',         weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'brand_pages_01', name:'頁面資訊架構規劃', weight:4, phase:1, milestone:1, category:'design' },
+    { key:'brand_pages_02', name:'首頁製作', weight:8, phase:2, milestone:2, category:'frontend' },
+    { key:'brand_pages_03', name:'關於／品牌頁製作', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'brand_pages_04', name:'聯絡頁製作', weight:4, phase:2, milestone:2, category:'frontend' },
+    { key:'brand_pages_05', name:'導覽列與 Footer', weight:3, phase:2, milestone:2, category:'frontend' },
+    { key:'brand_pages_06', name:'頁面測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   rwd: [
-    { name:'RWD 斷點規劃',     weight:3, phase:2, milestone:2, category:'frontend' },
-    { name:'各裝置版型調整',   weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'跨裝置測試',       weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'rwd_01', name:'RWD 斷點規劃', weight:3, phase:2, milestone:2, category:'frontend' },
+    { key:'rwd_02', name:'各裝置版型調整', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'rwd_03', name:'跨裝置測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   seo_basic: [
-    { name:'Meta / OG 基本設定', weight:2, phase:2, milestone:2, category:'seo' },
-    { name:'Sitemap 基本設定',   weight:2, phase:3, milestone:3, category:'seo' },
+    { key:'seo_basic_01', name:'Meta / OG 基本設定', weight:2, phase:2, milestone:2, category:'seo' },
+    { key:'seo_basic_02', name:'Sitemap 基本設定', weight:2, phase:3, milestone:3, category:'seo' },
   ],
   deployment_basic: [
-    { name:'基本部署設定',   weight:3, phase:3, milestone:3, category:'devops' },
-    { name:'基本 DNS 指向', weight:2, phase:3, milestone:3, category:'devops' },
+    { key:'deployment_basic_01', name:'基本部署設定', weight:3, phase:3, milestone:3, category:'devops' },
+    { key:'deployment_basic_02', name:'基本 DNS 指向', weight:2, phase:3, milestone:3, category:'devops' },
   ],
   content_page: [
-    { name:'頁面內容整理', weight:2, phase:2, milestone:2, category:'frontend' },
-    { name:'頁面製作',     weight:3, phase:2, milestone:2, category:'frontend' },
+    { key:'content_page_01', name:'頁面內容整理', weight:2, phase:2, milestone:2, category:'frontend' },
+    { key:'content_page_02', name:'頁面製作', weight:3, phase:2, milestone:2, category:'frontend' },
   ],
   cms_content: [
-    { name:'資料結構設計', weight:4, phase:1, milestone:1, category:'backend' },
-    { name:'文章列表',     weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'文章詳細頁',   weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'後台 CRUD',    weight:8, phase:2, milestone:2, category:'backend' },
-    { name:'圖片上傳',     weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'文章分類',     weight:3, phase:2, milestone:2, category:'backend' },
-    { name:'權限設定',     weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'測試',         weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'cms_content_01', name:'資料結構設計', weight:4, phase:1, milestone:1, category:'backend' },
+    { key:'cms_content_02', name:'文章列表', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'cms_content_03', name:'文章詳細頁', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'cms_content_04', name:'後台 CRUD', weight:8, phase:2, milestone:2, category:'backend' },
+    { key:'cms_content_05', name:'圖片上傳', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'cms_content_06', name:'文章分類', weight:3, phase:2, milestone:2, category:'backend' },
+    { key:'cms_content_07', name:'權限設定', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'cms_content_08', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   ecom_product: [
-    { name:'商品資料結構',   weight:5, phase:1, milestone:1, category:'backend' },
-    { name:'商品列表',       weight:6, phase:2, milestone:2, category:'frontend' },
-    { name:'商品詳細頁',     weight:6, phase:2, milestone:2, category:'frontend' },
-    { name:'商品分類',       weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'商品圖片管理',   weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'商品 CRUD 後台', weight:8, phase:2, milestone:2, category:'backend' },
-    { name:'測試',           weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'ecom_product_01', name:'商品資料結構', weight:5, phase:1, milestone:1, category:'backend' },
+    { key:'ecom_product_02', name:'商品列表', weight:6, phase:2, milestone:2, category:'frontend' },
+    { key:'ecom_product_03', name:'商品詳細頁', weight:6, phase:2, milestone:2, category:'frontend' },
+    { key:'ecom_product_04', name:'商品分類', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'ecom_product_05', name:'商品圖片管理', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'ecom_product_06', name:'商品 CRUD 後台', weight:8, phase:2, milestone:2, category:'backend' },
+    { key:'ecom_product_07', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   cart: [
-    { name:'加入購物車', weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'修改數量',   weight:3, phase:2, milestone:2, category:'frontend' },
-    { name:'刪除商品',   weight:2, phase:2, milestone:2, category:'frontend' },
-    { name:'價格計算',   weight:5, phase:2, milestone:2, category:'backend' },
-    { name:'狀態保存',   weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'錯誤處理',   weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'測試',       weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'cart_01', name:'加入購物車', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'cart_02', name:'修改數量', weight:3, phase:2, milestone:2, category:'frontend' },
+    { key:'cart_03', name:'刪除商品', weight:2, phase:2, milestone:2, category:'frontend' },
+    { key:'cart_04', name:'價格計算', weight:5, phase:2, milestone:2, category:'backend' },
+    { key:'cart_05', name:'狀態保存', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'cart_06', name:'錯誤處理', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'cart_07', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   checkout: [
-    { name:'結帳頁面',       weight:6, phase:2, milestone:2, category:'frontend' },
-    { name:'訂單資料整理',   weight:5, phase:2, milestone:2, category:'backend' },
-    { name:'會員資料整合',   weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'金額確認',       weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'訂單建立',       weight:6, phase:2, milestone:3, category:'backend' },
-    { name:'錯誤處理',       weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'測試',           weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'checkout_01', name:'結帳頁面', weight:6, phase:2, milestone:2, category:'frontend' },
+    { key:'checkout_02', name:'訂單資料整理', weight:5, phase:2, milestone:2, category:'backend' },
+    { key:'checkout_03', name:'會員資料整合', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'checkout_04', name:'金額確認', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'checkout_05', name:'訂單建立', weight:6, phase:2, milestone:3, category:'backend' },
+    { key:'checkout_06', name:'錯誤處理', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'checkout_07', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   member_auth: [
-    { name:'Authentication 設定', weight:5, phase:1, milestone:1, category:'backend' },
-    { name:'註冊',                weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'登入',                weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'登出',                weight:2, phase:2, milestone:2, category:'frontend' },
-    { name:'會員資料',            weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'權限驗證',            weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'錯誤處理',            weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'測試',                weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'member_auth_01', name:'Authentication 設定', weight:5, phase:1, milestone:1, category:'backend' },
+    { key:'member_auth_02', name:'註冊', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'member_auth_03', name:'登入', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'member_auth_04', name:'登出', weight:2, phase:2, milestone:2, category:'frontend' },
+    { key:'member_auth_05', name:'會員資料', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'member_auth_06', name:'權限驗證', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'member_auth_07', name:'錯誤處理', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'member_auth_08', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   orders: [
-    { name:'訂單資料結構', weight:4, phase:1, milestone:1, category:'backend' },
-    { name:'訂單查詢頁',   weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'訂單狀態更新', weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'測試',         weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'orders_01', name:'訂單資料結構', weight:4, phase:1, milestone:1, category:'backend' },
+    { key:'orders_02', name:'訂單查詢頁', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'orders_03', name:'訂單狀態更新', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'orders_04', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   product_mgmt: [
-    { name:'商品後台列表',   weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'商品新增／編輯', weight:6, phase:2, milestone:2, category:'backend' },
-    { name:'上下架控制',     weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'測試',           weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'product_mgmt_01', name:'商品後台列表', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'product_mgmt_02', name:'商品新增／編輯', weight:6, phase:2, milestone:2, category:'backend' },
+    { key:'product_mgmt_03', name:'上下架控制', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'product_mgmt_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   order_mgmt: [
-    { name:'訂單後台列表', weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'訂單狀態管理', weight:5, phase:2, milestone:3, category:'backend' },
-    { name:'測試',         weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'order_mgmt_01', name:'訂單後台列表', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'order_mgmt_02', name:'訂單狀態管理', weight:5, phase:2, milestone:3, category:'backend' },
+    { key:'order_mgmt_03', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   admin_login: [
-    { name:'後台登入與基礎架構', weight:4, phase:1, milestone:1, category:'backend' },
+    { key:'admin_login_01', name:'後台登入與基礎架構', weight:4, phase:1, milestone:1, category:'backend' },
   ],
   payment_gateway: [
-    { name:'測試環境串接',           weight:6, phase:2, milestone:2, category:'integration' },
-    { name:'Payment Form / API',     weight:7, phase:2, milestone:2, category:'integration' },
-    { name:'付款資料驗證',           weight:5, phase:2, milestone:2, category:'integration' },
-    { name:'Callback 處理',          weight:6, phase:2, milestone:3, category:'integration' },
-    { name:'訂單付款狀態更新',       weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'錯誤處理',               weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'Production Credentials 設定', weight:3, phase:3, milestone:3, category:'devops' },
-    { name:'正式環境測試',           weight:4, phase:3, milestone:3, category:'testing' },
+    { key:'payment_sandbox', name:'測試環境串接', weight:6, phase:2, milestone:2, category:'integration' },
+    { key:'payment_form', name:'Payment Form / API', weight:7, phase:2, milestone:2, category:'integration' },
+    { key:'payment_verify', name:'付款資料驗證', weight:5, phase:2, milestone:2, category:'integration' },
+    { key:'payment_callback', name:'Callback 處理', weight:6, phase:2, milestone:3, category:'integration' },
+    { key:'payment_order_status', name:'訂單付款狀態更新', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'payment_error', name:'錯誤處理', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'payment_production_credentials', name:'Production Credentials 設定', weight:3, phase:3, milestone:3, category:'devops' },
+    { key:'payment_production_test', name:'正式環境測試', weight:4, phase:3, milestone:3, category:'testing' },
   ],
   dashboard: [
-    { name:'數據來源整理',   weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'圖表／統計元件', weight:6, phase:2, milestone:2, category:'frontend' },
-    { name:'後台頁面串接',   weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'測試',           weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'dashboard_01', name:'數據來源整理', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'dashboard_02', name:'圖表／統計元件', weight:6, phase:2, milestone:2, category:'frontend' },
+    { key:'dashboard_03', name:'後台頁面串接', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'dashboard_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   member_mgmt_admin: [
-    { name:'會員列表',       weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'會員資料檢視',   weight:3, phase:2, milestone:2, category:'backend' },
-    { name:'停用／管理操作', weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'測試',           weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'member_mgmt_admin_01', name:'會員列表', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'member_mgmt_admin_02', name:'會員資料檢視', weight:3, phase:2, milestone:2, category:'backend' },
+    { key:'member_mgmt_admin_03', name:'停用／管理操作', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'member_mgmt_admin_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   member_advanced: [
-    { name:'會員等級／權限設計', weight:5, phase:1, milestone:1, category:'design' },
-    { name:'點數或分級邏輯',     weight:6, phase:2, milestone:2, category:'backend' },
-    { name:'後台設定介面',       weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'測試',               weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'member_advanced_01', name:'會員等級／權限設計', weight:5, phase:1, milestone:1, category:'design' },
+    { key:'member_advanced_02', name:'點數或分級邏輯', weight:6, phase:2, milestone:2, category:'backend' },
+    { key:'member_advanced_03', name:'後台設定介面', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'member_advanced_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   oauth_login: [
-    { name:'第三方開發者後台設定', weight:3, phase:2, milestone:2, category:'integration' },
-    { name:'OAuth Flow 串接',      weight:5, phase:2, milestone:2, category:'integration' },
-    { name:'Callback 處理',        weight:3, phase:2, milestone:2, category:'integration' },
-    { name:'帳號綁定',             weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'錯誤處理',             weight:2, phase:2, milestone:3, category:'backend' },
-    { name:'測試',                 weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'oauth_login_01', name:'第三方開發者後台設定', weight:3, phase:2, milestone:2, category:'integration' },
+    { key:'oauth_login_02', name:'OAuth Flow 串接', weight:5, phase:2, milestone:2, category:'integration' },
+    { key:'oauth_login_03', name:'Callback 處理', weight:3, phase:2, milestone:2, category:'integration' },
+    { key:'oauth_login_04', name:'帳號綁定', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'oauth_login_05', name:'錯誤處理', weight:2, phase:2, milestone:3, category:'backend' },
+    { key:'oauth_login_06', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   coupon: [
-    { name:'折扣邏輯設計',   weight:4, phase:1, milestone:2, category:'design' },
-    { name:'後台設定介面',   weight:5, phase:2, milestone:2, category:'backend' },
-    { name:'結帳流程整合',   weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'測試',           weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'coupon_01', name:'折扣邏輯設計', weight:4, phase:1, milestone:2, category:'design' },
+    { key:'coupon_02', name:'後台設定介面', weight:5, phase:2, milestone:2, category:'backend' },
+    { key:'coupon_03', name:'結帳流程整合', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'coupon_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   variants: [
-    { name:'規格資料結構',       weight:5, phase:1, milestone:1, category:'backend' },
-    { name:'前台規格選擇 UI',    weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'後台規格管理',       weight:5, phase:2, milestone:2, category:'backend' },
-    { name:'獨立 SKU／庫存邏輯', weight:5, phase:2, milestone:3, category:'backend' },
-    { name:'測試',               weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'variants_01', name:'規格資料結構', weight:5, phase:1, milestone:1, category:'backend' },
+    { key:'variants_02', name:'前台規格選擇 UI', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'variants_03', name:'後台規格管理', weight:5, phase:2, milestone:2, category:'backend' },
+    { key:'variants_04', name:'獨立 SKU／庫存邏輯', weight:5, phase:2, milestone:3, category:'backend' },
+    { key:'variants_05', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   inventory_adv: [
-    { name:'庫存資料結構調整',     weight:5, phase:1, milestone:2, category:'backend' },
-    { name:'安全庫存／警示邏輯',   weight:5, phase:2, milestone:2, category:'backend' },
-    { name:'後台介面',             weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'測試',                 weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'inventory_adv_01', name:'庫存資料結構調整', weight:5, phase:1, milestone:2, category:'backend' },
+    { key:'inventory_adv_02', name:'安全庫存／警示邏輯', weight:5, phase:2, milestone:2, category:'backend' },
+    { key:'inventory_adv_03', name:'後台介面', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'inventory_adv_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   email_notify: [
-    { name:'Email 樣板設計',   weight:3, phase:2, milestone:2, category:'design' },
-    { name:'觸發事件串接',     weight:5, phase:2, milestone:2, category:'backend' },
-    { name:'寄信服務設定',     weight:3, phase:2, milestone:3, category:'devops' },
-    { name:'測試',             weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'email_notify_01', name:'Email 樣板設計', weight:3, phase:2, milestone:2, category:'design' },
+    { key:'email_notify_02', name:'觸發事件串接', weight:5, phase:2, milestone:2, category:'backend' },
+    { key:'email_notify_03', name:'寄信服務設定', weight:3, phase:2, milestone:3, category:'devops' },
+    { key:'email_notify_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   newsletter: [
-    { name:'訂閱名單管理', weight:4, phase:2, milestone:2, category:'backend' },
-    { name:'電子報樣板',   weight:4, phase:2, milestone:2, category:'design' },
-    { name:'發送排程設定', weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'測試',         weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'newsletter_01', name:'訂閱名單管理', weight:4, phase:2, milestone:2, category:'backend' },
+    { key:'newsletter_02', name:'電子報樣板', weight:4, phase:2, milestone:2, category:'design' },
+    { key:'newsletter_03', name:'發送排程設定', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'newsletter_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   logistics: [
-    { name:'物流商資格／串接準備', weight:4, phase:2, milestone:2, category:'integration' },
-    { name:'API 串接',             weight:6, phase:2, milestone:2, category:'integration' },
-    { name:'出貨標籤產生',         weight:4, phase:2, milestone:3, category:'backend' },
-    { name:'測試',                 weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'logistics_01', name:'物流商資格／串接準備', weight:4, phase:2, milestone:2, category:'integration' },
+    { key:'logistics_02', name:'API 串接', weight:6, phase:2, milestone:2, category:'integration' },
+    { key:'logistics_03', name:'出貨標籤產生', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'logistics_04', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   invoice: [
-    { name:'稅籍／服務申請確認',   weight:3, phase:2, milestone:2, category:'integration' },
-    { name:'電子發票 API 串接',    weight:6, phase:2, milestone:2, category:'integration' },
-    { name:'開立／作廢流程',       weight:5, phase:2, milestone:3, category:'backend' },
-    { name:'測試',                 weight:3, phase:3, milestone:3, category:'testing' },
+    { key:'invoice_01', name:'稅籍／服務申請確認', weight:3, phase:2, milestone:2, category:'integration' },
+    { key:'invoice_02', name:'電子發票 API 串接', weight:6, phase:2, milestone:2, category:'integration' },
+    { key:'invoice_03', name:'開立／作廢流程', weight:5, phase:2, milestone:3, category:'backend' },
+    { key:'invoice_04', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   api_3rd: [
-    { name:'API 文件確認', weight:3, phase:1, milestone:2, category:'integration' },
-    { name:'串接開發',     weight:6, phase:2, milestone:2, category:'integration' },
-    { name:'錯誤處理',     weight:3, phase:2, milestone:3, category:'backend' },
-    { name:'測試',         weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'api_3rd_01', name:'API 文件確認', weight:3, phase:1, milestone:2, category:'integration' },
+    { key:'api_3rd_02', name:'串接開發', weight:6, phase:2, milestone:2, category:'integration' },
+    { key:'api_3rd_03', name:'錯誤處理', weight:3, phase:2, milestone:3, category:'backend' },
+    { key:'api_3rd_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   simple_integration: [
-    { name:'串接設定',       weight:2, phase:2, milestone:2, category:'integration' },
-    { name:'驗證運作正常',   weight:1, phase:3, milestone:3, category:'testing' },
+    { key:'simple_integration_01', name:'串接設定', weight:2, phase:2, milestone:2, category:'integration' },
+    { key:'simple_integration_02', name:'驗證運作正常', weight:1, phase:3, milestone:3, category:'testing' },
   ],
   ui_design: [
-    { name:'設計風格討論',           weight:3, phase:1, milestone:1, category:'design' },
-    { name:'Design System／元件庫',  weight:6, phase:1, milestone:1, category:'design' },
-    { name:'主要頁面視覺稿',         weight:8, phase:1, milestone:2, category:'design' },
-    { name:'切版／前端還原',         weight:8, phase:2, milestone:2, category:'frontend' },
-    { name:'細節調整',               weight:4, phase:2, milestone:3, category:'frontend' },
+    { key:'ui_design_01', name:'設計風格討論', weight:3, phase:1, milestone:1, category:'design' },
+    { key:'ui_design_02', name:'Design System／元件庫', weight:6, phase:1, milestone:1, category:'design' },
+    { key:'ui_design_03', name:'主要頁面視覺稿', weight:8, phase:1, milestone:2, category:'design' },
+    { key:'ui_design_04', name:'切版／前端還原', weight:8, phase:2, milestone:2, category:'frontend' },
+    { key:'ui_design_05', name:'細節調整', weight:4, phase:2, milestone:3, category:'frontend' },
   ],
   launch_adv: [
-    { name:'正式網域／DNS 設定',           weight:3, phase:3, milestone:3, category:'devops' },
-    { name:'環境變數設定',                 weight:3, phase:3, milestone:3, category:'devops' },
-    { name:'金流正式環境切換',             weight:3, phase:3, milestone:3, category:'devops' },
-    { name:'Email DNS（SPF/DKIM/DMARC）', weight:3, phase:3, milestone:3, category:'devops' },
-    { name:'正式管理員帳號建立',           weight:2, phase:3, milestone:3, category:'devops' },
-    { name:'Production 測試',              weight:4, phase:3, milestone:3, category:'testing' },
+    { key:'launch_adv_01', name:'正式網域／DNS 設定', weight:3, phase:3, milestone:3, category:'devops' },
+    { key:'launch_adv_02', name:'環境變數設定', weight:3, phase:3, milestone:3, category:'devops' },
+    { key:'launch_adv_03', name:'金流正式環境切換', weight:3, phase:3, milestone:3, category:'devops' },
+    { key:'launch_adv_04', name:'Email DNS（SPF/DKIM/DMARC）', weight:3, phase:3, milestone:3, category:'devops' },
+    { key:'launch_adv_05', name:'正式管理員帳號建立', weight:2, phase:3, milestone:3, category:'devops' },
+    { key:'launch_adv_06', name:'Production 測試', weight:4, phase:3, milestone:3, category:'testing' },
   ],
   permission_basic: [
-    { name:'角色權限資料結構',   weight:4, phase:1, milestone:2, category:'backend' },
-    { name:'後台權限設定介面',   weight:5, phase:2, milestone:2, category:'backend' },
-    { name:'測試',               weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'permission_basic_01', name:'角色權限資料結構', weight:4, phase:1, milestone:2, category:'backend' },
+    { key:'permission_basic_02', name:'後台權限設定介面', weight:5, phase:2, milestone:2, category:'backend' },
+    { key:'permission_basic_03', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   multilang_basic: [
-    { name:'多語系文字架構', weight:5, phase:1, milestone:2, category:'backend' },
-    { name:'頁面文字切換',   weight:5, phase:2, milestone:2, category:'frontend' },
-    { name:'測試',           weight:2, phase:3, milestone:3, category:'testing' },
+    { key:'multilang_basic_01', name:'多語系文字架構', weight:5, phase:1, milestone:2, category:'backend' },
+    { key:'multilang_basic_02', name:'頁面文字切換', weight:5, phase:2, milestone:2, category:'frontend' },
+    { key:'multilang_basic_03', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   minor_addon: [
-    { name:'功能設定與整合', weight:2, phase:2, milestone:2, category:'misc' },
-    { name:'驗證運作正常',   weight:1, phase:3, milestone:3, category:'testing' },
+    { key:'minor_addon_01', name:'功能設定與整合', weight:2, phase:2, milestone:2, category:'misc' },
+    { key:'minor_addon_02', name:'驗證運作正常', weight:1, phase:3, milestone:3, category:'testing' },
   ],
   design_service: [
-    { name:'需求討論與交付', weight:4, phase:1, milestone:1, category:'design' },
+    { key:'design_service_01', name:'需求討論與交付', weight:4, phase:1, milestone:1, category:'design' },
   ],
   discovery: [
-    { name:'需求訪談',           weight:5, phase:1, milestone:1, category:'discovery' },
-    { name:'技術評估與 Scope 確認', weight:5, phase:1, milestone:1, category:'discovery' },
+    { key:'discovery_01', name:'需求訪談', weight:5, phase:1, milestone:1, category:'discovery' },
+    { key:'discovery_02', name:'技術評估與 Scope 確認', weight:5, phase:1, milestone:1, category:'discovery' },
   ],
   evaluate_complex: [
-    { name:'需求訪談與技術評估', weight:5, phase:1, milestone:1, category:'discovery' },
-    { name:'技術方案與報價確認', weight:5, phase:1, milestone:1, category:'discovery' },
+    { key:'evaluate_complex_01', name:'需求訪談與技術評估', weight:5, phase:1, milestone:1, category:'discovery' },
+    { key:'evaluate_complex_02', name:'技術方案與報價確認', weight:5, phase:1, milestone:1, category:'discovery' },
   ],
 };
 
@@ -1094,6 +1094,18 @@ async function renderProjectSection() {
 }
 
 // ── 進度計算：Σ(Weight×Progress) ÷ Σ(Weight)，僅計入 active 且 includeInProgress 的項目 ──
+// ── 防呆：無效 weight（<=0／NaN／Infinity）視為 0（不計入分子分母）；
+//    無效 progress 一律 clamp 到 0～100，避免舊資料造成 NaN / Infinity / 超過 100% ──
+function safeWeight(t) {
+  const w = Number(t.weight);
+  return (Number.isFinite(w) && w > 0) ? w : 0;
+}
+function safeProgress(t) {
+  const p = Number(t.progress);
+  if (!Number.isFinite(p)) return 0;
+  return Math.max(0, Math.min(100, p));
+}
+
 function computeProjectMetrics() {
   const scopeById = {};
   projectScopes.forEach(s => { scopeById[s.id] = s; });
@@ -1106,9 +1118,9 @@ function computeProjectMetrics() {
   });
 
   function weightedPct(tasks) {
-    const totalWeight = tasks.reduce((sum, t) => sum + (Number(t.weight) || 0), 0);
+    const totalWeight = tasks.reduce((sum, t) => sum + safeWeight(t), 0);
     if (totalWeight === 0) return 0;
-    const done = tasks.reduce((sum, t) => sum + (Number(t.weight) || 0) * (Number(t.progress) || 0), 0);
+    const done = tasks.reduce((sum, t) => sum + safeWeight(t) * safeProgress(t), 0);
     return done / totalWeight;
   }
 
@@ -1116,8 +1128,8 @@ function computeProjectMetrics() {
   const byPhase = {};
   PHASES.forEach(p => { byPhase[p] = weightedPct(counted.filter(t => Number(t.phase) === p)); });
 
-  const totalWeight = counted.reduce((sum, t) => sum + (Number(t.weight) || 0), 0);
-  const waitingWeight = counted.filter(t => t.status === 'waiting_client').reduce((sum, t) => sum + (Number(t.weight) || 0), 0);
+  const totalWeight = counted.reduce((sum, t) => sum + safeWeight(t), 0);
+  const waitingWeight = counted.filter(t => t.status === 'waiting_client').reduce((sum, t) => sum + safeWeight(t), 0);
   const waitingClientPct = totalWeight ? (waitingWeight / totalWeight) * 100 : 0;
 
   const blocked = counted.filter(t => t.status === 'blocked');
@@ -1125,10 +1137,20 @@ function computeProjectMetrics() {
   const statusCounts = {};
   TASK_STATUS_ORDER.forEach(s => { statusCounts[s] = counted.filter(t => t.status === s).length; });
 
+  // Milestone Readiness：completed ≠ progress=100（開發完成 ≠ 已完成驗收），status 才是判斷依據
   const milestoneReadiness = MILESTONES.map(m => {
     const required = counted.filter(t => Number(t.requiredByMilestone || t.phase) <= m);
     const completed = required.filter(t => t.status === 'completed');
-    return { milestone: m, required: required.length, completed: completed.length, remaining: required.length - completed.length };
+    const inReview  = required.filter(t => t.status === 'review');
+    const remaining = required.length - completed.length - inReview.length;
+    return {
+      milestone: m,
+      required: required.length,
+      completed: completed.length,
+      inReview: inReview.length,
+      remaining,
+      ready: completed.length === required.length, // 全部 required task 都必須是 completed 狀態，review 不算
+    };
   });
 
   return { overall, byPhase, waitingClientPct, blocked, statusCounts, milestoneReadiness, totalTasks: counted.length, totalScopes: projectScopes.length };
@@ -1136,9 +1158,9 @@ function computeProjectMetrics() {
 
 function scopeProgress(scopeId) {
   const tasks = projectTasks.filter(t => t.scopeId === scopeId && t.active !== false);
-  const totalWeight = tasks.reduce((sum, t) => sum + (Number(t.weight) || 0), 0);
+  const totalWeight = tasks.reduce((sum, t) => sum + safeWeight(t), 0);
   if (totalWeight === 0) return 0;
-  const done = tasks.reduce((sum, t) => sum + (Number(t.weight) || 0) * (Number(t.progress) || 0), 0);
+  const done = tasks.reduce((sum, t) => sum + safeWeight(t) * safeProgress(t), 0);
   return done / totalWeight;
 }
 
@@ -1180,9 +1202,10 @@ function renderProjectUI() {
         <div class="tag-section-label">Milestone Readiness（僅供專案管理與付款參考，不會自動觸發付款）</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${m.milestoneReadiness.map(r => `
-            <div style="font-size:11.5px;background:var(--ink-10);border-radius:8px;padding:6px 10px">
-              <strong>${MILESTONE_LABELS[r.milestone]}</strong>　Required ${r.required}／Completed ${r.completed}／Remaining ${r.remaining}
-              　<span style="color:${r.remaining===0?'var(--green)':'var(--amber)'};font-weight:600">${r.remaining===0?'Ready':'Not Ready'}</span>
+            <div style="font-size:11.5px;background:var(--ink-10);border-radius:8px;padding:8px 10px;line-height:1.7">
+              <strong>${MILESTONE_LABELS[r.milestone]}</strong><br>
+              Required：${r.required}　Completed：${r.completed}　In Review：${r.inReview}　Remaining：${r.remaining}<br>
+              Status：<span style="color:${r.ready?'var(--green)':'var(--amber)'};font-weight:600">${r.ready?'Ready':'Not Ready'}</span>
             </div>`).join('')}
         </div>
       </div>
@@ -1210,24 +1233,37 @@ function renderProjectUI() {
 
 function renderScopeRow(s) {
   const taskCount = projectTasks.filter(t => t.scopeId === s.id).length;
-  const prog = scopeProgress(s.id);
+  const isActive = s.active !== false;
+  const includeProgress = s.includeInProgress !== false;
+
+  // Scope Progress 顯示規則：
+  // A) active===false → 顯示「已停用」，不顯示正常百分比
+  // B) active===true 且 includeInProgress===false → 仍計算並顯示 Scope 自己的百分比，但標示「不計入總進度」
+  // C/D) Task active 過濾已在 scopeProgress() 內處理
+  const progressDisplay = !isActive
+    ? '已停用'
+    : `${scopeProgress(s.id).toFixed(1)}%`;
+
+  // fallback 顯示未知/人工寫入的 source 值時，一律 escape 後才插入 innerHTML，避免 XSS
+  const sourceLabel = escapeHtml(SCOPE_SOURCE_LABELS[s.source] || s.source || '');
+
   return `
-    <div style="border:1.5px solid var(--ink-10);border-radius:var(--r);padding:12px 14px;margin-bottom:8px">
+    <div style="border:1.5px solid var(--ink-10);border-radius:var(--r);padding:12px 14px;margin-bottom:8px${!isActive ? ';opacity:.6' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:180px">
           <div style="font-size:13.5px;font-weight:600;color:var(--ink)">${escapeHtml(s.name)}
-            <span class="dtag" style="margin-left:6px">${SCOPE_SOURCE_LABELS[s.source] || s.source}</span>
-            ${s.active === false ? '<span class="dtag" style="background:#fef2f2;color:var(--red)">停用</span>' : ''}
-            ${s.includeInProgress === false ? '<span class="dtag" style="background:var(--ink-10)">不計入進度</span>' : ''}
+            <span class="dtag" style="margin-left:6px" title="Source">${sourceLabel}</span>
+            ${!isActive ? '<span class="dtag" style="background:#fef2f2;color:var(--red)">已停用</span>' : ''}
+            ${isActive && !includeProgress ? '<span class="dtag" style="background:var(--amber-light);color:var(--amber)">不計入總進度</span>' : ''}
           </div>
           ${s.description ? `<div style="font-size:12px;color:var(--ink-60);margin-top:3px">${escapeHtml(s.description)}</div>` : ''}
-          <div style="font-size:11px;color:var(--ink-30);margin-top:4px">Task 數：${taskCount}　Scope Progress：${prog.toFixed(1)}%</div>
+          <div style="font-size:11px;color:var(--ink-30);margin-top:4px">Task 數：${taskCount}　Scope Progress：${progressDisplay}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-copy-link" onclick="expandScopeToTasks('${s.id}')">展開成開發任務</button>
           <button class="btn-copy-link" onclick="editScopeField('${s.id}')">編輯</button>
-          <button class="btn-copy-link" onclick="toggleScopeFlag('${s.id}','active',${s.active !== false})">${s.active === false ? '啟用' : '停用'}</button>
-          <button class="btn-copy-link" onclick="toggleScopeFlag('${s.id}','includeInProgress',${s.includeInProgress !== false})">${s.includeInProgress === false ? '計入進度' : '不計入進度'}</button>
+          <button class="btn-copy-link" onclick="toggleScopeFlag('${s.id}','active',${isActive})">${!isActive ? '啟用' : '停用'}</button>
+          <button class="btn-copy-link" onclick="toggleScopeFlag('${s.id}','includeInProgress',${includeProgress})">${!includeProgress ? '計入總進度' : '不計入總進度'}</button>
           <button class="btn-copy-link" style="color:var(--red)" onclick="deleteScope('${s.id}')">刪除</button>
         </div>
       </div>
@@ -1253,11 +1289,16 @@ function renderTaskRow(t) {
         <select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px;color:${color}" onchange="updateTaskField('${t.id}','status',this.value)">
           ${TASK_STATUS_ORDER.map(s => `<option value="${s}" ${t.status===s?'selected':''}>${TASK_STATUS_LABELS[s]}</option>`).join('')}
         </select>
-        <input type="number" min="0" max="100" value="${t.progress ?? 0}" style="width:60px" class="field-input"
-               onchange="updateTaskField('${t.id}','progress',Math.max(0,Math.min(100,Number(this.value)||0)))">
+        <input type="number" min="0" max="100" value="${t.progress ?? 0}" style="width:60px" class="field-input" title="Progress"
+               onchange="updateTaskField('${t.id}','progress',parseFloat(this.value))">
         <span style="font-size:11px;color:var(--ink-30)">%</span>
-        <input type="number" min="1" value="${t.weight ?? 1}" style="width:56px" class="field-input" title="Weight"
-               onchange="updateTaskField('${t.id}','weight',Math.max(1,Number(this.value)||1))">
+        <input type="number" min="1" step="1" value="${t.weight ?? 1}" style="width:56px" class="field-input" title="Weight"
+               onchange="updateTaskField('${t.id}','weight',parseFloat(this.value))">
+        <input type="number" min="0" step="1" value="${t.order ?? 0}" style="width:56px" class="field-input" title="Order"
+               onchange="updateTaskField('${t.id}','order',parseFloat(this.value))">
+        <select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" title="Phase" onchange="updateTaskField('${t.id}','phase',Number(this.value))">
+          ${PHASES.map(p => `<option value="${p}" ${Number(t.phase)===p?'selected':''}>Phase ${p}</option>`).join('')}
+        </select>
         <select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" title="Required by Milestone" onchange="updateTaskField('${t.id}','requiredByMilestone',Number(this.value))">
           ${MILESTONES.map(mm => `<option value="${mm}" ${Number(t.requiredByMilestone)===mm?'selected':''}>M${mm}</option>`).join('')}
         </select>
@@ -1279,26 +1320,74 @@ function renderTaskRow(t) {
 }
 
 // ── 展開 Scope 成 Development Tasks（依 Task Template；已展開過則需確認是否再次生成）──
+// ── Legacy Compatibility：舊版 Task 可能沒有 templateTaskKey（v1 尚未加入穩定 key 前生成的資料）。
+//    優先用 templateTaskKey 比對；沒有的話，才用 Task Name 對照該 Scope 的樣板做「一次性」fallback。
+//    對上了就回傳 key（呼叫端會把它寫回 Firestore，完成 migration）；對不上就回傳 null，
+//    視為管理者自訂 / 已改名的 custom Task，不猜測、不覆蓋、不刪除。
+function resolveLegacyTemplateTaskKey(task, template) {
+  if (task.templateTaskKey) return task.templateTaskKey;
+  if (!template) return null;
+  const match = template.find(t => t.name === task.name);
+  return match ? match.key : null;
+}
+
 async function expandScopeToTasks(scopeId) {
   const scope = projectScopes.find(s => s.id === scopeId);
   if (!scope) return;
 
-  if (scope.tasksGenerated) {
-    if (!confirm('此 Scope 已存在 Development Tasks，是否仍要依樣板再次生成一批新 Task？（不會刪除既有 Task）')) return;
+  const tpl = TASK_TEMPLATES[scope.taskTemplateKey] || TASK_TEMPLATES.minor_addon;
+  const existingTasks = projectTasks.filter(t => t.scopeId === scopeId);
+
+  let mode = 'add'; // 尚未展開過：直接視為「新增全部」，等同於補齊缺少的（現有為 0 項）
+  if (scope.tasksGenerated || existingTasks.length) {
+    // 三種行為概念：取消／僅新增缺少的預設 Tasks（推薦）／強制重新生成完整一套
+    const choice = prompt(
+      '此 Scope 已存在 Development Tasks。\n' +
+      '輸入 "add" ：僅新增缺少的預設 Tasks（推薦，不會重複建立）\n' +
+      '輸入 "force"：強制重新生成完整一套樣板 Tasks（不會刪除既有 Task，但可能產生重複）\n' +
+      '留空或取消：不執行任何動作',
+      'add'
+    );
+    if (choice === null) return;
+    const normalized = choice.trim().toLowerCase();
+    if (normalized !== 'add' && normalized !== 'force') { showToast('已取消，未輸入有效指令'); return; }
+    mode = normalized;
+    if (mode === 'force') {
+      if (!confirm('確定要強制重新生成完整一套 Tasks？既有 Task 不會被刪除，但這會建立一批新的重複樣板任務，請確認這是你要的操作。')) return;
+    }
   }
 
-  const tpl = TASK_TEMPLATES[scope.taskTemplateKey] || TASK_TEMPLATES.minor_addon;
-  const existingMaxOrder = projectTasks.filter(t => t.scopeId === scopeId).reduce((mx, t) => Math.max(mx, t.order || 0), 0);
+  // 「僅新增缺少的」：比對 templateTaskKey；沒有 templateTaskKey 的舊 Task 用 Task Name 對照樣板做
+  // 一次性 legacy migration（對上了會在下方 batch 中把 templateTaskKey 補寫回 Firestore）。
+  // 管理者自行建立、或已改名對不上樣板的 Task，templateTaskKey 保持 null，視為 custom/manual Task，不受影響。
+  const existingKeys = new Set();
+  const legacyMigrations = []; // { taskId, key }
+  existingTasks.forEach(t => {
+    const resolved = resolveLegacyTemplateTaskKey(t, tpl);
+    if (!resolved) return;
+    existingKeys.add(resolved);
+    if (!t.templateTaskKey) legacyMigrations.push({ taskId: t.id, key: resolved });
+  });
+
+  const tasksToCreate = (mode === 'add') ? tpl.filter(t => !existingKeys.has(t.key)) : tpl;
+
+  if (mode === 'add' && tasksToCreate.length === 0 && legacyMigrations.length === 0) {
+    showToast('此 Scope 的預設 Tasks 皆已存在，未新增任何項目');
+    return;
+  }
+
+  const existingMaxOrder = existingTasks.reduce((mx, t) => Math.max(mx, t.order || 0), 0);
 
   try {
     const taskColl = db.collection('quotes').doc(currentId).collection('tasks');
     const batch = db.batch();
     const newTasks = [];
 
-    tpl.forEach((t, idx) => {
+    tasksToCreate.forEach((t, idx) => {
       const ref = taskColl.doc();
       const data = {
         scopeId,
+        templateTaskKey: t.key || null,
         name: t.name,
         description: '',
         category: t.category || '',
@@ -1321,6 +1410,14 @@ async function expandScopeToTasks(scopeId) {
       newTasks.push({ id: ref.id, ...data });
     });
 
+    // 補寫舊 Task 的 templateTaskKey，完成 migration，之後就能完全依穩定 key 判斷
+    legacyMigrations.forEach(mig => {
+      batch.update(taskColl.doc(mig.taskId), {
+        templateTaskKey: mig.key,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
     batch.update(db.collection('quotes').doc(currentId).collection('scopes').doc(scopeId), {
       tasksGenerated: true,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1329,7 +1426,12 @@ async function expandScopeToTasks(scopeId) {
     await batch.commit();
     scope.tasksGenerated = true;
     projectTasks.push(...newTasks);
-    showToast(`✓ 已產生 ${newTasks.length} 項開發任務`);
+    legacyMigrations.forEach(mig => {
+      const t = projectTasks.find(pt => pt.id === mig.taskId);
+      if (t) t.templateTaskKey = mig.key;
+    });
+    const migrationNote = legacyMigrations.length ? `，並補齊 ${legacyMigrations.length} 項舊 Task 的 templateTaskKey` : '';
+    showToast(`✓ 已產生 ${newTasks.length} 項開發任務${migrationNote}`);
     renderProjectUI();
   } catch (err) {
     console.error(err);
@@ -1431,9 +1533,37 @@ async function deleteScope(scopeId) {
 }
 
 // ── Task CRUD ──
+// ── Task 欄位驗證：擋下無效值，顯示明確錯誤，並重新渲染把 UI 還原成儲存值 ──
+function validateTaskField(field, value) {
+  if (field === 'weight') {
+    if (!Number.isFinite(value) || value <= 0) return 'Weight 必須為大於 0 的數字';
+  }
+  if (field === 'progress') {
+    if (!Number.isFinite(value) || value < 0 || value > 100) return 'Progress 必須為 0～100 之間的數字';
+  }
+  if (field === 'order') {
+    if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) return 'Order 必須為 0 以上的整數';
+  }
+  if (field === 'phase') {
+    if (!PHASES.includes(Number(value))) return 'Phase 必須為合法的 Phase（1～3）';
+  }
+  if (field === 'requiredByMilestone') {
+    if (!MILESTONES.includes(Number(value))) return 'Required By Milestone 必須為合法的 Milestone（1～3）';
+  }
+  return null;
+}
+
 async function updateTaskField(taskId, field, value) {
   const task = projectTasks.find(t => t.id === taskId);
   if (!task) return;
+
+  const err = validateTaskField(field, value);
+  if (err) {
+    showToast(`⚠ ${err}`);
+    renderProjectUI(); // 還原 UI 顯示為目前已儲存的值，避免畫面停在無效輸入
+    return;
+  }
+
   try {
     await db.collection('quotes').doc(currentId).collection('tasks').doc(taskId).update({
       [field]: value,
@@ -1441,16 +1571,30 @@ async function updateTaskField(taskId, field, value) {
     });
     task[field] = value;
     renderProjectUI();
-  } catch (err) {
-    console.error(err);
-    showToast(`⚠ 更新失敗：${err.message || err}`);
+  } catch (err2) {
+    console.error(err2);
+    showToast(`⚠ 更新失敗：${err2.message || err2}`);
   }
 }
 
 async function quickComplete(taskId) {
-  await updateTaskField(taskId, 'status', 'completed');
-  await updateTaskField(taskId, 'progress', 100);
-  showToast('✓ 已標記完成');
+  const task = projectTasks.find(t => t.id === taskId);
+  if (!task) return;
+  try {
+    await db.collection('quotes').doc(currentId).collection('tasks').doc(taskId).update({
+      status: 'completed',
+      progress: 100,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    // Firestore 成功後才同步更新本地狀態，避免半套更新（status/progress 其中一個成功、另一個失敗）
+    task.status = 'completed';
+    task.progress = 100;
+    showToast('✓ 已標記完成');
+    renderProjectUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
 }
 
 async function editTaskField(taskId) {
