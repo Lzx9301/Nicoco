@@ -1728,8 +1728,30 @@ function renderSummary() {
       </div>` : ''}
     </div>
 
+      <div class="final-section">
+        <div class="final-section-title">11. 合作與付款方式</div>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
+          本頁顯示之金額為<strong>線上初步估價</strong>，不等同正式成交金額。正式合作前將依需求訪談確認功能範圍（Scope）並提供正式報價；正式報價確認後，可依雙方約定採一次付款、兩期付款或分期付款，並於約定之啟動款完成後開始製作。
+        </div>
+      </div>
+
+      <div class="final-section">
+        <div class="final-section-title">12. 需求變更與追加報價</div>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
+          正式報價依已確認之需求範圍計算。開發開始後，如提出超出原確認範圍之新功能、新頁面、已確認設計大幅重做、整體版型重整、第三方服務新增串接等需求，將視為需求變更（Change Request），由開發者先評估追加工時與費用，經確認後再執行。原需求範圍內之細節調整依內含修改次數處理。
+        </div>
+      </div>
+
+      <div class="final-section">
+        <div class="final-section-title">13. 一次性專案開發說明</div>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
+          本服務以<strong>一次性專案開發費</strong>為主，不強制收取固定年度開發費。專案交付後提供約定之原功能 Bug 保固；保固期後如有維護、功能新增、頁面改版、第三方 API 調整或其他需求，可採單次委託或另行洽談維護方案。一次性專案開發費不代表終身免費維護。
+        </div>
+      </div>
+    </div>
+
     <div style="font-size:12px;color:var(--ink-30);text-align:center;margin-top:8px">
-      正式報價仍需需求訪談後確認，實際費用依詳細規格調整。
+      線上估價僅供初步預算參考；正式價格以需求訪談、Scope 確認及正式報價單為準。
     </div>`;
 }
 
@@ -2000,7 +2022,22 @@ function downloadHTML() {
     <div style="font-size:12px;color:#60636e;line-height:1.6">網域、主機、資料庫、金流手續費、Email、簡訊及其他第三方服務所產生之費用，由客戶依實際使用方案自行負擔，不包含於本開發估價。</div>
   </div>
 
-  <div class="disc">⚠ 本估價單為系統自動估算，僅供參考。正式報價需需求訪談後確認，實際費用依詳細規格調整。</div>
+  <div class="sec">
+    <div class="sec-title">合作與付款方式</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.7">本文件所列金額為線上初步估價，不等同正式成交金額。正式合作前將依需求訪談確認功能範圍（Scope）並提供正式報價；正式報價確認後，可依雙方約定採一次付款、兩期付款或分期付款，並於約定之啟動款完成後開始製作。</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">需求變更與追加報價</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.7">正式報價依已確認之需求範圍計算。開發開始後，如提出超出原確認範圍之新功能、新頁面、已確認設計大幅重做、整體版型重整、第三方服務新增串接等需求，將視為需求變更（Change Request），由開發者先評估追加工時與費用，經確認後再執行。原需求範圍內之細節調整依內含修改次數處理。</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">一次性專案開發說明</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.7">本服務以一次性專案開發費為主，不強制收取固定年度開發費。專案交付後提供約定之原功能 Bug 保固；保固期後如有維護、功能新增、頁面改版、第三方 API 調整或其他需求，可採單次委託或另行洽談維護方案。一次性專案開發費不代表終身免費維護。</div>
+  </div>
+
+  <div class="disc">⚠ 本估價單為系統自動初步估算，僅供預算參考。正式價格以需求訪談、Scope 確認及正式報價單為準。</div>
   <div class="footer"><span>${state.quoteId}</span><span>網站開發估價系統自動產生</span></div>
 </body></html>`;
 
