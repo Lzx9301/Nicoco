@@ -46,6 +46,17 @@ async function saveQuoteToFirestore(quoteId, data) {
     message:         data.message,
     budget:          data.budget,
     launchDate:      data.launchDate,
+    complexityLevel: data.complexityLevel || '',
+    complexityFeeMin: data.complexityFeeMin || 0,
+    complexityFeeMax: data.complexityFeeMax || 0,
+    isRush:          !!data.isRush,
+    rushFeeMin:      data.rushFeeMin || 0,
+    rushFeeMax:      data.rushFeeMax || 0,
+    warrantyFee:     data.warrantyFee || 0,
+    revisionPolicy:  data.revisionPolicy || '',
+    maintenanceKey:  data.maintenanceKey || 'none',
+    maintenanceLabel:data.maintenanceLabel || '不需要',
+    requiresManualReview: !!data.requiresManualReview,
     status:          'new',
     createdAt:       firebase.firestore.FieldValue.serverTimestamp(),
   });
@@ -552,8 +563,8 @@ body {
         <div class="type-card" data-type="ecom" onclick="selectType(this,'ecom')">
           <div class="type-card-icon">🛒</div>
           <div class="type-card-name">小型電商網站</div>
-          <div class="type-card-desc">商品管理、購物車、結帳金流。適合 50 種以內商品的品牌。</div>
-          <div class="type-card-price">NT$90,000 – 150,000</div>
+          <div class="type-card-desc">商品管理、購物車、基本 Checkout 與訂單管理。第三方正式金流需另行加購。適合 50 種以內商品的品牌。</div>
+          <div class="type-card-price">NT$90,000 – 120,000</div>
         </div>
         <div class="type-card type-card-custom" data-type="custom" onclick="selectType(this,'custom')">
           <div class="type-card-icon">⚙️</div>
@@ -613,14 +624,15 @@ body {
             <div class="cond-opt selected" onclick="selectCond('timeline',this,0)">一般時程<span class="cond-modifier">標準</span></div>
             <div class="cond-opt" onclick="selectCond('timeline',this,.2)">急件<span class="cond-modifier">+20%</span></div>
           </div>
+          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">急件費獨立計算，會在估價結果中列為單獨一項「急件調整」，不會隱藏在總價裡。</div>
         </div>
         <div class="cond-group">
           <div class="cond-label">修改次數</div>
           <div class="cond-opts" id="cond-revision">
-            <div class="cond-opt selected" onclick="selectCond('revision',this,0)">2 次<span class="cond-modifier">內含</span></div>
-            <div class="cond-opt" onclick="selectCond('revision',this,.08)">5 次<span class="cond-modifier">+8%</span></div>
-            <div class="cond-opt" onclick="selectCond('revision',this,0)" data-hourly="1">超過 5 次<span class="cond-modifier">按時計費</span></div>
+            <div class="cond-opt selected" onclick="selectRevisionOpt(this,'standard','2 次內含')">2 次<span class="cond-modifier">內含</span></div>
+            <div class="cond-opt" onclick="selectRevisionOpt(this,'flexible','需要較多修改彈性')">需要較多修改彈性<span class="cond-modifier">按時計費</span></div>
           </div>
+          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">超出內含 2 次修改後，以 NT$800–1,500/hr 按時計費，不會自動加入開發總價，實際發生時另行計算工時。</div>
         </div>
         <div class="cond-group">
           <div class="cond-label">保固期</div>
@@ -629,17 +641,28 @@ body {
             <div class="cond-opt" onclick="selectCondFlat('warranty',this,5000)">3 個月<span class="cond-modifier">+NT$5,000</span></div>
             <div class="cond-opt" onclick="selectCondFlat('warranty',this,10000)">6 個月<span class="cond-modifier">+NT$10,000</span></div>
           </div>
-          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">僅含既有功能 Bug 修正，不含新增功能、版面調整或需求變更。</div>
+          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">
+            Bug 定義：原本需求規格內、已完成之功能發生錯誤。僅含此類 Bug 免費修正。以下不屬於 Bug，需另外報價：新增功能、變更原本需求、新增頁面、第三方 API 改版、客戶自行操作造成之資料問題。
+          </div>
         </div>
         <div class="cond-group">
-          <div class="cond-label">維護方案</div>
-          <div class="cond-opts" id="cond-maint">
-            <div class="cond-opt selected" onclick="selectCondFlat('maint',this,0)">不需要</div>
-            <div class="cond-opt" onclick="selectCondFlat('maint',this,3000)">每月<span class="cond-modifier">+$3,000/月</span></div>
-            <div class="cond-opt" onclick="selectCondFlat('maint',this,8000)">每季<span class="cond-modifier">+$8,000/季</span></div>
-            <div class="cond-opt" onclick="selectCondFlat('maint',this,28000)">年度<span class="cond-modifier">+$28,000/年</span></div>
+          <div class="cond-label">專案複雜度</div>
+          <div class="cond-opts" id="cond-complexity">
+            <div class="cond-opt selected" onclick="selectCond('complexity',this,0)">標準<span class="cond-modifier">無</span></div>
+            <div class="cond-opt" onclick="selectCond('complexity',this,.10)">中度客製<span class="cond-modifier">最高 +NT$15,000</span></div>
+            <div class="cond-opt" onclick="selectCond('complexity',this,.20)">高度客製<span class="cond-modifier">最高 +NT$30,000</span></div>
           </div>
-          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">含安全檢查、備份確認、基本技術支援。不含大量內容修改或新增功能。</div>
+          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">複雜度調整費僅依「基礎方案價格」計算（不會再乘上已選加購功能的價值），並分別設有 NT$15,000／NT$30,000 上限，會在估價結果中獨立列出。</div>
+        </div>
+        <div class="cond-group">
+          <div class="cond-label">維護方案<span style="font-weight:400;color:var(--ink-30)">（選配，不列入開發總價）</span></div>
+          <div class="cond-opts" id="cond-maint">
+            <div class="cond-opt selected" onclick="selectMaint(this,'none','不需要')">不需要<span class="cond-modifier">NT$0</span></div>
+            <div class="cond-opt" onclick="selectMaint(this,'hourly','單次維護（按時計費）')">單次維護<span class="cond-modifier">NT$800–1,500/hr</span></div>
+            <div class="cond-opt" onclick="selectMaint(this,'basic','基本月維護')">基本月維護<span class="cond-modifier">NT$2,000–5,000/月</span></div>
+            <div class="cond-opt" onclick="selectMaint(this,'advanced','進階維護')">進階維護<span class="cond-modifier">NT$5,000–10,000+/月</span></div>
+          </div>
+          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">含安全檢查、備份確認、基本技術支援。不含大量內容修改或新增功能，且不會自動計入本次開發總價，僅供選配參考。</div>
         </div>
       </div>
 
@@ -734,7 +757,7 @@ body {
             <div class="base-include-row">✓ RWD 響應式</div>
             <div class="base-include-row">✓ 基礎 SEO</div>
             <div class="base-include-row">✓ SSL 憑證</div>
-            <div class="base-include-row">✓ 部署 &amp; DNS</div>
+            <div class="base-include-row">✓ 基本部署 &amp; 基本 DNS 指向</div>
           </div>
         </div>
       </div>
@@ -753,6 +776,13 @@ body {
 
       <div class="duration-label">預估工期</div>
       <div class="duration-value" id="durationValue">—</div>
+
+      <div id="sidebarMaintNote" style="display:none;margin-top:10px;font-size:11px;color:var(--ink-60);background:var(--ink-10);border-radius:8px;padding:8px 10px;line-height:1.5"></div>
+
+      <div style="margin-top:10px;font-size:10.5px;color:var(--ink-30);line-height:1.5">
+        以上不含第三方服務費（網域、主機、資料庫、金流手續費、Email、簡訊等），由客戶依實際使用方案自行負擔。
+      </div>
+
       <div class="quote-id-chip" id="quoteIdChip"></div>
     </div>
   </aside>
@@ -783,18 +813,20 @@ const TYPE_CONFIG = {
   },
   cms: {
     name:'內容管理網站', priceMin:55000, priceMax:85000, days:30,
+    // CMS 的核心價值是「內容管理能力」本身，不綁定特定頁面（例如 FAQ 不寫死為必含）
     included: {
-      pages: ['home','about','contact','faq'],
+      pages: ['home','about','contact'],
       cms:   ['admin','content-mgmt'],
     },
   },
   ecom: {
-    name:'小型電商網站', priceMin:90000, priceMax:150000, days:50,
+    name:'小型電商網站', priceMin:90000, priceMax:120000, days:50,
     included: {
       pages:  ['home','contact'],
       ecom:   ['ecom-base'],
-      member: ['register','orders'],
-      cms:    ['admin','content-mgmt','product-mgmt','order-mgmt'],
+      member: ['register','profile','orders'],
+      // 文章／內容 CMS 不含在小型電商基礎方案，改列為額外加購（見 FEATURES.cms.content-mgmt）
+      cms:    ['admin','product-mgmt','order-mgmt'],
     },
   },
   custom: {
@@ -804,6 +836,7 @@ const TYPE_CONFIG = {
 };
 
 // 功能資料：free → 不計費；evaluate → 需評估不計費
+// price = 參考低價；priceHigh = 參考高價（若省略，預設用 isModule?1.55x:1.3x 當高價，見 calcPrice()）
 const FEATURES = {
   // ── 頁面 ──
   pages: [
@@ -812,73 +845,82 @@ const FEATURES = {
     { id:'contact', name:'聯絡我們',     price:2500,  badge:'must', desc:'聯絡表單、地圖、電話 Email，基本必備。' },
     { id:'faq',     name:'FAQ',          price:2500,  badge:'rec',  desc:'整理常見問題，減少客服負擔，也有助 SEO。' },
     { id:'blog',    name:'部落格',       price:6000,  badge:'rec',  desc:'長期內容經營，支援標籤分類，有助自然搜尋流量。' },
-    { id:'multilang',name:'多語系（基礎）', price:18000, badge:'opt',  desc:'靜態文字多語切換（zh/en），適合語系固定、內容不複雜的形象網站。若需要 CMS 多語、商品多語或 SEO 多語 slug，請勾選「需評估」區塊的「完整多語系 CMS」。' },
+    { id:'multilang',name:'多語系（基礎）', price:8000, priceHigh:20000, badge:'opt',  desc:'靜態文字多語切換（zh/en），依頁面數量調整。適合語系固定、內容不複雜的形象網站。若需要 CMS 多語、商品多語或 SEO 多語 slug，請勾選「需評估」區塊的「完整多語系 CMS」。' },
     { id:'seo-adv', name:'SEO 進階設定', price:5000,  badge:'rec',  desc:'Schema 結構化資料、進階 OG、Sitemap 完整配置（基礎版已含於建置費）。' },
   ],
   // ── 電商功能 ──
   ecom: [
-    { id:'ecom-base',  name:'基礎電商模組',   price:45000, badge:'must', isModule:true,
-      desc:'商品管理、商品列表、商品詳細頁、購物車、結帳流程、訂單建立、一組金流（綠界或藍新二擇一）、基礎後台。<br><strong>適用範圍：單一語系、基本商品規格（顏色/尺寸各一層）、商品數量 50 項以內。</strong>超出此範圍請於補充說明中說明，將另行評估。' },
-    { id:'coupon',     name:'優惠券 / 促銷',   price:6000,  badge:'opt',
+    { id:'ecom-base',  name:'基礎電商模組',   price:45000, priceHigh:69750, badge:'must', isModule:true,
+      desc:'商品管理、商品列表、商品詳細頁、基本商品分類、購物車、基本 Checkout 流程、Email／密碼會員登入、基本會員資料、基本訂單建立與查詢、商品管理後台、訂單管理後台、基本部署。<br><strong>適用範圍：單一語系、基本商品規格（顏色/尺寸各一層）、商品數量 50 項以內。</strong>超出此範圍請於補充說明中說明，將另行評估。<br><strong>不包含：</strong>第三方正式金流串接、文章／內容 CMS、Dashboard、會員管理後台、Email 自動通知、物流串接、電子發票、優惠券、進階庫存、進階商品多規格、客製 UI／UX，以上皆為額外加購項目。<br>選擇「小型電商網站」時，此模組已含於方案基礎費，不另計費；僅在其他網站類型額外加入完整電商功能時，才以此價格計算。' },
+    { id:'coupon',     name:'優惠券 / 折扣碼',   price:5000, priceHigh:10000, badge:'opt',
       desc:'折扣碼、滿額折、限時優惠等促銷機制。' },
-    { id:'variants',   name:'多規格商品',       price:6000,  badge:'rec',
-      desc:'顏色、尺寸等多規格選擇，各規格獨立庫存管理。' },
+    { id:'variants',   name:'進階商品多規格',       price:5000, priceHigh:12000, badge:'rec',
+      desc:'基礎方案僅含簡易單層規格選項；此項目適用於多維度規格組合（例如顏色 × 尺寸），且各組合需獨立 SKU、價格或庫存管理。' },
+    { id:'inventory-adv', name:'進階庫存管理', price:8000, priceHigh:20000, badge:'opt',
+      desc:'安全庫存警示、多倉庫存、自動補貨提醒等進階庫存邏輯（基本進出貨已含於基礎電商模組）。' },
     { id:'reviews',    name:'商品評價',          price:4500,  badge:'opt',
       desc:'購買後留評分與文字評價，提升轉換率。' },
   ],
   // ── 會員 ──
   member: [
     { id:'register',  name:'會員註冊 / 登入',  price:8000,  badge:'must', desc:'Email 帳號註冊與登入，含信箱驗證。' },
-    { id:'oauth',     name:'第三方登入',        price:5000,  badge:'rec',  desc:'Google / LINE 登入，降低帳號門檻。' },
-    { id:'profile',   name:'個人資料管理',      price:3500,  badge:'rec',  desc:'修改姓名、聯絡資訊、大頭貼。' },
+    { id:'oauth-google', name:'Google 登入',  price:3000, priceHigh:6000, badge:'opt',  desc:'使用 Google 帳號快速登入，降低註冊門檻。' },
+    { id:'oauth-line',   name:'LINE 登入',    price:3000, priceHigh:6000, badge:'opt',  desc:'使用 LINE 帳號快速登入，適合台灣使用者習慣。' },
+    { id:'oauth-apple',  name:'Apple 登入',   price:3000, priceHigh:6000, badge:'opt',  desc:'使用 Apple ID 登入，App Store 審核情境或蘋果用戶較適用。' },
+    { id:'profile',   name:'基本個人資料管理',      price:3500,  badge:'rec',  desc:'修改姓名、電話、Email、基本地址等會員基本資料。小型電商方案已包含；若需要多地址簿、公司資料、會員偏好等進階欄位，需另行評估。' },
     { id:'wishlist',  name:'收藏 / 願望清單',   price:3000,  badge:'opt',  desc:'讓使用者收藏喜歡的商品，提升回訪率。' },
     { id:'orders',    name:'訂單查詢',           price:4000,  badge:'rec',  desc:'查看歷史訂單狀態，必要的購物體驗。' },
-    { id:'points',    name:'點數系統',           price:10000, badge:'opt',  desc:'消費累積點數，點數折抵購物金額。' },
-    { id:'levels',    name:'會員等級',           price:10000, badge:'opt',  desc:'銅銀金分級機制，搭配不同折扣或權益。' },
+    { id:'member-adv', name:'進階會員權限 / 等級', price:8000, priceHigh:15000, badge:'opt', desc:'銅銀金分級、點數累積折抵等進階會員權益機制，取代單純的基本會員資料。' },
   ],
   // ── 後台 CMS ──
   cms: [
     { id:'admin',       name:'後台管理入口',    price:0,     badge:'must', free:true,  desc:'後台登入與基礎架構，已含於基礎建置費中。' },
-    { id:'content-mgmt',name:'內容管理',        price:5000,  badge:'must', desc:'Banner、文章、FAQ、聯絡表單收件，後台編輯。' },
+    { id:'content-mgmt',name:'文章 / 內容 CMS', price:6000, priceHigh:12000,  badge:'must', desc:'Banner、文章、最新消息、FAQ、聯絡表單收件，後台自行編輯與分類。' },
     { id:'product-mgmt',name:'商品 / 服務管理', price:6000,  badge:'opt',  desc:'商品 CRUD、庫存調整、上下架控制。' },
     { id:'order-mgmt',  name:'訂單管理',         price:6000,  badge:'opt',  desc:'查看、搜尋、更新訂單狀態。' },
-    { id:'member-mgmt', name:'會員管理',         price:5000,  badge:'opt',  desc:'查詢會員資料、消費記錄、停用帳號。' },
-    { id:'dashboard',   name:'數據 Dashboard',   price:8000,  badge:'opt',  desc:'流量、訂單、會員成長一眼掌握。' },
-    { id:'permission',  name:'權限管理',          price:10000, badge:'ent',  desc:'多角色後台帳號，分別設定可操作的功能範圍。' },
+    { id:'member-mgmt', name:'會員管理',         price:5000, priceHigh:10000,  badge:'opt',  desc:'查詢會員資料、消費記錄、停用帳號。' },
+    { id:'dashboard',   name:'數據 Dashboard',   price:6000, priceHigh:12000, badge:'opt',  desc:'流量、訂單、會員成長一眼掌握。' },
+    { id:'permission',  name:'管理員權限分級（基本角色）', price:5000, priceHigh:12000, badge:'ent',  desc:'基本角色權限，例如管理員／編輯者兩三種固定角色，各自可操作的功能範圍。若需要複雜的多層級權限矩陣（RBAC），請改選下方「需評估」區塊的「複雜權限矩陣 RBAC」。' },
   ],
   // ── 串接 ──
   integrations: [
     { id:'ga',           name:'Google Analytics 4',   price:0,    badge:'must', free:true, desc:'流量來源、使用者行為、轉換追蹤，已含於基礎建置費中。' },
     { id:'gsc',          name:'Google Search Console', price:0,    badge:'must', free:true, desc:'Google 搜尋排名監控與爬蟲狀態，已含於基礎建置費中。' },
-    { id:'firebase-base',name:'Firebase 基礎架構',    price:0,    badge:'must', free:true, desc:'Firestore 資料庫、Authentication 會員驗證、Cloud Storage 基礎用量，已含於基礎建置費中（限標準用量）。' },
+    { id:'firebase-base',name:'Firebase 基礎架構',    price:0,    badge:'must', free:true, desc:'Firestore 資料庫、Authentication 會員驗證、Cloud Storage 基礎用量，已含於基礎建置費中（限標準用量，Firebase 付費用量費用由客戶自行負擔，詳見「第三方服務費」說明）。' },
+    { id:'payment-3rd',  name:'第三方金流串接',       price:8000, priceHigh:15000, badge:'opt', desc:'串接綠界 ECPay / 藍新 NewebPay 等正式金流服務，讓網站可以真正收款。<strong>小型電商方案僅包含基本 Checkout 流程（下單、結帳頁面與訂單建立），不包含第三方正式金流串接</strong>，因此不論選擇何種網站類型，只要需要收款都需要此加購項目。金流服務本身的交易手續費由客戶自行支付，不包含於本開發估價（見「第三方服務費」說明）。' },
     { id:'gtm',          name:'Google Tag Manager',    price:2500, badge:'rec',  desc:'追蹤碼統一管理，不需改程式碼即可部署 Pixel 等。' },
     { id:'fb-pixel',     name:'Facebook Pixel',         price:2500, badge:'rec',  desc:'追蹤廣告轉換、建立再行銷受眾，Facebook/Instagram 廣告必備。' },
     { id:'line-notify',  name:'LINE 訂單通知',          price:3500, badge:'opt',  desc:'訂單成立時自動推播到指定 LINE 群組或官方帳號。' },
+    { id:'email-auto',   name:'Email 自動通知',         price:3000, priceHigh:8000, badge:'opt', desc:'訂單成立、會員註冊、表單送出等事件自動發送通知信（寄信服務本身費用由客戶自行負擔）。' },
+    { id:'newsletter',   name:'電子報系統',              price:5000, priceHigh:12000, badge:'opt', desc:'訂閱名單管理與電子報發送排程（第三方寄信服務費用另計，由客戶自行負擔）。' },
+    { id:'logistics',    name:'物流串接',                price:8000, priceHigh:20000, badge:'opt', desc:'超商取貨（711/全家）、黑貓等物流串接，含出貨標籤列印。需商家資格申請與 API 測試，若涉及多家物流或複雜規則，將另行評估。' },
+    { id:'invoice',      name:'電子發票串接',            price:8000, priceHigh:15000, badge:'opt', desc:'整合綠界或歐付寶電子發票，符合台灣稅務法規。需配合稅籍設定與 API 測試。' },
+    { id:'api-3rd',      name:'第三方 API 串接',         price:5000, priceHigh:20000, badge:'opt', desc:'串接指定第三方服務 API，依串接複雜度落在 NT$5,000～20,000+ 區間。複雜度更高的串接（如 ERP、CRM、POS）請見下方「需評估」項目。' },
     { id:'maps',         name:'Google Maps 嵌入',       price:2500, badge:'opt',  desc:'互動地圖顯示公司位置，或支援結帳地址自動填入。' },
     { id:'recaptcha',    name:'reCAPTCHA',              price:1500, badge:'rec',  desc:'防止機器人垃圾表單送出，保護聯絡頁與登入頁。' },
-    { id:'firebase-adv', name:'Firebase 進階功能',     price:8000, badge:'opt',  desc:'Cloud Functions 自動化流程、FCM 推播通知、進階 Storage 規則或多環境設定。超出基礎架構範圍時適用。' },
+    { id:'firebase-adv', name:'Firebase 進階功能',     price:8000, priceHigh:25000, badge:'opt',  desc:'Cloud Functions 自動化流程、FCM 推播通知、進階 Storage 規則或多環境設定，依複雜度落在 NT$8,000～25,000+ 區間。超出基礎架構範圍時適用。' },
   ],
   // ── 設計 / 服務 ──
   services: [
-    { id:'ui-design',    name:'UI 視覺設計',    price:25000, badge:'rec', desc:'Figma 設計稿，含色系、元件庫、版型規劃。' },
+    { id:'ui-design',    name:'客製 UI／UX 設計', price:15000, priceHigh:40000, badge:'rec', desc:'一般基本網站 UI 已含於基礎方案，不另收費。此項目適用於需要完整客製視覺、Figma 設計稿、Design System、特殊互動或高度客製品牌視覺的專案。' },
     { id:'logo',         name:'LOGO 設計',       price:15000, badge:'opt', desc:'品牌識別設計，含黑白稿與應用規範。' },
     { id:'copywriting',  name:'文案撰寫',         price:8000,  badge:'opt', desc:'品牌故事、頁面文字、行銷標語。' },
     { id:'seo-consult',  name:'SEO 顧問',         price:12000, badge:'rec', desc:'關鍵字研究、競品分析、頁面優化建議。' },
     { id:'training',     name:'教育訓練',          price:6000,  badge:'rec', desc:'後台操作教學，可錄製影片教材。' },
     { id:'manual',       name:'操作手冊',          price:5000,  badge:'opt', desc:'PDF 格式後台使用說明書。' },
-    { id:'hosting',      name:'主機代管建議',      price:5000,  badge:'rec', desc:'AWS/GCP/Vercel 方案選擇與初始設定，年費另計。' },
+    { id:'launch-adv',   name:'進階正式環境設定', price:3000, priceHigh:8000, badge:'opt', desc:'基本部署與基本 DNS 指向已含於方案內。此項目適用於：多環境 Production 部署、Production Environment Variables、金流正式環境切換、Email DNS（SPF/DKIM/DMARC）、複雜 DNS 調整、正式管理員帳號建立、Production Checklist 與正式環境測試等進階上線需求。' },
+    { id:'hosting',      name:'主機代管建議',      price:5000,  badge:'rec', desc:'AWS/GCP/Vercel 方案選擇與初始設定建議（主機本身費用由客戶自行負擔）。' },
     { id:'photography',  name:'產品拍攝',           price:18000, badge:'opt', desc:'專業攝影棚拍攝商品或形象照。' },
   ],
-  // ── 需評估（不自動計費） ──
+  // ── 需評估（不自動計費，複雜度差異過大無法列固定區間） ──
   evaluate: [
-    { id:'logistics',    name:'物流串接',         badge:'eval', evaluate:true, desc:'超商取貨（711/全家）、黑貓等物流串接，含出貨標籤列印。涉及商家資格申請、測試環境建置、API 文件對接，複雜度與時程差異大，需個別評估。' },
-    { id:'invoice',      name:'電子發票',          badge:'eval', evaluate:true, desc:'整合綠界或歐付寶電子發票，符合台灣稅務法規。需配合稅籍設定、申請流程、API 測試，費用依整合複雜度評估。' },
+    { id:'permission-adv', name:'複雜權限矩陣 RBAC', badge:'eval', evaluate:true, desc:'多層級、多維度的角色與權限矩陣（例如依部門、資源、動作分別授權），複雜度差異大，不列固定價格，需依實際規則評估。' },
     { id:'erp',          name:'ERP 系統串接',      badge:'eval', evaluate:true, desc:'與現有 ERP 雙向同步庫存、訂單、財務資料。複雜度差異大，需評估。' },
     { id:'crm',          name:'CRM 整合',           badge:'eval', evaluate:true, desc:'串接 HubSpot、Salesforce 等 CRM 平台。' },
     { id:'pos',          name:'POS 串接',           badge:'eval', evaluate:true, desc:'線上線下訂單統一，整合實體收銀機。' },
     { id:'ai',           name:'AI 功能整合',         badge:'eval', evaluate:true, desc:'客服機器人、智慧推薦、文案生成等 AI API 應用。' },
     { id:'b2b',          name:'B2B 平台 / 詢報價',  badge:'eval', evaluate:true, desc:'客戶分級報價、批量訂單、業務管理流程。' },
-    { id:'booking',      name:'預約 / 排程系統',    badge:'eval', evaluate:true, desc:'多資源預約、行事曆整合、通知提醒。' },
+    { id:'booking',      name:'預約 / 排程系統',    badge:'eval', evaluate:true, desc:'多資源預約、行事曆整合、通知提醒。參考行情 NT$12,000～30,000，實際依預約邏輯複雜程度評估。' },
     { id:'payment-adv',  name:'進階金流',            badge:'eval', evaluate:true, desc:'分期付款、境外收款、訂閱制定期扣款。' },
     { id:'multilang-full',name:'完整多語系 CMS',    badge:'eval', evaluate:true, desc:'CMS 內容、商品資料、SEO slug 全部多語系，複雜度因系統規模差異顯著，需評估。' },
   ],
@@ -920,8 +962,8 @@ const TYPE_SECTIONS = {
 
 const TYPE_PRESETS = {
   brand:  { pages:['home','about','contact'], cms:[], member:[], ecom:[], integrations:[], services:[], evaluate:[] },
-  cms:    { pages:['home','about','contact','faq'], cms:['admin','content-mgmt'], member:[], ecom:[], integrations:[], services:[], evaluate:[] },
-  ecom:   { pages:['home','contact'], cms:['admin','content-mgmt','product-mgmt','order-mgmt'], member:['register','orders'], ecom:['ecom-base'], integrations:[], services:[], evaluate:[] },
+  cms:    { pages:['home','about','contact'], cms:['admin','content-mgmt'], member:[], ecom:[], integrations:[], services:[], evaluate:[] },
+  ecom:   { pages:['home','contact'], cms:['admin','product-mgmt','order-mgmt'], member:['register','profile','orders'], ecom:['ecom-base'], integrations:[], services:[], evaluate:[] },
   custom: { pages:['home','about','contact'], cms:['admin'], member:[], ecom:[], integrations:[], services:[], evaluate:[] },
 };
 
@@ -932,7 +974,7 @@ const state = {
   step: 1,
   type: null,
   selected: { pages:new Set(), member:new Set(), ecom:new Set(), cms:new Set(), integrations:new Set(), services:new Set(), evaluate:new Set() },
-  conds: { timeline:0, revision:0, warrantyFlat:0, maintFlat:0 },
+  conds: { timeline:0, warrantyFlat:0, complexity:0, revisionKey:'standard', revisionLabel:'2 次內含', maintKey:'none', maintLabel:'不需要' },
   contact: {},
   quoteId: genQid(),
 };
@@ -1088,11 +1130,12 @@ function renderSection(label, group, items) {
     const sel = state.selected[group] && state.selected[group].has(item.id);
     const evalItem = item.evaluate;
     const included = isIncluded(group, item.id);
+    const hiPrice = item.priceHigh || (item.isModule ? Math.round(item.price * 1.55) : null);
     const priceStr = item.free    ? '已含於建置費' :
                      evalItem     ? '需評估' :
                      included     ? '方案包含' :
-                     item.isModule ? `${(item.price/1000).toFixed(0)}k–${(item.price*1.55/1000).toFixed(0)}k` :
-                     item.price > 0 ? `+${(item.price/1000).toFixed(0)}k` : '';
+                     hiPrice      ? `${(item.price/1000).toFixed(0)}k–${(hiPrice/1000).toFixed(0)}k` :
+                     item.price > 0 ? `+${(item.price/1000).toFixed(0)}k 起` : '';
     const priceClass = item.free ? 'free' :
                        evalItem  ? 'evaluate' :
                        included  ? 'free' : '';  // 同樣用綠色表示「不計費」
@@ -1148,6 +1191,22 @@ function selectCondFlat(group, el, val) {
   state.conds[group + 'Flat'] = val;
   updateSidebar();
 }
+// 維護方案為選配持續性費用，不列入網站開發總價，僅記錄 key/label 供估價摘要顯示
+function selectMaint(el, key, label) {
+  document.querySelectorAll('#cond-maint .cond-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  state.conds.maintKey = key;
+  state.conds.maintLabel = label;
+  updateSidebar();
+}
+// 修改次數不再以總價百分比計算，僅記錄 key/label 供估價摘要顯示，超出內含次數改按時計費
+function selectRevisionOpt(el, key, label) {
+  document.querySelectorAll('#cond-revision .cond-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  state.conds.revisionKey = key;
+  state.conds.revisionLabel = label;
+  updateSidebar();
+}
 
 // ══════════════════════════════════════════════════
 //  PRICING
@@ -1160,14 +1219,28 @@ function isIncluded(group, id) {
   return !!(inc[group] && inc[group].includes(id));
 }
 
+// 取得單一功能項目的高價：優先用明確設定的 priceHigh，
+// 其次模組類 (isModule) 用 ×1.55，一般項目用 ×1.3，皆為估算倍率，方便日後調整。
+function itemHigh(item) {
+  if (item.priceHigh) return item.priceHigh;
+  return Math.round(item.price * (item.isModule ? 1.55 : 1.3));
+}
+
+// 複雜度調整費設定：rate 只作用於「基礎方案價格」，並各自設有上限（cap），避免無限放大
+const COMPLEXITY_TABLE = {
+  0:    { rate: 0,    cap: 0 },      // 標準
+  0.10: { rate: 0.10, cap: 15000 },  // 中度客製
+  0.20: { rate: 0.20, cap: 30000 },  // 高度客製
+};
+
 function calcPrice() {
   if (!state.type) return null;
   const cfg = TYPE_CONFIG[state.type];
-  if (!cfg.priceMin) return { evaluate: true };  // custom
+  const isCustom = !cfg.priceMin; // 客製化系統：不顯示固定總價
 
   let addMin = 0, addMax = 0;
   const includedItems = [];  // 已包含於方案，勾選但不計費
-  const addons = [];         // 真正加價的項目
+  const addons = [];         // 真正加價的項目（含 id，方便 UI 拉出特定項目如客製UI/UX、進階正式環境設定）
   const evalItems = [];      // 需評估項目
 
   Object.keys(FEATURES).forEach(group => {
@@ -1178,17 +1251,17 @@ function calcPrice() {
       // ① free 項目（GA、GSC 等）—— 永不計費，也不列為 included
       if (item.free || item.price === 0) return;
 
-      // ② included 項目 —— 已含在方案費，不加費但列出來
-      if (isIncluded(group, item.id)) {
+      // ② included 項目 —— 已含在方案費，不加費但列出來（客製化系統無 included，一律視為計費項目）
+      if (!isCustom && isIncluded(group, item.id)) {
         includedItems.push({ name: item.name, group, id: item.id });
         return;
       }
 
-      // ③ 真正的加選功能 —— 計費
-      const hi = item.isModule ? Math.round(item.price * 1.55) : Math.round(item.price * 1.3);
+      // ③ 真正的加選功能（或客製化系統的參考開發價值）—— 計費
+      const hi = itemHigh(item);
       addMin += item.price;
       addMax += hi;
-      addons.push({ name: item.name, min: item.price, max: hi });
+      addons.push({ id: item.id, group, name: item.name, min: item.price, max: hi });
     });
   });
 
@@ -1198,22 +1271,53 @@ function calcPrice() {
       evalItems.push(item.name);
   });
 
-  let minTotal = cfg.priceMin + addMin;
-  let maxTotal = cfg.priceMax + addMax;
+  // 客製化系統：不算固定總價，只顯示「目前所選功能之參考開發價值」
+  if (isCustom) {
+    return {
+      evaluate: true,
+      refMin: addMin, refMax: addMax,
+      addons, includedItems, evalItems,
+    };
+  }
 
-  const mult = 1 + state.conds.timeline + state.conds.revision;
-  minTotal = Math.round(minTotal * mult);
-  maxTotal = Math.round(maxTotal * mult);
+  const baseMin = cfg.priceMin, baseMax = cfg.priceMax;
 
-  const flat = (state.conds.warrantyFlat || 0) + (state.conds.maintFlat || 0);
-  minTotal += flat; maxTotal += flat;
+  // 專案複雜度調整費：只依「基礎方案價格」計算，不對加購功能（addons）再乘一次，
+  // 並以固定金額（cap）封頂，避免複雜度與其他倍率疊加造成價格不合理暴增。
+  const compCfg = COMPLEXITY_TABLE[state.conds.complexity] || COMPLEXITY_TABLE[0];
+  const complexityFeeMin = Math.min(Math.round(baseMin * compCfg.rate), compCfg.cap);
+  const complexityFeeMax = Math.min(Math.round(baseMax * compCfg.rate), compCfg.cap);
+
+  const subtotalMin = baseMin + addMin + complexityFeeMin;
+  const subtotalMax = baseMax + addMax + complexityFeeMax;
+
+  // 急件費：獨立計算，以「基礎方案+加購+複雜度」小計為基礎，於 UI 單獨顯示，不隱藏在總價中
+  const rushFeeMin = state.conds.timeline ? Math.round(subtotalMin * state.conds.timeline) : 0;
+  const rushFeeMax = state.conds.timeline ? Math.round(subtotalMax * state.conds.timeline) : 0;
+
+  // 保固期延長為一次性費用，計入總價；維護方案為選配持續性費用，不計入開發總價（見 state.conds.maintKey）
+  // 修改次數不再以總價百分比計算（見 state.conds.revisionKey），超出次數按時計費，不影響本次估價
+  const warrantyFee = state.conds.warrantyFlat || 0;
+
+  const minTotal = subtotalMin + rushFeeMin + warrantyFee;
+  const maxTotal = subtotalMax + rushFeeMax + warrantyFee;
+  const requiresManualReview = evalItems.length > 0;
 
   // Duration
   const base = cfg.days + addons.length * 2;
   const minDays = Math.round(base * 0.9);
   const maxDays = Math.round(base * 1.3);
 
-  return { minTotal, maxTotal, mid: Math.round((minTotal+maxTotal)/2), minDays, maxDays, addons, includedItems, evalItems };
+  return {
+    minTotal, maxTotal, mid: Math.round((minTotal+maxTotal)/2), minDays, maxDays,
+    addons, includedItems, evalItems,
+    baseMin, baseMax,
+    addMin, addMax,
+    complexityFeeMin, complexityFeeMax,
+    rushFeeMin, rushFeeMax,
+    warrantyFee,
+    requiresManualReview,
+  };
 }
 
 // ══════════════════════════════════════════════════
@@ -1255,6 +1359,16 @@ function updateSidebar() {
   const rangeEl    = document.getElementById('priceRange');
   const durEl      = document.getElementById('durationValue');
 
+  // 維護方案提示（選配，不列入開發總價）
+  const maintNoteEl = document.getElementById('sidebarMaintNote');
+  if (state.conds.maintKey && state.conds.maintKey !== 'none') {
+    const maintPrice = { hourly:'NT$800–1,500/hr', basic:'NT$2,000–5,000/月', advanced:'NT$5,000–10,000+/月' }[state.conds.maintKey] || '';
+    maintNoteEl.style.display = 'block';
+    maintNoteEl.innerHTML = `選配維護：${state.conds.maintLabel}（${maintPrice}）<br>不列入本次開發總價`;
+  } else {
+    maintNoteEl.style.display = 'none';
+  }
+
   if (!result) {
     if (_animFrame) cancelAnimationFrame(_animFrame);
     _dispPrice = 0;
@@ -1267,15 +1381,44 @@ function updateSidebar() {
   }
 
   if (result.evaluate) {
-    // Custom type
-    addonLabel.style.display = 'none';
-    addonList.innerHTML = '<div class="sidebar-empty" style="color:var(--amber)">需專人評估，不自動報價</div>';
+    // 客製化系統：不顯示固定總價，改顯示「目前所選功能之參考開發價值」
     if (_animFrame) cancelAnimationFrame(_animFrame);
     _dispPrice = 0;
     document.getElementById('priceValue').textContent = '—';
     document.getElementById('priceValue').style.fontSize = '20px';
     rangeEl.innerHTML = '<span style="color:var(--amber);font-weight:600">需專案評估</span>';
     durEl.textContent = '依需求而定';
+
+    const hasSelection = (result.addons && result.addons.length) || (result.evalItems && result.evalItems.length);
+    if (!hasSelection) {
+      addonLabel.style.display = 'none';
+      addonList.innerHTML = '<div class="sidebar-empty" style="color:var(--amber)">需專人評估，不自動報價</div>';
+      return;
+    }
+
+    addonLabel.style.display = 'none';
+    const sectionTitle = (label, color='var(--ink-30)') =>
+      `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+        color:${color};padding-bottom:5px;border-bottom:1px solid var(--ink-10);margin-bottom:4px">${label}</div>`;
+    let html = '';
+    if (result.addons.length) {
+      html += `<div style="background:var(--amber-light);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:#92400e;line-height:1.5">
+        目前所選功能之參考開發價值：NT$${result.refMin.toLocaleString()} – NT$${result.refMax.toLocaleString()}<br>
+        此金額僅供初步預算參考，實際報價需依系統架構、功能複雜度、第三方服務與開發時程評估。
+      </div>`;
+      html += sectionTitle(`已選功能（${result.addons.length} 項）`);
+      html += result.addons.map(a =>
+        `<div class="addon-item"><span class="addon-name">+ ${a.name}</span><span class="addon-price">${(a.min/1000).toFixed(0)}k</span></div>`
+      ).join('');
+    }
+    if (result.evalItems.length) {
+      if (html) html += '<div style="height:10px"></div>';
+      html += sectionTitle(`需評估（${result.evalItems.length} 項）`, 'var(--amber)');
+      html += result.evalItems.map(n =>
+        `<div class="addon-item"><span class="addon-name">◆ ${n}</span><span class="addon-eval">評估中</span></div>`
+      ).join('');
+    }
+    addonList.innerHTML = html;
     return;
   }
 
@@ -1299,14 +1442,27 @@ function updateSidebar() {
       ).join('')
     : '';
 
-  // 段三：需評估
+  // 段三：調整項目（複雜度調整費／急件費，各自獨立顯示，不隱藏在總價內）
+  const adjRows = [];
+  if (result.complexityFeeMin || result.complexityFeeMax) {
+    adjRows.push(`<div class="addon-item"><span class="addon-name">◇ 專案複雜度調整</span><span class="addon-price">+${(result.complexityFeeMin/1000).toFixed(0)}k–${(result.complexityFeeMax/1000).toFixed(0)}k</span></div>`);
+  }
+  if (result.rushFeeMin || result.rushFeeMax) {
+    adjRows.push(`<div class="addon-item"><span class="addon-name">◇ 急件調整（+20%）</span><span class="addon-price">+${(result.rushFeeMin/1000).toFixed(0)}k–${(result.rushFeeMax/1000).toFixed(0)}k</span></div>`);
+  }
+  if (result.warrantyFee) {
+    adjRows.push(`<div class="addon-item"><span class="addon-name">◇ 保固延長</span><span class="addon-price">+${(result.warrantyFee/1000).toFixed(0)}k</span></div>`);
+  }
+  const adjHtml = adjRows.join('');
+
+  // 段四：需評估
   const evalHtml = result.evalItems.length
     ? result.evalItems.map(n =>
         `<div class="addon-item"><span class="addon-name">◆ ${n}</span><span class="addon-eval">評估中</span></div>`
       ).join('')
     : '';
 
-  const hasAny = incHtml || addHtml || evalHtml;
+  const hasAny = incHtml || addHtml || adjHtml || evalHtml;
 
   if (!hasAny) {
     addonList.innerHTML = '<div class="sidebar-empty">尚未加選功能</div>';
@@ -1326,6 +1482,11 @@ function updateSidebar() {
       if (html) html += '<div style="height:10px"></div>';
       html += sectionTitle(`另外加購（${result.addons.length} 項）`);
       html += addHtml;
+    }
+    if (adjHtml) {
+      if (html) html += '<div style="height:10px"></div>';
+      html += sectionTitle(`調整項目`);
+      html += adjHtml;
     }
     if (evalHtml) {
       if (html) html += '<div style="height:10px"></div>';
@@ -1357,6 +1518,16 @@ function validate() {
   return ok;
 }
 
+
+function escapeHTML(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // ══════════════════════════════════════════════════
 //  SUMMARY (Step 5)
 // ══════════════════════════════════════════════════
@@ -1381,9 +1552,11 @@ function renderSummary() {
   const cfg = TYPE_CONFIG[state.type];
   const c = state.contact;
 
-  // 三種分類
+  // 分類：已包含 / 一般加購 / 客製UI／UX / 進階正式環境設定 / 需評估
   const includedNames = [];
-  const addonNames = [];
+  const addonItems = [];     // { id, name, min, max } 排除 ui-design / launch-adv
+  let uiDesignItem = null;
+  let launchAdvItem = null;
   const evalNames = [];
 
   Object.keys(FEATURES).forEach(group => {
@@ -1391,8 +1564,14 @@ function renderSummary() {
       if (!state.selected[group] || !state.selected[group].has(item.id)) return;
       if (item.evaluate) { evalNames.push(item.name); return; }
       if (item.free || item.price === 0) return;
-      if (isIncluded(group, item.id)) includedNames.push(item.name);
-      else addonNames.push(item.name);
+
+      const isCustomType = result && result.evaluate;
+      if (!isCustomType && isIncluded(group, item.id)) { includedNames.push(item.name); return; }
+
+      const hi = itemHigh(item);
+      if (item.id === 'ui-design')  { uiDesignItem  = { name: item.name, min: item.price, max: hi }; return; }
+      if (item.id === 'launch-adv') { launchAdvItem = { name: item.name, min: item.price, max: hi }; return; }
+      addonItems.push({ name: item.name, min: item.price, max: hi });
     });
   });
 
@@ -1400,29 +1579,35 @@ function renderSummary() {
 
   let priceHtml = '';
   if (result && result.evaluate) {
+    const refHtml = (result.addons && result.addons.length)
+      ? `<div class="final-price-range" style="margin-top:6px">目前所選功能之參考開發價值：NT$${result.refMin.toLocaleString()} – NT$${result.refMax.toLocaleString()}</div>
+         <div style="font-size:11px;color:var(--ink-30);margin-top:4px">此金額僅供初步預算參考，實際報價需依系統架構、功能複雜度、第三方服務與開發時程評估。</div>`
+      : '';
     priceHtml = `
       <div class="final-evaluate-block">
         <div class="final-evaluate-icon">💼</div>
         <div class="final-evaluate-title">此專案需要專人評估</div>
         <div class="final-evaluate-sub">你的需求屬於客製化系統範疇，<br>費用與工期因複雜度差異顯著，無法自動計算。<br>我們會在收到需求後 1–2 個工作天聯繫你。</div>
+        ${refHtml}
       </div>`;
   } else if (result) {
     priceHtml = `
       <div class="final-price-block">
-        <div class="final-price-label">預估總價</div>
+        <div class="final-price-label">預估一次性開發總價</div>
         <div class="final-price-main">NT$${result.mid.toLocaleString()}</div>
         <div class="final-price-range">參考範圍 NT$${result.minTotal.toLocaleString()} – NT$${result.maxTotal.toLocaleString()}</div>
         <div class="final-duration">預估工期：${result.minDays}–${result.maxDays} 個工作天</div>
+        ${result.requiresManualReview ? `<div style="margin-top:10px;font-size:12px;color:#fde68a;line-height:1.5">⚠ 此專案包含需人工評估項目；以上僅為目前可計價部分，不代表完整專案總價。</div>` : ''}
       </div>`;
   }
 
   const contactRows = [
-    c.name    ? `<div class="cs-item"><div class="cs-label">姓名</div><div class="cs-value">${c.name}</div></div>` : '',
-    c.company ? `<div class="cs-item"><div class="cs-label">公司</div><div class="cs-value">${c.company}</div></div>` : '',
-    c.email   ? `<div class="cs-item"><div class="cs-label">Email</div><div class="cs-value">${c.email}</div></div>` : '',
-    c.phone   ? `<div class="cs-item"><div class="cs-label">電話</div><div class="cs-value">${c.phone}</div></div>` : '',
-    c.budget  ? `<div class="cs-item"><div class="cs-label">預算</div><div class="cs-value">${c.budget}</div></div>` : '',
-    c.launch  ? `<div class="cs-item"><div class="cs-label">上線時間</div><div class="cs-value">${c.launch}</div></div>` : '',
+    c.name    ? `<div class="cs-item"><div class="cs-label">姓名</div><div class="cs-value">${escapeHTML(c.name)}</div></div>` : '',
+    c.company ? `<div class="cs-item"><div class="cs-label">公司</div><div class="cs-value">${escapeHTML(c.company)}</div></div>` : '',
+    c.email   ? `<div class="cs-item"><div class="cs-label">Email</div><div class="cs-value">${escapeHTML(c.email)}</div></div>` : '',
+    c.phone   ? `<div class="cs-item"><div class="cs-label">電話</div><div class="cs-value">${escapeHTML(c.phone)}</div></div>` : '',
+    c.budget  ? `<div class="cs-item"><div class="cs-label">預算</div><div class="cs-value">${escapeHTML(c.budget)}</div></div>` : '',
+    c.launch  ? `<div class="cs-item"><div class="cs-label">上線時間</div><div class="cs-value">${escapeHTML(c.launch)}</div></div>` : '',
   ].filter(Boolean).join('');
 
   document.getElementById('summaryContent').innerHTML = `
@@ -1438,25 +1623,64 @@ function renderSummary() {
 
     <div class="final-card">
       <div class="final-section">
-        <div class="final-section-title">專案類型</div>
+        <div class="final-section-title">1. 基礎網站方案</div>
         <div style="font-size:15px;font-weight:600;color:var(--ink)">${cfg.name}</div>
-        <div style="font-size:12px;color:var(--ink-60);margin-top:4px">含 RWD 響應式・基礎 SEO・SSL 憑證・部署・DNS</div>
+        <div style="font-size:13px;color:var(--ink-60);margin-top:2px">${cfg.priceMin ? `NT$${cfg.priceMin.toLocaleString()} – NT$${cfg.priceMax.toLocaleString()}` : '依需求專案評估'}</div>
+        <div style="font-size:12px;color:var(--ink-60);margin-top:4px">含 RWD 響應式・基礎 SEO・SSL 憑證・基本部署・基本 DNS 指向</div>
       </div>
 
       ${includedNames.length ? `
       <div class="final-section">
-        <div class="final-section-title">方案已包含（${includedNames.length} 項，不另計費）</div>
+        <div class="final-section-title">2. 方案已包含功能（${includedNames.length} 項，不另計費）</div>
         <div class="feature-tags">
           ${includedNames.map(n=>`<span class="ftag" style="background:var(--green-light);color:var(--green)">✓ ${n}</span>`).join('')}
         </div>
       </div>` : ''}
 
-      ${addonNames.length ? `
+      ${addonItems.length ? `
       <div class="final-section">
-        <div class="final-section-title">加選功能（${addonNames.length} 項）</div>
-        <div class="feature-tags">
-          ${addonNames.map(n=>`<span class="ftag">${n}</span>`).join('')}
-        </div>
+        <div class="final-section-title">3. 額外功能模組（${addonItems.length} 項）</div>
+        <table style="width:100%;border-collapse:collapse">
+          ${addonItems.map(a=>`<tr><td style="padding:4px 0;font-size:13px;color:var(--ink)">${a.name}</td><td style="padding:4px 0;font-size:13px;color:var(--ink-60);text-align:right">NT$${a.min.toLocaleString()} – NT$${a.max.toLocaleString()}</td></tr>`).join('')}
+        </table>
+      </div>` : ''}
+
+      ${uiDesignItem ? `
+      <div class="final-section">
+        <div class="final-section-title">4. 客製 UI／UX</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span>${uiDesignItem.name}</span><span style="color:var(--ink-60)">NT$${uiDesignItem.min.toLocaleString()} – NT$${uiDesignItem.max.toLocaleString()}</span></div>
+      </div>` : ''}
+
+      ${(result && !result.evaluate && (result.complexityFeeMin || result.complexityFeeMax)) ? `
+      <div class="final-section">
+        <div class="final-section-title">5. 專案複雜度調整</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span>${{0.10:'中度客製',0.20:'高度客製'}[state.conds.complexity] || '客製調整'}</span><span style="color:var(--ink-60)">+NT$${result.complexityFeeMin.toLocaleString()} – NT$${result.complexityFeeMax.toLocaleString()}</span></div>
+        <div style="font-size:11px;color:var(--ink-30);margin-top:4px">僅依基礎方案價格計算，並設有固定上限，不對加購功能重複計價。</div>
+      </div>` : ''}
+
+      ${(result && !result.evaluate && (result.rushFeeMin || result.rushFeeMax)) ? `
+      <div class="final-section">
+        <div class="final-section-title">6. 急件調整</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span>急件（+20%）</span><span style="color:var(--ink-60)">+NT$${result.rushFeeMin.toLocaleString()} – NT$${result.rushFeeMax.toLocaleString()}</span></div>
+      </div>` : ''}
+
+      ${(result && !result.evaluate && result.warrantyFee) ? `
+      <div class="final-section">
+        <div class="final-section-title">保固延長</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span>延長原功能 Bug 保固</span><span style="color:var(--ink-60)">+NT$${result.warrantyFee.toLocaleString()}</span></div>
+      </div>` : ''}
+
+      ${launchAdvItem ? `
+      <div class="final-section">
+        <div class="final-section-title">7. Production 進階設定</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span>${launchAdvItem.name}</span><span style="color:var(--ink-60)">NT$${launchAdvItem.min.toLocaleString()} – NT$${launchAdvItem.max.toLocaleString()}</span></div>
+      </div>` : ''}
+
+      ${(result && !result.evaluate) ? `
+      <div class="final-section" style="background:var(--ink-10);border-radius:8px;padding:12px 14px">
+        <div class="final-section-title">8. ${result.requiresManualReview ? '目前可計價部分（非完整總價）' : '預估一次性開發總價'}</div>
+        <div style="font-size:17px;font-weight:700;color:var(--ink)">NT$${result.minTotal.toLocaleString()} – NT$${result.maxTotal.toLocaleString()}</div>
+        ${result.requiresManualReview ? `<div style="font-size:11px;color:var(--amber);margin-top:5px">包含需人工評估項目，完整專案價格需於需求訪談後另行評估。</div>` : ''}
       </div>` : ''}
 
       ${evalNames.length ? `
@@ -1467,6 +1691,30 @@ function renderSummary() {
         </div>
       </div>` : ''}
 
+      <div class="final-section">
+        <div class="final-section-title">9. 第三方服務費（客戶自行負擔）</div>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.6">
+          網域、DNS、Firebase／Railway／Vercel／Cloudflare 等主機使用費、Google Workspace／企業 Email、金流交易手續費、簡訊費、第三方 API 月費等，由客戶依實際使用方案自行負擔，不包含於本開發估價。<br>
+          <span style="color:var(--ink-30)">（協助串接、設定、開發等工作本身仍屬開發費，例如：綠界金流串接的開發工作屬於開發費，但綠界本身收取的交易手續費不屬於開發費）</span>
+        </div>
+      </div>
+
+      <div class="final-section">
+        <div class="final-section-title">10. 選配維護費</div>
+        ${state.conds.maintKey && state.conds.maintKey !== 'none'
+          ? `<div style="font-size:13px;color:var(--ink)">${state.conds.maintLabel}
+              <span style="color:var(--ink-60);font-size:12px">（${{hourly:'NT$800–1,500/hr', basic:'NT$2,000–5,000/月', advanced:'NT$5,000–10,000+/月'}[state.conds.maintKey]}）</span>
+             </div>
+             <div style="font-size:11px;color:var(--ink-30);margin-top:4px">不列入本次開發總價，為選配持續性服務。</div>`
+          : `<div style="font-size:13px;color:var(--ink-60)">未選擇維護方案</div>`}
+      </div>
+
+      <div class="final-section">
+        <div class="final-section-title">修改次數</div>
+        <div style="font-size:13px;color:var(--ink)">${state.conds.revisionLabel}</div>
+        <div style="font-size:11px;color:var(--ink-30);margin-top:4px">超出 2 次內含修改後，以 NT$800–1,500/hr 按時計費，不列入本次開發總價。</div>
+      </div>
+
       ${contactRows ? `
       <div class="final-section">
         <div class="final-section-title">聯絡資訊</div>
@@ -1476,7 +1724,7 @@ function renderSummary() {
       ${c.notes ? `
       <div class="final-section" style="margin-bottom:0">
         <div class="final-section-title">補充說明</div>
-        <div style="font-size:13px;color:var(--ink-60);line-height:1.6">${c.notes}</div>
+        <div style="font-size:13px;color:var(--ink-60);line-height:1.6">${escapeHTML(c.notes)}</div>
       </div>` : ''}
     </div>
 
@@ -1540,6 +1788,17 @@ async function submitQuote() {
         message:         c.notes     || '',
         budget:          c.budget    || '',
         launchDate:      c.launch    || '',
+        complexityLevel: ({0:'標準',0.1:'中度客製',0.2:'高度客製'})[state.conds.complexity] || '標準',
+        complexityFeeMin: result && !result.evaluate ? result.complexityFeeMin : 0,
+        complexityFeeMax: result && !result.evaluate ? result.complexityFeeMax : 0,
+        isRush:          !!state.conds.timeline,
+        rushFeeMin:      result && !result.evaluate ? result.rushFeeMin : 0,
+        rushFeeMax:      result && !result.evaluate ? result.rushFeeMax : 0,
+        warrantyFee:     result && !result.evaluate ? result.warrantyFee : 0,
+        revisionPolicy:  state.conds.revisionLabel,
+        maintenanceKey:  state.conds.maintKey,
+        maintenanceLabel:state.conds.maintLabel,
+        requiresManualReview: !!(result && !result.evaluate && result.requiresManualReview),
       });
     }
 
@@ -1565,6 +1824,12 @@ async function submitQuote() {
                        ? `${result.minDays}–${result.maxDays} 個工作天`
                        : '依需求而定',
       message:       c.notes || '無',
+      complexity:    ({0:'標準',0.1:'中度客製',0.2:'高度客製'})[state.conds.complexity] || '標準',
+      rush:          state.conds.timeline ? '是（+20%）' : '否',
+      warranty_fee:  (result && !result.evaluate) ? `NT$${result.warrantyFee.toLocaleString()}` : '—',
+      revision_policy: state.conds.revisionLabel,
+      maintenance:   state.conds.maintLabel,
+      manual_review: (result && !result.evaluate && result.requiresManualReview) ? '是' : '否',
       submit_date:   new Date().toLocaleDateString('zh-TW'),
     };
 
@@ -1577,8 +1842,6 @@ async function submitQuote() {
 
   } catch (err) {
     const msg = String(err && err.message || err);
-    // 沙盒環境（Artifact 預覽）fetch 被封鎖，視為成功
-    if (msg.includes('fetch')) { showSuccess(); return; }
     const detail = err && err.text ? err.text : msg;
     showToast(`⚠ 送出失敗：${detail}`);
     btn.disabled = false;
@@ -1621,10 +1884,14 @@ function downloadHTML() {
         <div style="font-size:30px;font-weight:800;letter-spacing:-1px">NT$${result.mid.toLocaleString()}</div>
         <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:4px">NT$${result.minTotal.toLocaleString()} – NT$${result.maxTotal.toLocaleString()}</div>
         <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:6px">預估工期：${result.minDays}–${result.maxDays} 個工作天</div>
+        ${result.requiresManualReview ? `<div style="font-size:12px;color:#fde68a;margin-top:8px">⚠ 包含需人工評估項目；以上僅為目前可計價部分，不代表完整專案總價。</div>` : ''}
        </div>`
     : `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:20px;text-align:center;margin:20px 0;color:#92400e">
         <div style="font-size:18px;font-weight:700;margin-bottom:6px">此專案需要專人評估</div>
         <div style="font-size:13px">費用與工期因複雜度差異顯著，收到需求後將由專人聯繫。</div>
+        ${(result && result.addons && result.addons.length) ? `
+        <div style="font-size:13px;font-weight:700;margin-top:10px">目前所選功能之參考開發價值：NT$${result.refMin.toLocaleString()} – NT$${result.refMax.toLocaleString()}</div>
+        <div style="font-size:11px;margin-top:4px">此金額僅供初步預算參考，實際報價需依系統架構、功能複雜度、第三方服務與開發時程評估。</div>` : ''}
        </div>`;
 
   const html = `<!DOCTYPE html>
@@ -1659,12 +1926,12 @@ function downloadHTML() {
   <div class="sec">
     <div class="sec-title">客戶資訊</div>
     <div class="grid">
-      ${c.name?`<div class="box"><div class="box-label">姓名</div><div class="box-val">${c.name}</div></div>`:''}
-      ${c.company?`<div class="box"><div class="box-label">公司</div><div class="box-val">${c.company}</div></div>`:''}
-      ${c.email?`<div class="box"><div class="box-label">Email</div><div class="box-val">${c.email}</div></div>`:''}
-      ${c.phone?`<div class="box"><div class="box-label">電話</div><div class="box-val">${c.phone}</div></div>`:''}
-      ${c.budget?`<div class="box"><div class="box-label">預算</div><div class="box-val">${c.budget}</div></div>`:''}
-      ${c.launch?`<div class="box"><div class="box-label">預計上線</div><div class="box-val">${c.launch}</div></div>`:''}
+      ${c.name?`<div class="box"><div class="box-label">姓名</div><div class="box-val">${escapeHTML(c.name)}</div></div>`:''}
+      ${c.company?`<div class="box"><div class="box-label">公司</div><div class="box-val">${escapeHTML(c.company)}</div></div>`:''}
+      ${c.email?`<div class="box"><div class="box-label">Email</div><div class="box-val">${escapeHTML(c.email)}</div></div>`:''}
+      ${c.phone?`<div class="box"><div class="box-label">電話</div><div class="box-val">${escapeHTML(c.phone)}</div></div>`:''}
+      ${c.budget?`<div class="box"><div class="box-label">預算</div><div class="box-val">${escapeHTML(c.budget)}</div></div>`:''}
+      ${c.launch?`<div class="box"><div class="box-label">預計上線</div><div class="box-val">${escapeHTML(c.launch)}</div></div>`:''}
     </div>
   </div>
 
@@ -1674,8 +1941,8 @@ function downloadHTML() {
       <span class="tag" style="background:#f0fdf4;color:#16a34a">✓ RWD 響應式</span>
       <span class="tag" style="background:#f0fdf4;color:#16a34a">✓ 基礎 SEO</span>
       <span class="tag" style="background:#f0fdf4;color:#16a34a">✓ SSL 憑證</span>
-      <span class="tag" style="background:#f0fdf4;color:#16a34a">✓ 網站部署</span>
-      <span class="tag" style="background:#f0fdf4;color:#16a34a">✓ DNS 設定</span>
+      <span class="tag" style="background:#f0fdf4;color:#16a34a">✓ 基本網站部署</span>
+      <span class="tag" style="background:#f0fdf4;color:#16a34a">✓ 基本 DNS 指向</span>
     </div>
   </div>
 
@@ -1689,9 +1956,21 @@ function downloadHTML() {
   <div class="sec">
     <div class="sec-title">加選功能明細（${allItems.length} 項）</div>
     <table>
-      <tr><td style="color:#9ca3af">基礎建置費</td><td>${cfg?`NT$${cfg.priceMin.toLocaleString()} – NT$${cfg.priceMax.toLocaleString()}`:'依評估'}</td></tr>
-      ${allItems.map(i=>`<tr><td>${i.name}</td><td>NT$${i.price.toLocaleString()}</td></tr>`).join('')}
+      <tr><td style="color:#9ca3af">基礎建置費</td><td>${cfg&&cfg.priceMin?`NT$${cfg.priceMin.toLocaleString()} – NT$${cfg.priceMax.toLocaleString()}`:'依評估'}</td></tr>
+      ${allItems.map(i=>`<tr><td>${i.name}</td><td>NT$${i.price.toLocaleString()} – NT$${itemHigh(i).toLocaleString()}</td></tr>`).join('')}
     </table>
+  </div>`:''}
+
+  ${(result && !result.evaluate && (result.complexityFeeMin || result.complexityFeeMax)) ? `
+  <div class="sec">
+    <div class="sec-title">專案複雜度調整</div>
+    <table><tr><td>${{0.10:'中度客製',0.20:'高度客製'}[state.conds.complexity] || '客製調整'}</td><td>+NT$${result.complexityFeeMin.toLocaleString()} – NT$${result.complexityFeeMax.toLocaleString()}</td></tr></table>
+  </div>`:''}
+
+  ${(result && !result.evaluate && (result.rushFeeMin || result.rushFeeMax)) ? `
+  <div class="sec">
+    <div class="sec-title">急件調整</div>
+    <table><tr><td>急件（+20%）</td><td>+NT$${result.rushFeeMin.toLocaleString()} – NT$${result.rushFeeMax.toLocaleString()}</td></tr></table>
   </div>`:''}
 
   ${evalItems.length?`
@@ -1700,7 +1979,26 @@ function downloadHTML() {
     <div class="tags">${evalItems.map(i=>`<span class="tag eval">◆ ${i.name}</span>`).join('')}</div>
   </div>`:''}
 
-  ${c.notes?`<div class="sec"><div class="sec-title">補充說明</div><div style="color:#60636e;line-height:1.6">${c.notes}</div></div>`:''}
+  ${c.notes?`<div class="sec"><div class="sec-title">補充說明</div><div style="color:#60636e;line-height:1.6">${escapeHTML(c.notes)}</div></div>`:''}
+
+  <div class="sec">
+    <div class="sec-title">修改次數</div>
+    <div style="font-size:12px;color:#60636e">${state.conds.revisionLabel}。超出 2 次內含修改後，以 NT$800–1,500/hr 按時計費，不列入本次開發總價。</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">選配維護費</div>
+    <div style="font-size:12px;color:#60636e">
+      ${state.conds.maintKey && state.conds.maintKey !== 'none'
+        ? `${state.conds.maintLabel}（${{hourly:'NT$800–1,500/hr', basic:'NT$2,000–5,000/月', advanced:'NT$5,000–10,000+/月'}[state.conds.maintKey]}），不列入本次開發總價，為選配持續性服務。`
+        : '未選擇維護方案。'}
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">第三方服務費（客戶自行負擔）</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.6">網域、主機、資料庫、金流手續費、Email、簡訊及其他第三方服務所產生之費用，由客戶依實際使用方案自行負擔，不包含於本開發估價。</div>
+  </div>
 
   <div class="disc">⚠ 本估價單為系統自動估算，僅供參考。正式報價需需求訪談後確認，實際費用依詳細規格調整。</div>
   <div class="footer"><span>${state.quoteId}</span><span>網站開發估價系統自動產生</span></div>
