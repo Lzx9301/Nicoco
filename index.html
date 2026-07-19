@@ -53,10 +53,12 @@ async function saveQuoteToFirestore(quoteId, data) {
     rushFeeMin:      data.rushFeeMin || 0,
     rushFeeMax:      data.rushFeeMax || 0,
     warrantyFee:     data.warrantyFee || 0,
+    warrantyLabel:   data.warrantyLabel || '30 天內含保固',
     revisionPolicy:  data.revisionPolicy || '',
     maintenanceKey:  data.maintenanceKey || 'none',
     maintenanceLabel:data.maintenanceLabel || '不需要',
     requiresManualReview: !!data.requiresManualReview,
+    pricingBreakdown: data.pricingBreakdown || null,
     status:          'new',
     createdAt:       firebase.firestore.FieldValue.serverTimestamp(),
   });
@@ -637,9 +639,9 @@ body {
         <div class="cond-group">
           <div class="cond-label">保固期</div>
           <div class="cond-opts" id="cond-warranty">
-            <div class="cond-opt selected" onclick="selectCondFlat('warranty',this,0)">30 天<span class="cond-modifier">內含</span></div>
-            <div class="cond-opt" onclick="selectCondFlat('warranty',this,5000)">3 個月<span class="cond-modifier">+NT$5,000</span></div>
-            <div class="cond-opt" onclick="selectCondFlat('warranty',this,10000)">6 個月<span class="cond-modifier">+NT$10,000</span></div>
+            <div class="cond-opt selected" onclick="selectCondFlat('warranty',this,0,'30 天內含保固')">30 天<span class="cond-modifier">內含</span></div>
+            <div class="cond-opt" onclick="selectCondFlat('warranty',this,5000,'3 個月保固（+NT$5,000）')">3 個月<span class="cond-modifier">+NT$5,000</span></div>
+            <div class="cond-opt" onclick="selectCondFlat('warranty',this,10000,'6 個月保固（+NT$10,000）')">6 個月<span class="cond-modifier">+NT$10,000</span></div>
           </div>
           <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">
             Bug 定義：原本需求規格內、已完成之功能發生錯誤。僅含此類 Bug 免費修正。以下不屬於 Bug，需另外報價：新增功能、變更原本需求、新增頁面、第三方 API 改版、客戶自行操作造成之資料問題。
@@ -974,7 +976,7 @@ const state = {
   step: 1,
   type: null,
   selected: { pages:new Set(), member:new Set(), ecom:new Set(), cms:new Set(), integrations:new Set(), services:new Set(), evaluate:new Set() },
-  conds: { timeline:0, warrantyFlat:0, complexity:0, revisionKey:'standard', revisionLabel:'2 次內含', maintKey:'none', maintLabel:'不需要' },
+  conds: { timeline:0, warrantyFlat:0, warrantyLabel:'30 天內含保固', complexity:0, revisionKey:'standard', revisionLabel:'2 次內含', maintKey:'none', maintLabel:'不需要' },
   contact: {},
   quoteId: genQid(),
 };
@@ -1185,10 +1187,11 @@ function selectCond(group, el, val) {
   state.conds[group] = val;
   updateSidebar();
 }
-function selectCondFlat(group, el, val) {
+function selectCondFlat(group, el, val, label) {
   document.querySelectorAll(`#cond-${group} .cond-opt`).forEach(o => o.classList.remove('selected'));
   el.classList.add('selected');
   state.conds[group + 'Flat'] = val;
+  if (label !== undefined) state.conds[group + 'Label'] = label;
   updateSidebar();
 }
 // 維護方案為選配持續性費用，不列入網站開發總價，僅記錄 key/label 供估價摘要顯示
@@ -1451,7 +1454,7 @@ function updateSidebar() {
     adjRows.push(`<div class="addon-item"><span class="addon-name">◇ 急件調整（+20%）</span><span class="addon-price">+${(result.rushFeeMin/1000).toFixed(0)}k–${(result.rushFeeMax/1000).toFixed(0)}k</span></div>`);
   }
   if (result.warrantyFee) {
-    adjRows.push(`<div class="addon-item"><span class="addon-name">◇ 保固延長</span><span class="addon-price">+${(result.warrantyFee/1000).toFixed(0)}k</span></div>`);
+    adjRows.push(`<div class="addon-item"><span class="addon-name">◇ ${state.conds.warrantyLabel || '保固延長'}</span><span class="addon-price">+${(result.warrantyFee/1000).toFixed(0)}k</span></div>`);
   }
   const adjHtml = adjRows.join('');
 
@@ -1593,10 +1596,11 @@ function renderSummary() {
   } else if (result) {
     priceHtml = `
       <div class="final-price-block">
-        <div class="final-price-label">預估一次性開發總價</div>
+        <div class="final-price-label">線上初步估價${result.requiresManualReview ? '（部分項目待評估）' : ''}</div>
         <div class="final-price-main">NT$${result.mid.toLocaleString()}</div>
         <div class="final-price-range">參考範圍 NT$${result.minTotal.toLocaleString()} – NT$${result.maxTotal.toLocaleString()}</div>
         <div class="final-duration">預估工期：${result.minDays}–${result.maxDays} 個工作天</div>
+        <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.55);line-height:1.6">此金額為依目前所選需求產生之線上初步估價，非正式報價。實際專案費用需經需求確認、功能範圍（Scope）、開發細節與專案複雜度人工評估後，以正式報價單為準。</div>
         ${result.requiresManualReview ? `<div style="margin-top:10px;font-size:12px;color:#fde68a;line-height:1.5">⚠ 此專案包含需人工評估項目；以上僅為目前可計價部分，不代表完整專案總價。</div>` : ''}
       </div>`;
   }
@@ -1667,7 +1671,7 @@ function renderSummary() {
       ${(result && !result.evaluate && result.warrantyFee) ? `
       <div class="final-section">
         <div class="final-section-title">保固延長</div>
-        <div style="display:flex;justify-content:space-between;font-size:13px"><span>延長原功能 Bug 保固</span><span style="color:var(--ink-60)">+NT$${result.warrantyFee.toLocaleString()}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span>${state.conds.warrantyLabel || '延長原功能 Bug 保固'}</span><span style="color:var(--ink-60)">+NT$${result.warrantyFee.toLocaleString()}</span></div>
       </div>` : ''}
 
       ${launchAdvItem ? `
@@ -1678,8 +1682,9 @@ function renderSummary() {
 
       ${(result && !result.evaluate) ? `
       <div class="final-section" style="background:var(--ink-10);border-radius:8px;padding:12px 14px">
-        <div class="final-section-title">8. ${result.requiresManualReview ? '目前可計價部分（非完整總價）' : '預估一次性開發總價'}</div>
+        <div class="final-section-title">8. ${result.requiresManualReview ? '目前可計價部分（非完整總價）' : '線上初步估價總計'}</div>
         <div style="font-size:17px;font-weight:700;color:var(--ink)">NT$${result.minTotal.toLocaleString()} – NT$${result.maxTotal.toLocaleString()}</div>
+        <div style="font-size:11px;color:var(--ink-30);margin-top:5px">非正式報價，實際費用需經需求確認與 Scope 評估後，以正式報價單為準。</div>
         ${result.requiresManualReview ? `<div style="font-size:11px;color:var(--amber);margin-top:5px">包含需人工評估項目，完整專案價格需於需求訪談後另行評估。</div>` : ''}
       </div>` : ''}
 
@@ -1726,26 +1731,59 @@ function renderSummary() {
         <div class="final-section-title">補充說明</div>
         <div style="font-size:13px;color:var(--ink-60);line-height:1.6">${escapeHTML(c.notes)}</div>
       </div>` : ''}
-    </div>
 
       <div class="final-section">
-        <div class="final-section-title">11. 合作與付款方式</div>
-        <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
-          本頁顯示之金額為<strong>線上初步估價</strong>，不等同正式成交金額。正式合作前將依需求訪談確認功能範圍（Scope）並提供正式報價；正式報價確認後，可依雙方約定採一次付款、兩期付款或分期付款，並於約定之啟動款完成後開始製作。
+        <div class="final-section-title">11. 合作流程與付款方式</div>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.7;margin-bottom:8px">
+          本頁顯示之金額為<strong>線上初步估價</strong>，不等同正式成交金額。正式合作流程為：線上初估 → 客戶送出需求 → 人工確認需求 → 確認功能範圍（Scope） → 產生正式報價 → 客戶確認 → 選擇付款方式 → 收到約定啟動款 → 開始正式開發。正式專案原則上於收到約定之啟動款後開始進行開發，不提供「0 元開始、完成後才支付全部款項」的付款模式。
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="background:var(--ink-10);border-radius:8px;padding:10px 12px">
+            <div style="font-size:12.5px;font-weight:600;color:var(--ink)">一次付款（100%）</div>
+            <div style="font-size:11.5px;color:var(--ink-60);margin-top:3px;line-height:1.6">正式報價與 Scope 確認 → 支付 100% → 開始正式開發。付款方式本身不影響網站開發價值，不自動提供折扣。</div>
+          </div>
+          <div style="background:var(--accent-light);border-radius:8px;padding:10px 12px">
+            <div style="font-size:12.5px;font-weight:600;color:var(--ink)">兩期付款（推薦）— 50% 啟動款 + 50% 尾款</div>
+            <div style="font-size:11.5px;color:var(--ink-60);margin-top:3px;line-height:1.6">正式報價與 Scope 確認 → 支付 50% 啟動款 → 開始開發 → 完成主要功能 → 客戶驗收 → 完成 Scope 內必要修正 → 支付 50% 尾款 → 正式 Production 上線／完整交付。</div>
+          </div>
+          <div style="background:var(--ink-10);border-radius:8px;padding:10px 12px">
+            <div style="font-size:12.5px;font-weight:600;color:var(--ink)">三期付款 — 40% 啟動款 + 30% 中期款 + 30% 尾款</div>
+            <div style="font-size:11.5px;color:var(--ink-60);margin-top:3px;line-height:1.6">正式報價與 Scope 確認 → 支付 40% 啟動款 → 開始開發 → 達成中期開發里程碑 → 支付 30% 中期款 → 完成剩餘 Scope → 客戶驗收 → 完成 Scope 內必要修正 → 支付 30% 尾款 → Production 正式上線／完整交付。</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.6">
+          付款里程碑以「專案開發階段」為依據，而非單純以經過天數計算。原則上專案完成驗收並支付尾款後，才進行正式 Production 上線或完整交付；但若因第三方金流正式環境驗證、Payment Callback、正式 DNS／Email DNS（SPF/DKIM/DMARC）、Production API 等必須在正式環境測試的第三方服務，可先進行必要之技術性 Production 測試，完整交付與專案結案仍以尾款完成為原則。
         </div>
       </div>
 
       <div class="final-section">
-        <div class="final-section-title">12. 需求變更與追加報價</div>
+        <div class="final-section-title">12. 需求變更與追加報價（Change Request）</div>
         <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
-          正式報價依已確認之需求範圍計算。開發開始後，如提出超出原確認範圍之新功能、新頁面、已確認設計大幅重做、整體版型重整、第三方服務新增串接等需求，將視為需求變更（Change Request），由開發者先評估追加工時與費用，經確認後再執行。原需求範圍內之細節調整依內含修改次數處理。
+          <div style="margin-bottom:6px"><strong>A．原範圍內小幅修改</strong>（文案替換、圖片更換、字體/間距、小幅 Layout 微調）：原則上使用方案內含之修改額度（2 次內含）。</div>
+          <div style="margin-bottom:6px"><strong>B．超過修改額度但未變更 Scope</strong>：以 NT$800–1,500/hr 依實際工作內容評估計費，不使用專案總價百分比計費。</div>
+          <div style="margin-bottom:6px"><strong>C．追加需求／Scope Change</strong>（如首頁整體重新設計、大幅版型重整、新增 Section／頁面／會員功能／Login／第三方 API／預約系統／金流／CMS、商品架構重大修改等）：需重新評估工時與費用，經雙方確認後執行，流程為「客戶提出新需求 → 評估需求 → 提供追加報價 → 客戶確認 → 開始追加開發」。</div>
+          <div style="font-size:11px;color:var(--ink-30);margin-top:4px">追加報價付款原則（可由雙方協調調整）：NT$10,000 以下之小額追加，原則上併入下一期款項或尾款；超過 NT$10,000 之大型追加，原則上 50% 追加需求啟動款＋50% 併入下一期款項或最終尾款。</div>
         </div>
       </div>
 
       <div class="final-section">
-        <div class="final-section-title">13. 一次性專案開發說明</div>
+        <div class="final-section-title">14. 驗收與交付</div>
         <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
-          本服務以<strong>一次性專案開發費</strong>為主，不強制收取固定年度開發費。專案交付後提供約定之原功能 Bug 保固；保固期後如有維護、功能新增、頁面改版、第三方 API 調整或其他需求，可採單次委託或另行洽談維護方案。一次性專案開發費不代表終身免費維護。
+          客戶收到驗收通知後，原則上於 14 天內確認 Scope 內功能，並提出必要之 Bug 或 Scope 內修改事項；原 Scope 內問題進行修正，新增功能或重大設計變更則視為 12. 所述之需求變更（Change Request）。若超過驗收期間未收到回覆，專案將進入待交付狀態，後續時程與正式上線時間將依當時排程重新安排。
+        </div>
+      </div>
+
+      <div class="final-section">
+        <div class="final-section-title">15. 客戶提供資料與專案時程</div>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
+          若因客戶未能提供必要之文案、圖片、商品資料、帳號、API Credentials、金流資料、網域資訊或其他確認事項，導致專案無法繼續進行，專案時程將順延；若專案因客戶因素暫停超過 30 天，專案將進入暫停狀態，重新啟動時需依當時開發排程重新安排（目前不自動收取重新啟動費）。
+        </div>
+      </div>
+
+      <div class="final-section">
+        <div class="final-section-title">16. 一次性專案開發說明</div>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
+          本服務採<strong>一次性專案開發制</strong>，不收取強制年度維護費；網站完成並依約交付後，客戶可自行決定是否委託後續維護。一次性開發費包含：已確認 Scope 內之設計與開發、測試、基本 Deployment、約定之修改額度、30 天原功能 Bug 保固。一次性開發費不代表：終身免費維護、無限修改、無限新增功能、第三方服務永久免費，或未來 API 改版永久免費處理。
         </div>
       </div>
     </div>
@@ -1817,10 +1855,36 @@ async function submitQuote() {
         rushFeeMin:      result && !result.evaluate ? result.rushFeeMin : 0,
         rushFeeMax:      result && !result.evaluate ? result.rushFeeMax : 0,
         warrantyFee:     result && !result.evaluate ? result.warrantyFee : 0,
+        warrantyLabel:   state.conds.warrantyLabel,
         revisionPolicy:  state.conds.revisionLabel,
         maintenanceKey:  state.conds.maintKey,
         maintenanceLabel:state.conds.maintLabel,
         requiresManualReview: !!(result && !result.evaluate && result.requiresManualReview),
+        // 保存當時估價的完整組成快照，即使未來估價公式調整，舊報價紀錄仍可還原當時為什麼是這個價格
+        pricingBreakdown: {
+          type: state.type,
+          baseMin: result && !result.evaluate ? result.baseMin : null,
+          baseMax: result && !result.evaluate ? result.baseMax : null,
+          addonsMin: result ? (result.evaluate ? result.refMin : result.addMin) : null,
+          addonsMax: result ? (result.evaluate ? result.refMax : result.addMax) : null,
+          complexityLevel: ({0:'標準',0.1:'中度客製',0.2:'高度客製'})[state.conds.complexity] || '標準',
+          complexityFeeMin: result && !result.evaluate ? result.complexityFeeMin : 0,
+          complexityFeeMax: result && !result.evaluate ? result.complexityFeeMax : 0,
+          isRush: !!state.conds.timeline,
+          rushFeeMin: result && !result.evaluate ? result.rushFeeMin : 0,
+          rushFeeMax: result && !result.evaluate ? result.rushFeeMax : 0,
+          warrantyLabel: state.conds.warrantyLabel,
+          warrantyFee: result && !result.evaluate ? result.warrantyFee : 0,
+          revisionPolicy: state.conds.revisionLabel,
+          maintenanceKey: state.conds.maintKey,
+          maintenanceLabel: state.conds.maintLabel,
+          requiresManualReview: !!(result && !result.evaluate && result.requiresManualReview),
+          includedItems: includedNames,
+          selectedItems: selectedNames,
+          evaluationItems: evalNames,
+          minTotal: result && !result.evaluate ? result.minTotal : null,
+          maxTotal: result && !result.evaluate ? result.maxTotal : null,
+        },
       });
     }
 
@@ -1849,6 +1913,7 @@ async function submitQuote() {
       complexity:    ({0:'標準',0.1:'中度客製',0.2:'高度客製'})[state.conds.complexity] || '標準',
       rush:          state.conds.timeline ? '是（+20%）' : '否',
       warranty_fee:  (result && !result.evaluate) ? `NT$${result.warrantyFee.toLocaleString()}` : '—',
+      warranty_label: state.conds.warrantyLabel,
       revision_policy: state.conds.revisionLabel,
       maintenance:   state.conds.maintLabel,
       manual_review: (result && !result.evaluate && result.requiresManualReview) ? '是' : '否',
@@ -1995,6 +2060,12 @@ function downloadHTML() {
     <table><tr><td>急件（+20%）</td><td>+NT$${result.rushFeeMin.toLocaleString()} – NT$${result.rushFeeMax.toLocaleString()}</td></tr></table>
   </div>`:''}
 
+  ${(result && !result.evaluate && result.warrantyFee) ? `
+  <div class="sec">
+    <div class="sec-title">保固延長</div>
+    <table><tr><td>${state.conds.warrantyLabel || '延長原功能 Bug 保固'}</td><td>+NT$${result.warrantyFee.toLocaleString()}</td></tr></table>
+  </div>`:''}
+
   ${evalItems.length?`
   <div class="sec">
     <div class="sec-title">需評估項目（${evalItems.length} 項）</div>
@@ -2023,18 +2094,41 @@ function downloadHTML() {
   </div>
 
   <div class="sec">
-    <div class="sec-title">合作與付款方式</div>
-    <div style="font-size:12px;color:#60636e;line-height:1.7">本文件所列金額為線上初步估價，不等同正式成交金額。正式合作前將依需求訪談確認功能範圍（Scope）並提供正式報價；正式報價確認後，可依雙方約定採一次付款、兩期付款或分期付款，並於約定之啟動款完成後開始製作。</div>
+    <div class="sec-title">合作流程與付款方式</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.7">
+      本文件所列金額為線上初步估價，不等同正式成交金額。合作流程：線上初估 → 客戶送出需求 → 人工確認需求 → 確認 Scope → 產生正式報價 → 客戶確認 → 選擇付款方式 → 收到約定啟動款 → 開始正式開發。原則上收到約定啟動款後才開始開發，不提供「0 元開始、完成後才支付全部款項」的模式。
+    </div>
+    <table style="margin-top:8px">
+      <tr><td style="font-weight:600">一次付款</td><td>100%，正式報價與 Scope 確認後支付，開始開發</td></tr>
+      <tr><td style="font-weight:600">兩期付款（推薦）</td><td>50% 啟動款＋50% 尾款；驗收與必要修正完成後支付尾款，Production 上線／交付</td></tr>
+      <tr><td style="font-weight:600">三期付款</td><td>40% 啟動款＋30% 中期款（達成中期里程碑）＋30% 尾款（驗收完成後）</td></tr>
+    </table>
+    <div style="font-size:11px;color:#9ca3af;margin-top:6px">付款里程碑以開發階段為依據；若因金流正式環境驗證、正式 DNS／Email DNS（SPF/DKIM/DMARC）等須在正式環境測試之項目，可先進行必要之技術性 Production 測試，完整交付與結案仍以尾款完成為原則。</div>
   </div>
 
   <div class="sec">
-    <div class="sec-title">需求變更與追加報價</div>
-    <div style="font-size:12px;color:#60636e;line-height:1.7">正式報價依已確認之需求範圍計算。開發開始後，如提出超出原確認範圍之新功能、新頁面、已確認設計大幅重做、整體版型重整、第三方服務新增串接等需求，將視為需求變更（Change Request），由開發者先評估追加工時與費用，經確認後再執行。原需求範圍內之細節調整依內含修改次數處理。</div>
+    <div class="sec-title">需求變更與追加報價（Change Request）</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.7">
+      A．原範圍內小幅修改（文案/圖片/字體間距/小幅 Layout）：使用方案內含修改額度（2 次）。<br>
+      B．超過修改額度但未變更 Scope：NT$800–1,500/hr 按實際工作內容計費。<br>
+      C．追加需求／Scope Change（大幅設計重做、新增頁面/會員功能/Login/第三方 API/預約系統/金流/CMS、商品架構重大修改等）：需重新評估工時與費用，經確認後執行。<br>
+      追加報價付款原則：NT$10,000 以下原則上併入下一期款項或尾款；超過 NT$10,000 原則上 50% 追加啟動款＋50% 併入下一期款項或最終尾款。
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">驗收與交付</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.7">客戶收到驗收通知後，原則上於 14 天內確認 Scope 內功能並提出必要修正；新增功能或重大設計變更視為需求變更（Change Request）。若超過驗收期間未回覆，專案將進入待交付狀態，後續時程依當時排程重新安排。</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">客戶提供資料與專案時程</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.7">若因客戶未能提供必要文案、圖片、商品資料、帳號、API Credentials、金流資料、網域資訊或其他確認事項導致專案無法繼續，時程將順延；因客戶因素暫停超過 30 天將進入暫停狀態，重新啟動需依當時排程重新安排（目前不自動收取重新啟動費）。</div>
   </div>
 
   <div class="sec">
     <div class="sec-title">一次性專案開發說明</div>
-    <div style="font-size:12px;color:#60636e;line-height:1.7">本服務以一次性專案開發費為主，不強制收取固定年度開發費。專案交付後提供約定之原功能 Bug 保固；保固期後如有維護、功能新增、頁面改版、第三方 API 調整或其他需求，可採單次委託或另行洽談維護方案。一次性專案開發費不代表終身免費維護。</div>
+    <div style="font-size:12px;color:#60636e;line-height:1.7">本服務採一次性專案開發制，不收取強制年度維護費。一次性開發費包含：已確認 Scope 內設計與開發、測試、基本 Deployment、約定修改額度、30 天原功能 Bug 保固。不代表：終身免費維護、無限修改、無限新增功能、第三方服務永久免費，或未來 API 改版永久免費處理。</div>
   </div>
 
   <div class="disc">⚠ 本估價單為系統自動初步估算，僅供預算參考。正式價格以需求訪談、Scope 確認及正式報價單為準。</div>
