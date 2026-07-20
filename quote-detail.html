@@ -717,6 +717,8 @@ let currentData = null;
 let dirty = false;
 let projectScopes = [];
 let projectTasks = [];
+// Existing Project Initialization v1：純前端 Draft State，只在「確認套用」時才寫入 Firestore
+let initPanel = { open:false, step:'edit', draft:{} };
 // Phase / Scope Group 展開收合狀態，僅為前端 UI 狀態，不寫入 Firestore、不跨頁面持久化
 const collapsedGroups = new Set();
 function toggleGroupCollapse(key) {
@@ -1243,6 +1245,8 @@ function renderProjectUI() {
   const el = document.getElementById('projectSection');
   const m = computeProjectMetrics();
   const proj = currentData.project || {};
+  const hasInitRecord = !!(proj.initialProgressInitializedAt);
+  const initBtnLabel = hasInitRecord ? '批次調整 Task 狀態' : '初始化既有專案進度';
 
   el.innerHTML = `
     <div class="card">
@@ -1251,7 +1255,9 @@ function renderProjectUI() {
         <select class="field-select" style="width:auto;padding:5px 10px;font-size:12px" id="f-projectStatus" onchange="updateProjectStatus(this.value)">
           ${PROJECT_STATUS_ORDER.map(s => `<option value="${s}" ${(proj.status||'planning')===s?'selected':''}>${PROJECT_STATUS_LABELS[s]}</option>`).join('')}
         </select>
+        <button class="btn-copy-link" style="margin-left:8px" onclick="openInitPanel()">${initBtnLabel}</button>
       </div>
+      ${hasInitRecord ? '<div style="font-size:11px;color:var(--ink-60);margin-top:-6px;margin-bottom:10px">此專案已有進度紀錄，此工具可持續作為批次調整工具使用。</div>' : ''}
 
       <div class="info-grid" style="margin-bottom:14px">
         <div class="info-box"><div class="info-label">Project Progress</div><div class="info-value" style="font-size:18px;font-weight:800">${m.overall.toFixed(1)}%</div></div>
@@ -1284,6 +1290,8 @@ function renderProjectUI() {
         </div>
       </div>
     </div>
+
+    ${renderInitPanel(m)}
 
     <div class="card">
       <div class="card-title">Scope Items（${projectScopes.length}）</div>
@@ -1331,7 +1339,7 @@ function renderScopeRow(s) {
             ${isActive && !includeProgress ? '<span class="dtag" style="background:var(--amber-light);color:var(--amber)">不計入總進度</span>' : ''}
           </div>
           ${s.description ? `<div style="font-size:12px;color:var(--ink-60);margin-top:3px">${escapeHtml(s.description)}</div>` : ''}
-          <div style="font-size:11px;color:var(--ink-30);margin-top:4px">Task 數：${taskCount}　Scope Progress：${progressDisplay}</div>
+          <div style="font-size:11px;color:var(--ink-60);margin-top:4px">Task 數：${taskCount}　Scope Progress：${progressDisplay}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-copy-link" onclick="expandScopeToTasks('${s.id}')">展開成開發任務</button>
@@ -1373,7 +1381,7 @@ function renderPhaseTaskGroup(phase, m) {
         <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 0" onclick="toggleGroupCollapse('${scopeGroupKey}')">
           <span style="font-size:10.5px;color:var(--ink-30);width:12px;flex-shrink:0">${scopeCollapsed ? '▶' : '▼'}</span>
           <span style="font-size:12.5px;font-weight:600;color:var(--ink)">${escapeHtml(scopeName)}</span>
-          <span style="font-size:11px;color:var(--ink-30)">${groupTasks.length} Tasks｜${scopeOverall.toFixed(1)}%</span>
+          <span style="font-size:11px;color:var(--ink-60)">${groupTasks.length} Tasks｜${scopeOverall.toFixed(1)}%</span>
         </div>
         ${scopeCollapsed ? '' : groupTasks.map(renderTaskRow).join('')}
       </div>`;
@@ -1384,7 +1392,7 @@ function renderPhaseTaskGroup(phase, m) {
       <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:7px 0;border-bottom:1.5px solid var(--ink-10)" onclick="toggleGroupCollapse('${phaseKey}')">
         <span style="font-size:12px;color:var(--ink-30);width:14px;flex-shrink:0">${phaseCollapsed ? '▶' : '▼'}</span>
         <span class="tag-section-label" style="margin:0;padding:0;border:none">${PHASE_LABELS[phase]}</span>
-        <span style="font-size:11.5px;color:var(--ink-30)">${tasksInPhase.length} Tasks｜${phaseProgress.toFixed(1)}%</span>
+        <span style="font-size:11.5px;color:var(--ink-60)">${tasksInPhase.length} Tasks｜${phaseProgress.toFixed(1)}%</span>
       </div>
       ${phaseCollapsed ? '' : scopeGroupsHtml}
     </div>`;
@@ -1394,7 +1402,7 @@ function renderTaskRow(t) {
   const color = TASK_STATUS_COLOR[t.status] || 'var(--ink-30)';
   const field = (label, inputHtml, extraStyle) => `
         <div style="display:flex;flex-direction:column;gap:2px${extraStyle ? ';' + extraStyle : ''}">
-          <span style="font-size:9px;color:var(--ink-30);text-transform:uppercase;letter-spacing:.04em">${label}</span>
+          <span style="font-size:9.5px;color:var(--ink-60);text-transform:uppercase;letter-spacing:.04em;font-weight:600">${label}</span>
           ${inputHtml}
         </div>`;
   return `
@@ -1434,6 +1442,271 @@ function renderTaskRow(t) {
         <input class="field-input" style="display:inline-block;width:auto;min-width:180px;font-size:11.5px;padding:4px 8px" value="${escapeHtml(t.blockedReason || '')}"
                onchange="updateTaskField('${t.id}','blockedReason',this.value)">
       </div>` : ''}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  EXISTING PROJECT INITIALIZATION v1
+//  「初始化既有專案進度／批次調整 Task 狀態」
+//  只能操作「目前已存在」的 Task 的 Status／Progress（必要時 waitingFor／blockedReason）。
+//  不建立 Scope、不展開 Task、不動 Weight/Order/Phase/Milestone、不影響報價。
+//  所有操作先在 initPanel.draft（純前端 local state）修改，按「確認套用」才寫 Firestore，
+//  且只送出「實際有變更」的 Task，欄位範圍與正式 Task Editor 一致（不引入第二套邏輯）。
+// ══════════════════════════════════════════════════
+
+function openInitPanel() {
+  const draft = {};
+  projectTasks.forEach(t => {
+    if (t.active === false) return; // 預設不處理已停用 Task（十八）
+    draft[t.id] = {
+      status: t.status || 'not_started',
+      progress: Number.isFinite(Number(t.progress)) ? Number(t.progress) : 0,
+      waitingFor: t.waitingFor || '',
+      blockedReason: t.blockedReason || '',
+    };
+  });
+  initPanel = { open: true, step: 'edit', draft };
+  renderProjectUI();
+}
+
+function closeInitPanel() {
+  initPanel = { open: false, step: 'edit', draft: {} };
+  renderProjectUI();
+}
+
+function initSetTaskField(taskId, field, value) {
+  if (!initPanel.draft[taskId]) return;
+  initPanel.draft[taskId][field] = value;
+  renderProjectUI();
+}
+
+// 套用單一 Task 的批次動作到 Draft（不觸碰 Firestore）
+function initApplyBulkToTask(taskId, action) {
+  const d = initPanel.draft[taskId];
+  if (!d) return;
+  if (action === 'completed')       { d.status = 'completed';   d.progress = 100; }
+  else if (action === 'not_started') { d.status = 'not_started'; d.progress = 0; }
+  else if (action === 'in_progress') { d.status = 'in_progress'; /* progress 保留原值，不猜測 */ }
+}
+
+function initBulkPhase(phase, action) {
+  projectTasks
+    .filter(t => Number(t.phase) === phase && t.active !== false && initPanel.draft[t.id])
+    .forEach(t => initApplyBulkToTask(t.id, action));
+  renderProjectUI();
+}
+
+// Scope 批次操作：影響該 Scope「所有」目前既有 Task，不論分散在哪個 Phase
+function initBulkScope(scopeId, action) {
+  projectTasks
+    .filter(t => t.scopeId === scopeId && t.active !== false && initPanel.draft[t.id])
+    .forEach(t => initApplyBulkToTask(t.id, action));
+  renderProjectUI();
+}
+
+// 只有「Draft 與目前 Firestore 實際值不同」才算變更，避免把沒動過的 Task 也送去 update
+function initComputeChanges() {
+  const changes = [];
+  Object.keys(initPanel.draft).forEach(taskId => {
+    const t = projectTasks.find(x => x.id === taskId);
+    if (!t) return;
+    const d = initPanel.draft[taskId];
+    const origStatus = t.status || 'not_started';
+    const origProgress = Number.isFinite(Number(t.progress)) ? Number(t.progress) : 0;
+    const origWaiting = t.waitingFor || '';
+    const origBlocked = t.blockedReason || '';
+
+    const statusChanged   = d.status !== origStatus;
+    const progressChanged = Number(d.progress) !== origProgress;
+    const waitingChanged  = d.status === 'waiting_client' && d.waitingFor !== origWaiting;
+    const blockedChanged  = d.status === 'blocked' && d.blockedReason !== origBlocked;
+
+    if (statusChanged || progressChanged || waitingChanged || blockedChanged) {
+      changes.push({ taskId, task: t, draft: d });
+    }
+  });
+  return changes;
+}
+
+function initGoPreview() { initPanel.step = 'preview'; renderProjectUI(); }
+function initBackToEdit() { initPanel.step = 'edit'; renderProjectUI(); }
+
+async function initConfirmApply() {
+  const changes = initComputeChanges();
+  if (!changes.length) { closeInitPanel(); return; }
+  if (!confirm(`確定要批次更新 ${changes.length} 個 Task 的 Status 與 Progress 嗎？\n此操作不會修改 Weight、Order、Phase、Milestone，也不會修改正式報價。`)) return;
+
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const taskColl = quoteRef.collection('tasks');
+    const batch = db.batch();
+
+    changes.forEach(c => {
+      const payload = {
+        status: c.draft.status,
+        progress: c.draft.progress,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+      // 僅在對應狀態時才更新 waitingFor / blockedReason，維持與正式 Task Editor 一致的欄位範圍
+      if (c.draft.status === 'waiting_client') payload.waitingFor = c.draft.waitingFor || null;
+      if (c.draft.status === 'blocked')        payload.blockedReason = c.draft.blockedReason || null;
+      batch.update(taskColl.doc(c.taskId), payload);
+    });
+
+    // 使用安全的 nested field update，不覆蓋整個 project object；
+    // 第一次成功記錄 initialProgressInitializedAt，之後都記錄 lastBulkTaskUpdateAt（可重複使用，非一次性鎖）
+    const isFirstTime = !(currentData.project && currentData.project.initialProgressInitializedAt);
+    const markerField = isFirstTime ? 'initialProgressInitializedAt' : 'lastBulkTaskUpdateAt';
+    batch.update(quoteRef, {
+      [`project.${markerField}`]: firebase.firestore.FieldValue.serverTimestamp(),
+      'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    // Firestore 成功後才同步正式 local projectTasks（避免假成功）
+    changes.forEach(c => {
+      const t = projectTasks.find(x => x.id === c.taskId);
+      if (!t) return;
+      t.status = c.draft.status;
+      t.progress = c.draft.progress;
+      if (c.draft.status === 'waiting_client') t.waitingFor = c.draft.waitingFor || null;
+      if (c.draft.status === 'blocked')        t.blockedReason = c.draft.blockedReason || null;
+    });
+    currentData.project = currentData.project || {};
+    currentData.project[markerField] = true;
+
+    showToast(`✓ 已更新 ${changes.length} 個 Task`);
+    initPanel = { open: false, step: 'edit', draft: {} };
+    renderProjectUI(); // 沿用既有 Progress / Milestone Readiness 計算邏輯，不建立第二套公式
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 批次更新失敗：${err.message || err}`);
+    // 失敗：不關閉 Panel、不清空 Draft，保留讓使用者重試，也不動正式 local projectTasks
+  }
+}
+
+function renderInitPanel(m) {
+  if (!initPanel.open) return '';
+  if (initPanel.step === 'preview') return renderInitPreview();
+
+  const draftTaskIds = new Set(Object.keys(initPanel.draft));
+  const draftTasks = projectTasks.filter(t => draftTaskIds.has(t.id));
+
+  const phaseBlocks = PHASES.map(phase => {
+    const tasksInPhase = draftTasks.filter(t => Number(t.phase) === phase);
+    if (!tasksInPhase.length) return '';
+
+    const seenScopeIds = new Set(tasksInPhase.map(t => t.scopeId));
+    const orderedScopeIds = projectScopes.map(s => s.id).filter(id => seenScopeIds.has(id));
+    const unknownScopeIds = [...seenScopeIds].filter(id => !orderedScopeIds.includes(id));
+
+    const scopeBlocks = [...orderedScopeIds, ...unknownScopeIds].map(scopeId => {
+      const scope = projectScopes.find(s => s.id === scopeId);
+      const groupTasks = tasksInPhase.filter(t => t.scopeId === scopeId).sort((a,b) => (a.order||0) - (b.order||0));
+      const scopeName = scope ? scope.name : '未分類';
+      return `
+        <div style="margin-left:14px;margin-bottom:10px;border-left:2px solid var(--ink-10);padding-left:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <div style="font-size:12.5px;font-weight:600;color:var(--ink)">${escapeHtml(scopeName)} <span style="font-size:11px;color:var(--ink-60);font-weight:400">${groupTasks.length} Tasks</span></div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <button class="btn-copy-link" onclick="initBulkScope('${scopeId}','completed')">全部已完成</button>
+              <button class="btn-copy-link" onclick="initBulkScope('${scopeId}','in_progress')">全部進行中</button>
+              <button class="btn-copy-link" onclick="initBulkScope('${scopeId}','not_started')">全部未開始</button>
+            </div>
+          </div>
+          ${groupTasks.map(renderInitTaskRow).join('')}
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1.5px solid var(--ink-10);margin-bottom:6px">
+          <span class="tag-section-label" style="margin:0;padding:0;border:none">${PHASE_LABELS[phase]} <span style="font-size:11px;color:var(--ink-60);font-weight:400">${tasksInPhase.length} Tasks</span></span>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            <button class="btn-copy-link" onclick="initBulkPhase(${phase},'completed')">全部已完成</button>
+            <button class="btn-copy-link" onclick="initBulkPhase(${phase},'in_progress')">全部進行中</button>
+            <button class="btn-copy-link" onclick="initBulkPhase(${phase},'not_started')">全部未開始</button>
+          </div>
+        </div>
+        ${scopeBlocks}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="card" style="border:2px solid var(--ink)">
+      <div class="card-title">初始化既有專案進度</div>
+      <div style="font-size:12px;color:var(--ink-60);margin-bottom:12px;line-height:1.6">
+        此工具只會修改目前「已存在」Task 的 Status 與 Progress。不會建立新 Task、不會展開 Scope，也不會修改 Weight、Order、Phase、Milestone 或報價。所有調整會先暫存在草稿中，按「預覽變更」後才會顯示即將寫入 Firestore 的內容。已停用（active=false）的 Task 不會出現在這裡。
+      </div>
+      ${draftTasks.length ? phaseBlocks : '<div class="tag-empty">目前沒有可調整的 Task（僅列出已存在且未停用的 Task）</div>'}
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn-copy-link" onclick="closeInitPanel()">取消</button>
+        ${draftTasks.length ? `<button class="btn-save" style="padding:9px 18px" onclick="initGoPreview()">預覽變更</button>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderInitTaskRow(t) {
+  const d = initPanel.draft[t.id];
+  if (!d) return '';
+  const sourceLabel = escapeHtml(SCOPE_SOURCE_LABELS[t.source] || t.source || '');
+  return `
+    <div style="border:1px solid var(--ink-10);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:5px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="font-size:12.5px;font-weight:600;color:var(--ink);flex:1;min-width:120px">${escapeHtml(t.name)} <span class="dtag" style="margin-left:4px">${sourceLabel}</span></div>
+        <select class="field-select" style="width:auto;padding:4px 7px;font-size:11px" onchange="initSetTaskField('${t.id}','status',this.value)">
+          ${TASK_STATUS_ORDER.map(s => `<option value="${s}" ${d.status===s?'selected':''}>${TASK_STATUS_LABELS[s]}</option>`).join('')}
+        </select>
+        <div style="display:flex;align-items:center;gap:3px">
+          <input type="number" min="0" max="100" value="${d.progress}" style="width:50px" class="field-input"
+                 onchange="initSetTaskField('${t.id}','progress',Math.max(0,Math.min(100,parseFloat(this.value)||0)))">
+          <span style="font-size:10.5px;color:var(--ink-60)">%</span>
+        </div>
+      </div>
+      ${d.status === 'waiting_client' ? `
+      <div style="margin-top:5px;font-size:11px;color:var(--amber)">Waiting For：
+        <input class="field-input" style="display:inline-block;width:auto;min-width:160px;font-size:11px;padding:3px 6px" value="${escapeHtml(d.waitingFor)}"
+               onchange="initSetTaskField('${t.id}','waitingFor',this.value)">
+      </div>` : ''}
+      ${d.status === 'blocked' ? `
+      <div style="margin-top:5px;font-size:11px;color:var(--red)">Blocked Reason：
+        <input class="field-input" style="display:inline-block;width:auto;min-width:160px;font-size:11px;padding:3px 6px" value="${escapeHtml(d.blockedReason)}"
+               onchange="initSetTaskField('${t.id}','blockedReason',this.value)">
+      </div>` : ''}
+    </div>`;
+}
+
+function renderInitPreview() {
+  const changes = initComputeChanges();
+  const dist = {};
+  TASK_STATUS_ORDER.forEach(s => { dist[s] = 0; });
+  changes.forEach(c => { dist[c.draft.status] = (dist[c.draft.status] || 0) + 1; });
+
+  return `
+    <div class="card" style="border:2px solid var(--ink)">
+      <div class="card-title">預覽變更</div>
+      ${changes.length ? `
+      <div style="font-size:13px;color:var(--ink);margin-bottom:10px;font-weight:600">即將更新 ${changes.length} 個 Tasks</div>
+      <div class="info-grid" style="margin-bottom:14px">
+        <div class="info-box"><div class="info-label">已完成</div><div class="info-value">${dist.completed}</div></div>
+        <div class="info-box"><div class="info-label">進行中</div><div class="info-value">${dist.in_progress}</div></div>
+        <div class="info-box"><div class="info-label">待驗收</div><div class="info-value">${dist.review}</div></div>
+        <div class="info-box"><div class="info-label">等待客戶</div><div class="info-value">${dist.waiting_client}</div></div>
+        <div class="info-box"><div class="info-label">受阻</div><div class="info-value">${dist.blocked}</div></div>
+        <div class="info-box"><div class="info-label">未開始</div><div class="info-value">${dist.not_started}</div></div>
+      </div>
+      <div style="max-height:260px;overflow:auto;border:1px solid var(--ink-10);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:14px">
+        ${changes.map(c => `<div style="font-size:11.5px;color:var(--ink-60);margin-bottom:3px">・${escapeHtml(c.task.name)}　→　${TASK_STATUS_LABELS[c.draft.status]}／${c.draft.progress}%</div>`).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--ink-60);background:var(--ink-10);border-radius:8px;padding:10px 12px;margin-bottom:14px;line-height:1.6">
+        ⚠ 此操作將批次修改 Task 的 Status 與 Progress（必要時含 Waiting For／Blocked Reason）。<br>
+        不會修改 Task 的 Weight、Order、Phase、Milestone，也不會修改正式報價。
+      </div>` : `<div class="tag-empty">目前草稿與現有資料相同，沒有需要更新的 Task。</div>`}
+      <div style="display:flex;gap:8px">
+        <button class="btn-copy-link" onclick="initBackToEdit()">返回修改</button>
+        ${changes.length ? `<button class="btn-save" style="padding:9px 18px" onclick="initConfirmApply()">確認套用</button>` : ''}
+      </div>
     </div>`;
 }
 
