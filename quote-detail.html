@@ -1067,6 +1067,73 @@ async function createProjectFromQuote() {
 }
 
 // ── 載入並渲染專案管理區塊（backward compatible：沒有 project 欄位時顯示建立按鈕）──
+// ══════════════════════════════════════════════════
+//  一次性 Template Task Migration（僅依 templateTaskKey 精準比對）
+//  用途：已經有 templateTaskKey 的既有 Task，套用本次明確的 Template 校正（改名 / 調整 milestone）。
+//  與 LEGACY_NAME_ALIASES / resolveLegacyTemplateTaskKey() 用途不同、互不取代：
+//  那一套是給「還沒有 templateTaskKey」的舊 Task 在展開 Scope 時做 dedup／補寫 key；
+//  這一套是給「已經有 templateTaskKey」的 Task 做一次性欄位校正。
+// ══════════════════════════════════════════════════
+const TASK_TEMPLATE_MIGRATION_ID = 'task_template_calibration_20260720_v1';
+
+// 只列出「這次要精準更新」的 templateTaskKey → 欄位 patch。
+// 只會更新這裡明確列出的欄位，progress/status/weight/order/phase/active/source/crId/
+// notes/waitingFor/blockedReason/description 一律不動。
+const TASK_TEMPLATE_MIGRATION_PATCH = {
+  payment_sandbox:         { name: '金流 Sandbox／測試環境串接' },
+  payment_callback:        { requiredByMilestone: 2 },
+  payment_order_status:    { requiredByMilestone: 2 },
+  payment_production_test: { name: '金流 Production 實單流程測試' },
+  launch_adv_06:           { name: 'Production Smoke Test' },
+};
+
+// 執行一次性 migration（若尚未執行過）。只依 templateTaskKey 精準識別要更新的 Task；
+// 找不到對應 key 的直接跳過，不猜測；templateTaskKey === null（管理者自訂 Task）完全不處理。
+async function runTaskTemplateMigrationIfNeeded() {
+  const proj = currentData.project || {};
+  const migrations = proj.migrations || {};
+  if (migrations[TASK_TEMPLATE_MIGRATION_ID]) return; // 已執行過，不重複寫入 Firestore
+
+  const quoteRef = db.collection('quotes').doc(currentId);
+  const taskColl = quoteRef.collection('tasks');
+  // 使用 dot-notation 路徑做安全的 nested field update，只會寫入這一個 migration key，
+  // 不會覆蓋 project 底下其他既有欄位（包含其他未來的 migrations）。
+  const markerPatch = {
+    [`project.migrations.${TASK_TEMPLATE_MIGRATION_ID}`]: true,
+    'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    const tasksToPatch = projectTasks.filter(t => t.templateTaskKey && TASK_TEMPLATE_MIGRATION_PATCH[t.templateTaskKey]);
+
+    if (tasksToPatch.length) {
+      const batch = db.batch();
+      tasksToPatch.forEach(t => {
+        const patch = TASK_TEMPLATE_MIGRATION_PATCH[t.templateTaskKey];
+        batch.update(taskColl.doc(t.id), {
+          ...patch,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      batch.update(quoteRef, markerPatch);
+      await batch.commit();
+
+      // 寫入成功後才同步 local state，避免要重新整理頁面才看到新值
+      tasksToPatch.forEach(t => Object.assign(t, TASK_TEMPLATE_MIGRATION_PATCH[t.templateTaskKey]));
+    } else {
+      // 這個 Project 目前沒有符合的 Task，也要留下 marker，避免每次載入都重新掃描
+      await quoteRef.update(markerPatch);
+    }
+
+    currentData.project = currentData.project || {};
+    currentData.project.migrations = currentData.project.migrations || {};
+    currentData.project.migrations[TASK_TEMPLATE_MIGRATION_ID] = true;
+  } catch (err) {
+    // Migration 失敗不影響既有資料正常顯示，僅記錄；下次載入會再嘗試（因為 marker 尚未寫入）
+    console.error('Task template migration failed:', err);
+  }
+}
+
 async function renderProjectSection() {
   const el = document.getElementById('projectSection');
   if (!el) return;
@@ -1092,6 +1159,7 @@ async function renderProjectSection() {
     ]);
     projectScopes = scopeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     projectTasks  = taskSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    await runTaskTemplateMigrationIfNeeded();
     renderProjectUI();
   } catch (err) {
     console.error(err);
