@@ -502,14 +502,14 @@ const TASK_TEMPLATES = {
     { key:'admin_login_01', name:'後台登入與基礎架構', weight:4, phase:1, milestone:1, category:'backend' },
   ],
   payment_gateway: [
-    { key:'payment_sandbox', name:'測試環境串接', weight:6, phase:2, milestone:2, category:'integration' },
+    { key:'payment_sandbox', name:'金流 Sandbox／測試環境串接', weight:6, phase:2, milestone:2, category:'integration' },
     { key:'payment_form', name:'Payment Form / API', weight:7, phase:2, milestone:2, category:'integration' },
     { key:'payment_verify', name:'付款資料驗證', weight:5, phase:2, milestone:2, category:'integration' },
-    { key:'payment_callback', name:'Callback 處理', weight:6, phase:2, milestone:3, category:'integration' },
-    { key:'payment_order_status', name:'訂單付款狀態更新', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'payment_callback', name:'Callback 處理', weight:6, phase:2, milestone:2, category:'integration' },
+    { key:'payment_order_status', name:'訂單付款狀態更新', weight:4, phase:2, milestone:2, category:'backend' },
     { key:'payment_error', name:'錯誤處理', weight:3, phase:2, milestone:3, category:'backend' },
     { key:'payment_production_credentials', name:'Production Credentials 設定', weight:3, phase:3, milestone:3, category:'devops' },
-    { key:'payment_production_test', name:'正式環境測試', weight:4, phase:3, milestone:3, category:'testing' },
+    { key:'payment_production_test', name:'金流 Production 實單流程測試', weight:4, phase:3, milestone:3, category:'testing' },
   ],
   dashboard: [
     { key:'dashboard_01', name:'數據來源整理', weight:4, phase:2, milestone:2, category:'backend' },
@@ -603,7 +603,7 @@ const TASK_TEMPLATES = {
     { key:'launch_adv_03', name:'金流正式環境切換', weight:3, phase:3, milestone:3, category:'devops' },
     { key:'launch_adv_04', name:'Email DNS（SPF/DKIM/DMARC）', weight:3, phase:3, milestone:3, category:'devops' },
     { key:'launch_adv_05', name:'正式管理員帳號建立', weight:2, phase:3, milestone:3, category:'devops' },
-    { key:'launch_adv_06', name:'Production 測試', weight:4, phase:3, milestone:3, category:'testing' },
+    { key:'launch_adv_06', name:'Production Smoke Test', weight:4, phase:3, milestone:3, category:'testing' },
   ],
   permission_basic: [
     { key:'permission_basic_01', name:'角色權限資料結構', weight:4, phase:1, milestone:2, category:'backend' },
@@ -717,6 +717,12 @@ let currentData = null;
 let dirty = false;
 let projectScopes = [];
 let projectTasks = [];
+// Phase / Scope Group 展開收合狀態，僅為前端 UI 狀態，不寫入 Firestore、不跨頁面持久化
+const collapsedGroups = new Set();
+function toggleGroupCollapse(key) {
+  if (collapsedGroups.has(key)) collapsedGroups.delete(key); else collapsedGroups.add(key);
+  renderProjectUI();
+}
 
 // ══════════════════════════════════════════════════
 //  GET ?id= FROM URL
@@ -1226,8 +1232,8 @@ function renderProjectUI() {
     </div>
 
     <div class="card">
-      <div class="card-title">Development Tasks（依 Phase 分組，${projectTasks.length} 項）</div>
-      ${projectTasks.length ? PHASES.map(renderPhaseTaskGroup).join('') : '<div class="tag-empty">尚無 Task，請先在上方 Scope 按「展開成開發任務」</div>'}
+      <div class="card-title">Development Tasks（Phase → Scope 分組，${projectTasks.length} 項）</div>
+      ${projectTasks.length ? PHASES.map(p => renderPhaseTaskGroup(p, m)).join('') : '<div class="tag-empty">尚無 Task，請先在上方 Scope 按「展開成開發任務」</div>'}
     </div>`;
 }
 
@@ -1270,41 +1276,85 @@ function renderScopeRow(s) {
     </div>`;
 }
 
-function renderPhaseTaskGroup(phase) {
-  const tasks = projectTasks.filter(t => Number(t.phase) === phase).sort((a,b) => (a.order||0) - (b.order||0));
-  if (!tasks.length) return '';
+function renderPhaseTaskGroup(phase, m) {
+  const tasksInPhase = projectTasks.filter(t => Number(t.phase) === phase);
+  if (!tasksInPhase.length) return '';
+
+  const phaseKey = 'phase_' + phase;
+  const phaseCollapsed = collapsedGroups.has(phaseKey);
+  const phaseProgress = (m && m.byPhase[phase]) || 0;
+
+  // 依現有 scopeId 關聯資料分組（不依 Task 顯示名稱猜測），並依 Scope 目前既有順序排列；
+  // 找不到對應 Scope（理論上不會發生，因刪除 Scope 會一併刪除其 Task）者歸入「未分類」保底顯示。
+  const seenScopeIds = new Set(tasksInPhase.map(t => t.scopeId));
+  const orderedScopeIds = projectScopes.map(s => s.id).filter(id => seenScopeIds.has(id));
+  const unknownScopeIds = [...seenScopeIds].filter(id => !orderedScopeIds.includes(id));
+
+  const scopeGroupsHtml = [...orderedScopeIds, ...unknownScopeIds].map(scopeId => {
+    const scope = projectScopes.find(s => s.id === scopeId);
+    const groupTasks = tasksInPhase.filter(t => t.scopeId === scopeId).sort((a,b) => (a.order||0) - (b.order||0));
+    const scopeGroupKey = 'scope_' + phase + '_' + scopeId;
+    const scopeCollapsed = collapsedGroups.has(scopeGroupKey);
+    const scopeName = scope ? scope.name : '未分類（原 Scope 已不存在）';
+    // Scope Overall Progress：該 Scope 在整個 Project 中所有 active Task 的整體進度，
+    // 同一 Scope 出現在不同 Phase 時顯示相同數值，避免互相矛盾（沿用既有 scopeProgress()）
+    const scopeOverall = scope ? scopeProgress(scopeId) : 0;
+
+    return `
+      <div style="margin-left:16px;margin-bottom:6px;border-left:2px solid var(--ink-10);padding-left:12px">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 0" onclick="toggleGroupCollapse('${scopeGroupKey}')">
+          <span style="font-size:10.5px;color:var(--ink-30);width:12px;flex-shrink:0">${scopeCollapsed ? '▶' : '▼'}</span>
+          <span style="font-size:12.5px;font-weight:600;color:var(--ink)">${escapeHtml(scopeName)}</span>
+          <span style="font-size:11px;color:var(--ink-30)">${groupTasks.length} Tasks｜${scopeOverall.toFixed(1)}%</span>
+        </div>
+        ${scopeCollapsed ? '' : groupTasks.map(renderTaskRow).join('')}
+      </div>`;
+  }).join('');
+
   return `
-    <div style="margin-bottom:16px">
-      <div class="tag-section-label">${PHASE_LABELS[phase]}</div>
-      ${tasks.map(renderTaskRow).join('')}
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:7px 0;border-bottom:1.5px solid var(--ink-10)" onclick="toggleGroupCollapse('${phaseKey}')">
+        <span style="font-size:12px;color:var(--ink-30);width:14px;flex-shrink:0">${phaseCollapsed ? '▶' : '▼'}</span>
+        <span class="tag-section-label" style="margin:0;padding:0;border:none">${PHASE_LABELS[phase]}</span>
+        <span style="font-size:11.5px;color:var(--ink-30)">${tasksInPhase.length} Tasks｜${phaseProgress.toFixed(1)}%</span>
+      </div>
+      ${phaseCollapsed ? '' : scopeGroupsHtml}
     </div>`;
 }
 
 function renderTaskRow(t) {
   const color = TASK_STATUS_COLOR[t.status] || 'var(--ink-30)';
+  const field = (label, inputHtml, extraStyle) => `
+        <div style="display:flex;flex-direction:column;gap:2px${extraStyle ? ';' + extraStyle : ''}">
+          <span style="font-size:9px;color:var(--ink-30);text-transform:uppercase;letter-spacing:.04em">${label}</span>
+          ${inputHtml}
+        </div>`;
   return `
     <div style="border:1.5px solid var(--ink-10);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:6px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:600;color:var(--ink);flex:1;min-width:140px">${escapeHtml(t.name)}</div>
-        <select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px;color:${color}" onchange="updateTaskField('${t.id}','status',this.value)">
-          ${TASK_STATUS_ORDER.map(s => `<option value="${s}" ${t.status===s?'selected':''}>${TASK_STATUS_LABELS[s]}</option>`).join('')}
-        </select>
-        <input type="number" min="0" max="100" value="${t.progress ?? 0}" style="width:60px" class="field-input" title="Progress"
-               onchange="updateTaskField('${t.id}','progress',parseFloat(this.value))">
-        <span style="font-size:11px;color:var(--ink-30)">%</span>
-        <input type="number" min="1" step="1" value="${t.weight ?? 1}" style="width:56px" class="field-input" title="Weight"
-               onchange="updateTaskField('${t.id}','weight',parseFloat(this.value))">
-        <input type="number" min="0" step="1" value="${t.order ?? 0}" style="width:56px" class="field-input" title="Order"
-               onchange="updateTaskField('${t.id}','order',parseFloat(this.value))">
-        <select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" title="Phase" onchange="updateTaskField('${t.id}','phase',Number(this.value))">
-          ${PHASES.map(p => `<option value="${p}" ${Number(t.phase)===p?'selected':''}>Phase ${p}</option>`).join('')}
-        </select>
-        <select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" title="Required by Milestone" onchange="updateTaskField('${t.id}','requiredByMilestone',Number(this.value))">
-          ${MILESTONES.map(mm => `<option value="${mm}" ${Number(t.requiredByMilestone)===mm?'selected':''}>M${mm}</option>`).join('')}
-        </select>
-        <button class="btn-copy-link" onclick="quickComplete('${t.id}')">快速完成</button>
-        <button class="btn-copy-link" onclick="editTaskField('${t.id}')">編輯</button>
-        <button class="btn-copy-link" style="color:var(--red)" onclick="deleteTask('${t.id}')">刪除</button>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:600;color:var(--ink);flex:1;min-width:140px;padding-bottom:6px">${escapeHtml(t.name)}</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          ${field('Status', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px;color:${color}" onchange="updateTaskField('${t.id}','status',this.value)">
+            ${TASK_STATUS_ORDER.map(s => `<option value="${s}" ${t.status===s?'selected':''}>${TASK_STATUS_LABELS[s]}</option>`).join('')}
+          </select>`)}
+          ${field('Progress', `<div style="display:flex;align-items:center;gap:3px"><input type="number" min="0" max="100" value="${t.progress ?? 0}" style="width:56px" class="field-input"
+               onchange="updateTaskField('${t.id}','progress',parseFloat(this.value))"><span style="font-size:11px;color:var(--ink-30)">%</span></div>`)}
+          ${field('Weight', `<input type="number" min="1" step="1" value="${t.weight ?? 1}" style="width:50px" class="field-input"
+               onchange="updateTaskField('${t.id}','weight',parseFloat(this.value))">`)}
+          ${field('Order', `<input type="number" min="0" step="1" value="${t.order ?? 0}" style="width:50px" class="field-input"
+               onchange="updateTaskField('${t.id}','order',parseFloat(this.value))">`)}
+          ${field('Phase', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" onchange="updateTaskField('${t.id}','phase',Number(this.value))">
+            ${PHASES.map(p => `<option value="${p}" ${Number(t.phase)===p?'selected':''}>Phase ${p}</option>`).join('')}
+          </select>`)}
+          ${field('Milestone', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" onchange="updateTaskField('${t.id}','requiredByMilestone',Number(this.value))">
+            ${MILESTONES.map(mm => `<option value="${mm}" ${Number(t.requiredByMilestone)===mm?'selected':''}>M${mm}</option>`).join('')}
+          </select>`)}
+          <div style="display:flex;gap:6px;padding-bottom:5px">
+            <button class="btn-copy-link" onclick="quickComplete('${t.id}')">快速完成</button>
+            <button class="btn-copy-link" onclick="editTaskField('${t.id}')">編輯</button>
+            <button class="btn-copy-link" style="color:var(--red)" onclick="deleteTask('${t.id}')">刪除</button>
+          </div>
+        </div>
       </div>
       ${t.status === 'waiting_client' ? `
       <div style="margin-top:6px;font-size:11.5px;color:var(--amber)">Waiting For：
@@ -1324,11 +1374,24 @@ function renderTaskRow(t) {
 //    優先用 templateTaskKey 比對；沒有的話，才用 Task Name 對照該 Scope 的樣板做「一次性」fallback。
 //    對上了就回傳 key（呼叫端會把它寫回 Firestore，完成 migration）；對不上就回傳 null，
 //    視為管理者自訂 / 已改名的 custom Task，不猜測、不覆蓋、不刪除。
+// 本輪 Template 校正時被改名的項目：舊名稱 → 對應既有 stable templateTaskKey。
+// 僅供尚未完成 templateTaskKey migration 的 legacy Task 使用，明確表列、非模糊字串比對。
+const LEGACY_NAME_ALIASES = {
+  '測試環境串接': 'payment_sandbox',
+  '正式環境測試': 'payment_production_test',
+  'Production 測試': 'launch_adv_06',
+};
+
 function resolveLegacyTemplateTaskKey(task, template) {
   if (task.templateTaskKey) return task.templateTaskKey;
   if (!template) return null;
+  // 1) 用目前 Template 的 name 完全比對
   const match = template.find(t => t.name === task.name);
-  return match ? match.key : null;
+  if (match) return match.key;
+  // 2) 本輪改名前的舊名稱 alias（明確表列，非模糊比對），避免因 rename 誤判成自訂 Task 而重複生成
+  const aliasKey = LEGACY_NAME_ALIASES[task.name];
+  if (aliasKey && template.some(t => t.key === aliasKey)) return aliasKey;
+  return null;
 }
 
 async function expandScopeToTasks(scopeId) {
