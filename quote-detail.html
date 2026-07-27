@@ -449,8 +449,6 @@ const TASK_TEMPLATES = {
     { key:'ecom_product_02', name:'商品列表', weight:6, phase:2, milestone:2, category:'frontend' },
     { key:'ecom_product_03', name:'商品詳細頁', weight:6, phase:2, milestone:2, category:'frontend' },
     { key:'ecom_product_04', name:'商品分類', weight:4, phase:2, milestone:2, category:'backend' },
-    { key:'ecom_product_05', name:'商品圖片管理', weight:4, phase:2, milestone:2, category:'backend' },
-    { key:'ecom_product_06', name:'商品 CRUD 後台', weight:8, phase:2, milestone:2, category:'backend' },
     { key:'ecom_product_07', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   cart: [
@@ -490,6 +488,7 @@ const TASK_TEMPLATES = {
   product_mgmt: [
     { key:'product_mgmt_01', name:'商品後台列表', weight:4, phase:2, milestone:2, category:'backend' },
     { key:'product_mgmt_02', name:'商品新增／編輯', weight:6, phase:2, milestone:2, category:'backend' },
+    { key:'ecom_product_05', name:'商品圖片管理', weight:4, phase:2, milestone:2, category:'backend' },
     { key:'product_mgmt_03', name:'上下架控制', weight:3, phase:2, milestone:3, category:'backend' },
     { key:'product_mgmt_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
@@ -1136,6 +1135,92 @@ async function runTaskTemplateMigrationIfNeeded() {
   }
 }
 
+// ══════════════════════════════════════════════════
+//  一次性 Migration #2：商品系統／商品管理後台 Scope 職責校正
+//  獨立於 task_template_calibration_20260720_v1，不重用、不修改該 migration。
+//  只依 templateTaskKey 精準識別，不做 Task 名稱模糊比對。
+// ══════════════════════════════════════════════════
+const PRODUCT_SCOPE_MIGRATION_ID = 'product_scope_task_calibration_20260720_v1';
+
+async function runProductScopeMigrationIfNeeded() {
+  const proj = currentData.project || {};
+  const migrations = proj.migrations || {};
+  if (migrations[PRODUCT_SCOPE_MIGRATION_ID]) return; // 已執行過，不重複寫入 Firestore
+
+  const quoteRef = db.collection('quotes').doc(currentId);
+  const taskColl = quoteRef.collection('tasks');
+  const markerPatch = {
+    [`project.migrations.${PRODUCT_SCOPE_MIGRATION_ID}`]: true,
+    'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    // 用 templateTaskKey 精準定位，不依賴 Task 顯示名稱
+    const crudTask  = projectTasks.find(t => t.templateTaskKey === 'ecom_product_06'); // 舊「商品 CRUD 後台」
+    const imageTask = projectTasks.find(t => t.templateTaskKey === 'ecom_product_05'); // 「商品圖片管理」
+    // 用 Scope 的 taskTemplateKey（而非顯示名稱）找到「商品管理後台」Scope
+    const pmScope = projectScopes.find(s => s.taskTemplateKey === 'product_mgmt');
+
+    const batch = db.batch();
+    let writeCount = 0;
+    const localPatches = []; // 記錄成功後要同步回 local projectTasks 的變更
+
+    // 1) 商品管理後台的細分 Tasks 若已存在，才將舊「商品 CRUD 後台」設為 active=false（不刪除、不動 status/progress）
+    if (crudTask && pmScope) {
+      const pmHasCoreTasks = projectTasks.some(t =>
+        t.scopeId === pmScope.id && ['product_mgmt_01','product_mgmt_02','product_mgmt_03'].includes(t.templateTaskKey)
+      );
+      if (pmHasCoreTasks && crudTask.active !== false) {
+        batch.update(taskColl.doc(crudTask.id), { active: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        writeCount++;
+        localPatches.push({ task: crudTask, patch: { active: false } });
+      }
+    }
+
+    // 2) 「商品圖片管理」若還在商品系統 Scope，且商品管理後台 Scope 存在，才搬移 scopeId（只動 scopeId，其餘欄位不動）
+    //    找不到商品管理後台 Scope 時完全跳過此步驟，不移動、不建立、不刪除，保留原資料。
+    if (imageTask && pmScope && imageTask.scopeId !== pmScope.id) {
+      batch.update(taskColl.doc(imageTask.id), { scopeId: pmScope.id, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      writeCount++;
+      localPatches.push({ task: imageTask, patch: { scopeId: pmScope.id } });
+    }
+
+    // 3) 調整商品管理後台這 5 個 Task 的 Order（只動 order，只針對這 5 個明確的 templateTaskKey）
+    if (pmScope) {
+      const pm01 = projectTasks.find(t => t.templateTaskKey === 'product_mgmt_01');
+      const pm02 = projectTasks.find(t => t.templateTaskKey === 'product_mgmt_02');
+      const pm03 = projectTasks.find(t => t.templateTaskKey === 'product_mgmt_03');
+      const pm04 = projectTasks.find(t => t.templateTaskKey === 'product_mgmt_04');
+      const orderTargets = [
+        { task: pm01, order: 10 },
+        { task: pm02, order: 20 },
+        { task: imageTask, order: 30 },
+        { task: pm03, order: 40 },
+        { task: pm04, order: 50 },
+      ];
+      orderTargets.forEach(({ task, order }) => {
+        if (task && task.order !== order) {
+          batch.update(taskColl.doc(task.id), { order, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          writeCount++;
+          localPatches.push({ task, patch: { order } });
+        }
+      });
+    }
+
+    batch.update(quoteRef, markerPatch);
+    await batch.commit();
+
+    // Firestore 成功後才同步 local state
+    localPatches.forEach(({ task, patch }) => Object.assign(task, patch));
+
+    currentData.project = currentData.project || {};
+    currentData.project.migrations = currentData.project.migrations || {};
+    currentData.project.migrations[PRODUCT_SCOPE_MIGRATION_ID] = true;
+  } catch (err) {
+    console.error('Product scope migration failed:', err);
+  }
+}
+
 async function renderProjectSection() {
   const el = document.getElementById('projectSection');
   if (!el) return;
@@ -1162,6 +1247,7 @@ async function renderProjectSection() {
     projectScopes = scopeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     projectTasks  = taskSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     await runTaskTemplateMigrationIfNeeded();
+    await runProductScopeMigrationIfNeeded();
     renderProjectUI();
   } catch (err) {
     console.error(err);
