@@ -471,16 +471,26 @@ function getLocalDateStr(d) {
 function hasPaymentMilestones(q) {
   return Array.isArray(q._paymentMilestones) && q._paymentMilestones.length > 0;
 }
+// 目前應收總額基準：優先用 project.currentContractValue（未來 Change Request 核准後才會出現），
+// 沒有則 fallback project.contractAmount（原始合約金額快照），都沒有則 0。
 function paymentContractAmount(q) {
-  return Number((q.project && q.project.contractAmount) || 0);
+  const proj = q.project;
+  if (proj && Number(proj.currentContractValue) > 0) return Number(proj.currentContractValue);
+  if (proj && Number(proj.contractAmount) > 0) return Number(proj.contractAmount);
+  return 0;
 }
 function paymentPaidAmount(q) {
   return (q._paymentMilestones || [])
     .filter(p => p.status === 'paid')
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
 }
+// 應收剩餘永遠 >= 0，避免合約總額被下修（例如未來 Change Request 減項）後出現負數 Remaining
 function paymentRemainingAmount(q) {
-  return paymentContractAmount(q) - paymentPaidAmount(q);
+  return Math.max(paymentContractAmount(q) - paymentPaidAmount(q), 0);
+}
+// 溢收／待退款：已收金額超過目前合約總額的部分
+function paymentOverpaidAmount(q) {
+  return Math.max(paymentPaidAmount(q) - paymentContractAmount(q), 0);
 }
 // Σ status==='pending' 且 dueDate < 今天 的 amount（已付款的過期項目不算，見規則 十四-H）
 function paymentOverdueAmount(q) {

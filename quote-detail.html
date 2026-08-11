@@ -2228,10 +2228,24 @@ function isValidCalendarDateStr(str) {
   return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
 }
 
+// ── 付款摘要顯示用的「目前應收總額」基準：優先用 project.currentContractValue（未來 CR 核准後才會出現），
+//    沒有的話 fallback 回 project.contractAmount（原始合約金額快照），都沒有則 0。
+//    注意：這跟 resolveContractAmount() 語意不同——
+//    resolveContractAmount() 是「第一次建立付款計畫時」決定要快照哪個金額（quotationTotal/officialPrice）；
+//    resolvePaymentContractValue() 是「顯示付款摘要時」決定目前應該拿哪個金額當基準，兩者不要混用。
+function resolvePaymentContractValue() {
+  const proj = currentData.project;
+  if (proj && Number(proj.currentContractValue) > 0) return Number(proj.currentContractValue);
+  if (proj && Number(proj.contractAmount) > 0) return Number(proj.contractAmount);
+  return 0;
+}
+
 function computePaymentSummary() {
-  const contractAmount = (currentData.project && Number(currentData.project.contractAmount)) || 0;
+  const contractAmount = resolvePaymentContractValue();
   const paid = paymentMilestones.filter(p => p.status === 'paid').reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const remaining = contractAmount - paid;
+  const rawBalance = contractAmount - paid;
+  const remaining = Math.max(rawBalance, 0);
+  const overpaid = Math.max(-rawBalance, 0);
   const todayStr = getLocalDateStr();
   const overdue = paymentMilestones
     .filter(p => p.status === 'pending' && p.dueDate && p.dueDate < todayStr)
@@ -2246,7 +2260,7 @@ function computePaymentSummary() {
   if (allPaid) nextDue = 'DONE';
   else if (pendingWithDue.length) nextDue = pendingWithDue[0];
 
-  return { contractAmount, paid, remaining, overdue, nextDue, allPaid };
+  return { contractAmount, paid, remaining, overpaid, overdue, nextDue, allPaid };
 }
 
 // ── 建立付款計畫：Draft 操作（不寫 Firestore）──
@@ -2505,10 +2519,11 @@ function renderPaymentSection() {
       <div class="card-title">Payment Milestones</div>
 
       <div class="info-grid" style="margin-bottom:14px">
-        <div class="info-box"><div class="info-label">Contract Amount</div><div class="info-value">NT$${summary.contractAmount.toLocaleString()}</div></div>
+        <div class="info-box"><div class="info-label">目前合約總額</div><div class="info-value">NT$${summary.contractAmount.toLocaleString()}</div></div>
         <div class="info-box"><div class="info-label">Paid</div><div class="info-value" style="color:var(--green)">NT$${summary.paid.toLocaleString()}</div></div>
         <div class="info-box"><div class="info-label">Remaining</div><div class="info-value">NT$${summary.remaining.toLocaleString()}</div></div>
         <div class="info-box"><div class="info-label">Overdue</div><div class="info-value" style="color:${summary.overdue > 0 ? 'var(--red)' : 'var(--ink)'}">NT$${summary.overdue.toLocaleString()}</div></div>
+        ${summary.overpaid > 0 ? `<div class="info-box" style="background:var(--amber-light)"><div class="info-label" style="color:#92400e">溢收／待退款</div><div class="info-value" style="color:#92400e">NT$${summary.overpaid.toLocaleString()}</div></div>` : ''}
         <div class="info-box" style="grid-column:1/-1"><div class="info-label">Next Due</div><div class="info-value" style="font-size:14px">${nextDueText}</div></div>
       </div>
 
