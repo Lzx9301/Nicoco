@@ -716,6 +716,10 @@ let currentData = null;
 let dirty = false;
 let projectScopes = [];
 let projectTasks = [];
+// Payment Milestone v1：quotes/{quoteId}/paymentMilestones subcollection 的本地快取
+let paymentMilestones = [];
+// 建立付款計畫時的前端草稿，未按「建立付款計畫」前完全不寫 Firestore
+let paymentPlanBuilder = null;
 // Existing Project Initialization v1：純前端 Draft State，只在「確認套用」時才寫入 Firestore
 let initPanel = { open:false, step:'edit', draft:{} };
 // Phase / Scope Group 展開收合狀態，僅為前端 UI 狀態，不寫入 Firestore、不跨頁面持久化
@@ -899,6 +903,7 @@ function renderDetail() {
           </select>
         </div>
       </div>
+      <div id="paymentStatusNotice"></div>
 
       <div class="field-row">
         <div class="field full">
@@ -1240,15 +1245,25 @@ async function renderProjectSection() {
   el.innerHTML = `<div class="card"><div class="card-title">專案管理 Project</div><div class="loading-state" style="padding:40px 0"><div class="spinner"></div>載入專案資料中…</div></div>`;
 
   try {
-    const [scopeSnap, taskSnap] = await Promise.all([
+    const [scopeSnap, taskSnap, paymentSnap] = await Promise.all([
       db.collection('quotes').doc(currentId).collection('scopes').orderBy('order').get(),
       db.collection('quotes').doc(currentId).collection('tasks').get(),
+      db.collection('quotes').doc(currentId).collection('paymentMilestones').orderBy('order').get(),
     ]);
     projectScopes = scopeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     projectTasks  = taskSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    paymentMilestones = paymentSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     await runTaskTemplateMigrationIfNeeded();
     await runProductScopeMigrationIfNeeded();
     renderProjectUI();
+
+    // 若已啟用 Payment Milestone，在「案件管理」卡片的 paymentStatus 欄位下方補一段小提示（不動舊欄位本身）
+    const noticeEl = document.getElementById('paymentStatusNotice');
+    if (noticeEl) {
+      noticeEl.innerHTML = paymentMilestones.length
+        ? `<div style="font-size:11px;color:var(--amber);margin-top:6px">此專案已啟用 Payment Milestone，付款明細請以付款里程碑為準。</div>`
+        : '';
+    }
   } catch (err) {
     console.error(err);
     el.innerHTML = `<div class="card"><div class="card-title">專案管理 Project</div><div class="error-state">⚠ 讀取專案資料失敗：${escapeHtml(err.message || String(err))}</div></div>`;
@@ -1396,7 +1411,9 @@ function renderProjectUI() {
     <div class="card">
       <div class="card-title">Development Tasks（Phase → Scope 分組，${projectTasks.length} 項）</div>
       ${projectTasks.length ? PHASES.map(p => renderPhaseTaskGroup(p, m)).join('') : '<div class="tag-empty">尚無 Task，請先在上方 Scope 按「展開成開發任務」</div>'}
-    </div>`;
+    </div>
+
+    ${renderPaymentSection()}`;
 }
 
 function renderScopeRow(s) {
@@ -2143,6 +2160,425 @@ async function updateProjectStatus(newStatus) {
     console.error(err);
     showToast(`⚠ 更新失敗：${err.message || err}`);
   }
+}
+
+// ══════════════════════════════════════════════════
+//  PAYMENT MILESTONE v1
+//  quotes/{quoteId}/paymentMilestones/{paymentId}
+//  與 Phase／Development Milestone／Task Progress 完全獨立；不因任何狀態自動改為 paid。
+//  沿用既有 activityLogs（type:'payment'），不建立第二套紀錄系統。
+// ══════════════════════════════════════════════════
+
+const PAYMENT_PLAN_PRESETS = {
+  full:         { label:'一次付清（100%）',      items:[{ title:'全額付款', percentage:100 }] },
+  half2:        { label:'兩期付款（50/50）',      items:[{ title:'啟動款', percentage:50 }, { title:'尾款', percentage:50 }] },
+  third_403030: { label:'三期付款（40/30/30）',   items:[{ title:'啟動款', percentage:40 }, { title:'第二期款', percentage:30 }, { title:'尾款', percentage:30 }] },
+  third_304030: { label:'三期付款（30/40/30）',   items:[{ title:'啟動款', percentage:30 }, { title:'第二期款', percentage:40 }, { title:'尾款', percentage:30 }] },
+  custom:       { label:'自訂',                   items:[{ title:'第一期款', percentage:100 }] },
+};
+
+// ── contractAmount 決定：優先沿用已快照的 project.contractAmount；
+//    尚未建立過付款計畫時，用 quotationTotal || officialPrice（與 dashboard.html 的 wonAmount() 優先序一致）──
+function resolveContractAmount() {
+  if (currentData.project && Number(currentData.project.contractAmount) > 0) {
+    return Number(currentData.project.contractAmount);
+  }
+  return Number(currentData.quotationTotal || currentData.officialPrice || 0);
+}
+
+// ── Rounding：前 N-1 期依比例四捨五入，最後一期吸收差額，確保加總與 contractAmount 完全相等 ──
+function calcPaymentAmounts(contractAmount, items) {
+  const amounts = [];
+  let runningSum = 0;
+  for (let i = 0; i < items.length - 1; i++) {
+    const amt = Math.round(contractAmount * Number(items[i].percentage) / 100);
+    amounts.push(amt);
+    runningSum += amt;
+  }
+  amounts.push(contractAmount - runningSum); // 最後一期吸收 rounding difference
+  return amounts;
+}
+
+function validatePaymentPlanDraft() {
+  if (!paymentPlanBuilder || !paymentPlanBuilder.items.length) return '請至少設定一筆付款節點';
+  if (paymentPlanBuilder.items.some(i => !(Number(i.percentage) > 0))) return '每筆付款比例必須大於 0';
+  if (paymentPlanBuilder.items.some(i => !i.title || !i.title.trim())) return '每筆付款節點都需要名稱';
+  const sum = paymentPlanBuilder.items.reduce((s, i) => s + (Number(i.percentage) || 0), 0);
+  if (Math.abs(sum - 100) > 0.001) return `付款比例加總必須為 100%（目前為 ${sum}%）`;
+  return null;
+}
+
+// ── 共用 local-date helper：用瀏覽器本地時區產生 YYYY-MM-DD，避免 UTC+8 凌晨用 toISOString() 判斷成前一天 ──
+function getLocalDateStr(d) {
+  const date = d instanceof Date ? d : new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// ── 驗證 YYYY-MM-DD 字串是否為「真實存在」的日期（例如 2026-02-30、2026-99-99 必須拒絕）──
+// 用 round-trip 檢查：組出 Date 後年/月/日必須跟輸入完全一致，才代表沒有被 JS Date 自動進位/溢位吸收掉。
+function isValidCalendarDateStr(str) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
+  if (!m) return false;
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(y, mo - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+}
+
+function computePaymentSummary() {
+  const contractAmount = (currentData.project && Number(currentData.project.contractAmount)) || 0;
+  const paid = paymentMilestones.filter(p => p.status === 'paid').reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const remaining = contractAmount - paid;
+  const todayStr = getLocalDateStr();
+  const overdue = paymentMilestones
+    .filter(p => p.status === 'pending' && p.dueDate && p.dueDate < todayStr)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+  const allPaid = paymentMilestones.length > 0 && paymentMilestones.every(p => p.status === 'paid');
+  const pendingWithDue = paymentMilestones
+    .filter(p => p.status !== 'paid' && p.dueDate)
+    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0));
+
+  let nextDue = null; // null=尚未設定, 'DONE'=已全部完成, 否則為該筆付款物件
+  if (allPaid) nextDue = 'DONE';
+  else if (pendingWithDue.length) nextDue = pendingWithDue[0];
+
+  return { contractAmount, paid, remaining, overdue, nextDue, allPaid };
+}
+
+// ── 建立付款計畫：Draft 操作（不寫 Firestore）──
+function openPaymentPlanBuilder() {
+  paymentPlanBuilder = { planKey: null, items: [] };
+  renderProjectUI();
+}
+function closePaymentPlanBuilder() {
+  paymentPlanBuilder = null;
+  renderProjectUI();
+}
+function selectPaymentPreset(planKey) {
+  const preset = PAYMENT_PLAN_PRESETS[planKey];
+  if (!preset) return;
+  paymentPlanBuilder = { planKey, items: preset.items.map(i => ({ ...i })) };
+  renderProjectUI();
+}
+function customAddItem() {
+  if (!paymentPlanBuilder) return;
+  paymentPlanBuilder.items.push({ title: `第 ${paymentPlanBuilder.items.length + 1} 期款`, percentage: 0 });
+  renderProjectUI();
+}
+function customRemoveItem(idx) {
+  if (!paymentPlanBuilder) return;
+  paymentPlanBuilder.items.splice(idx, 1);
+  renderProjectUI();
+}
+function customSetItemField(idx, field, value) {
+  if (!paymentPlanBuilder || !paymentPlanBuilder.items[idx]) return;
+  paymentPlanBuilder.items[idx][field] = value;
+  renderProjectUI();
+}
+
+// ── 確認建立付款計畫：唯一會把 Payment Milestone 寫入 Firestore 的地方 ──
+async function createPaymentPlan() {
+  const validationErr = validatePaymentPlanDraft();
+  if (validationErr) { showToast(`⚠ ${validationErr}`); return; }
+
+  const contractAmount = resolveContractAmount();
+  if (!(contractAmount > 0)) {
+    showToast('尚未設定有效的正式合約金額，請先完成正式報價或設定正式報價金額。');
+    return;
+  }
+
+  const items = paymentPlanBuilder.items;
+  if (!confirm(`確定要建立付款計畫嗎？\n合約金額 NT$${contractAmount.toLocaleString()}，共 ${items.length} 期。`)) return;
+
+  const amounts = calcPaymentAmounts(contractAmount, items);
+
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const pmColl = quoteRef.collection('paymentMilestones');
+    const batch = db.batch();
+    const newDocs = [];
+
+    items.forEach((item, idx) => {
+      const ref = pmColl.doc();
+      const data = {
+        order: idx,
+        title: item.title.trim(),
+        percentage: Number(item.percentage),
+        amount: amounts[idx],
+        dueDate: null,
+        status: 'pending',
+        paidAt: null,
+        note: '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+      batch.set(ref, data);
+      newDocs.push({ id: ref.id, ...data });
+    });
+
+    const planSummary = items.map(i => `${i.percentage}%`).join(' / ');
+    const newLog = {
+      id: genActivityId(),
+      type: 'payment',
+      content: `建立付款計畫：${planSummary}，合約金額 NT$${contractAmount.toLocaleString()}`,
+      createdAt: firebase.firestore.Timestamp.now(),
+      createdBy: 'me',
+    };
+
+    batch.update(quoteRef, {
+      'project.contractAmount': contractAmount,
+      'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp(),
+      activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog),
+    });
+
+    await batch.commit();
+
+    // Firestore 成功後才同步 local state
+    paymentMilestones = newDocs;
+    currentData.project = currentData.project || {};
+    currentData.project.contractAmount = contractAmount;
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+
+    paymentPlanBuilder = null;
+    showToast('✓ 已建立付款計畫');
+    renderProjectUI();
+    syncTimelineUI();
+    const noticeEl = document.getElementById('paymentStatusNotice');
+    if (noticeEl) noticeEl.innerHTML = `<div style="font-size:11px;color:var(--amber);margin-top:6px">此專案已啟用 Payment Milestone，付款明細請以付款里程碑為準。</div>`;
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 建立付款計畫失敗：${err.message || err}`);
+  }
+}
+
+// ── 標記已付款：單次 Firestore batch（Payment 文件 + Activity Log），成功後才更新 local state ──
+async function markPaymentPaid(paymentId) {
+  const p = paymentMilestones.find(x => x.id === paymentId);
+  if (!p) return;
+  if (!confirm(`確定要將「${p.title}」（NT$${(Number(p.amount) || 0).toLocaleString()}）標記為已付款嗎？`)) return;
+
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const pmRef = quoteRef.collection('paymentMilestones').doc(paymentId);
+    const newLog = {
+      id: genActivityId(), type: 'payment',
+      content: `付款完成：${p.title} NT$${(Number(p.amount) || 0).toLocaleString()}`,
+      createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
+    };
+    const batch = db.batch();
+    batch.update(pmRef, { status: 'paid', paidAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    batch.update(quoteRef, { activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog) });
+    await batch.commit();
+
+    p.status = 'paid';
+    p.paidAt = firebase.firestore.Timestamp.now();
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast('✓ 已標記付款完成');
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+// ── 改回待付款：同樣單次 batch，只動 status/paidAt/updatedAt ──
+async function markPaymentPending(paymentId) {
+  const p = paymentMilestones.find(x => x.id === paymentId);
+  if (!p) return;
+  if (!confirm(`確定要將「${p.title}」改回待付款嗎？`)) return;
+
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const pmRef = quoteRef.collection('paymentMilestones').doc(paymentId);
+    const newLog = {
+      id: genActivityId(), type: 'payment',
+      content: `付款狀態更正：${p.title}改回待付款`,
+      createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
+    };
+    const batch = db.batch();
+    batch.update(pmRef, { status: 'pending', paidAt: null, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    batch.update(quoteRef, { activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog) });
+    await batch.commit();
+
+    p.status = 'pending';
+    p.paidAt = null;
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast('✓ 已改回待付款');
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+// ── 編輯付款資訊：僅限 title／dueDate／note，不允許改 percentage／amount（避免破壞總額一致性）──
+async function editPaymentMilestone(paymentId) {
+  const p = paymentMilestones.find(x => x.id === paymentId);
+  if (!p) return;
+
+  const newTitle = prompt('付款名稱：', p.title);
+  if (newTitle === null) return;
+  const newDueDate = prompt('到期日（格式 YYYY-MM-DD，留空清除）：', p.dueDate || '');
+  if (newDueDate === null) return;
+  const newNote = prompt('備註：', p.note || '');
+  if (newNote === null) return;
+
+  const trimmedDue = newDueDate.trim();
+  if (trimmedDue && !isValidCalendarDateStr(trimmedDue)) {
+    showToast('⚠ 到期日格式需為 YYYY-MM-DD 且必須是真實存在的日期');
+    return;
+  }
+
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const pmRef = quoteRef.collection('paymentMilestones').doc(paymentId);
+    const patch = {
+      title: newTitle.trim() || p.title,
+      dueDate: trimmedDue || null,
+      note: newNote,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    const newLog = {
+      id: genActivityId(), type: 'payment',
+      content: `付款資訊已更新：${patch.title}`,
+      createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
+    };
+    const batch = db.batch();
+    batch.update(pmRef, patch);
+    batch.update(quoteRef, { activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog) });
+    await batch.commit();
+
+    Object.assign(p, patch);
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast('✓ 已更新付款資訊');
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+// ── 因為 Payment 動作也會附加寫入 activityLogs，這裡統一重繪已存在的 Timeline（若 DOM 中存在的話）──
+function syncTimelineUI() {
+  const timelineEl = document.getElementById('timelineList');
+  if (timelineEl) timelineEl.innerHTML = renderTimelineList(currentData.activityLogs || []);
+}
+
+// ── 渲染：Payment Milestones 卡片（Project 未建立時完全不顯示）──
+function renderPaymentSection() {
+  if (!currentData.project) return '';
+
+  if (paymentPlanBuilder) return renderPaymentPlanBuilder();
+
+  if (!paymentMilestones.length) {
+    return `
+      <div class="card">
+        <div class="card-title">Payment Milestones</div>
+        <div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">尚未建立付款計畫。</div>
+        <button class="btn-save" onclick="openPaymentPlanBuilder()">建立付款計畫</button>
+      </div>`;
+  }
+
+  const summary = computePaymentSummary();
+  const todayStr = getLocalDateStr();
+  const sorted = [...paymentMilestones].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const nextDueText = summary.nextDue === 'DONE'
+    ? '已全部完成'
+    : summary.nextDue
+      ? `${escapeHtml(summary.nextDue.title)}（${summary.nextDue.dueDate}）`
+      : '尚未設定';
+
+  return `
+    <div class="card">
+      <div class="card-title">Payment Milestones</div>
+
+      <div class="info-grid" style="margin-bottom:14px">
+        <div class="info-box"><div class="info-label">Contract Amount</div><div class="info-value">NT$${summary.contractAmount.toLocaleString()}</div></div>
+        <div class="info-box"><div class="info-label">Paid</div><div class="info-value" style="color:var(--green)">NT$${summary.paid.toLocaleString()}</div></div>
+        <div class="info-box"><div class="info-label">Remaining</div><div class="info-value">NT$${summary.remaining.toLocaleString()}</div></div>
+        <div class="info-box"><div class="info-label">Overdue</div><div class="info-value" style="color:${summary.overdue > 0 ? 'var(--red)' : 'var(--ink)'}">NT$${summary.overdue.toLocaleString()}</div></div>
+        <div class="info-box" style="grid-column:1/-1"><div class="info-label">Next Due</div><div class="info-value" style="font-size:14px">${nextDueText}</div></div>
+      </div>
+
+      ${sorted.map(p => renderPaymentMilestoneRow(p, todayStr)).join('')}
+    </div>`;
+}
+
+function renderPaymentMilestoneRow(p, todayStr) {
+  const isOverdue = p.status === 'pending' && p.dueDate && p.dueDate < todayStr;
+  const statusLabel = p.status === 'paid' ? '已付款' : '待付款';
+  const statusColor = p.status === 'paid' ? 'var(--green)' : (isOverdue ? 'var(--red)' : 'var(--ink-60)');
+  return `
+    <div style="border:1.5px solid var(--ink-10);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:13px;font-weight:600;color:var(--ink)">${escapeHtml(p.title)}
+            <span class="dtag" style="margin-left:6px;color:${statusColor}">${statusLabel}</span>
+            ${isOverdue ? '<span class="dtag" style="background:#fef2f2;color:var(--red)">已逾期</span>' : ''}
+          </div>
+          <div style="font-size:11px;color:var(--ink-60);margin-top:3px">
+            ${p.percentage}%　NT$${(Number(p.amount) || 0).toLocaleString()}　到期日：${p.dueDate ? escapeHtml(p.dueDate) : '未設定'}
+          </div>
+          ${p.note ? `<div style="font-size:11px;color:var(--ink-60);margin-top:2px">備註：${escapeHtml(p.note)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${p.status === 'pending'
+            ? `<button class="btn-copy-link" onclick="markPaymentPaid('${p.id}')">標記已付款</button>`
+            : `<button class="btn-copy-link" onclick="markPaymentPending('${p.id}')">改回待付款</button>`}
+          <button class="btn-copy-link" onclick="editPaymentMilestone('${p.id}')">編輯</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── 渲染：建立付款計畫的草稿編輯畫面（純前端 Draft，未確認前不寫 Firestore）──
+function renderPaymentPlanBuilder() {
+  const b = paymentPlanBuilder;
+  const sum = b.items.reduce((s, i) => s + (Number(i.percentage) || 0), 0);
+  const err = validatePaymentPlanDraft();
+
+  const presetButtons = Object.keys(PAYMENT_PLAN_PRESETS).map(key => `
+    <button class="btn-copy-link" style="${b.planKey === key ? 'background:var(--ink);color:#fff' : ''}" onclick="selectPaymentPreset('${key}')">${PAYMENT_PLAN_PRESETS[key].label}</button>
+  `).join('');
+
+  const itemRows = b.planKey ? b.items.map((item, idx) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+      <input class="field-input" style="flex:1;min-width:120px" value="${escapeHtml(item.title)}" onchange="customSetItemField(${idx},'title',this.value)">
+      <input type="number" min="0" max="100" step="0.01" class="field-input" style="width:80px" value="${item.percentage}"
+             onchange="customSetItemField(${idx},'percentage',parseFloat(this.value)||0)">
+      <span style="font-size:11px;color:var(--ink-60)">%</span>
+      ${b.planKey === 'custom' ? `<button class="btn-copy-link" style="color:var(--red)" onclick="customRemoveItem(${idx})">刪除</button>` : ''}
+    </div>
+  `).join('') : '';
+
+  return `
+    <div class="card" style="border:2px solid var(--ink)">
+      <div class="card-title">建立付款計畫</div>
+      <div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">請先選擇付款方案：</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${presetButtons}</div>
+      ${b.planKey ? `
+        <div style="margin-bottom:10px">${itemRows}</div>
+        ${b.planKey === 'custom' ? `<button class="btn-copy-link" onclick="customAddItem()">+ 新增付款節點</button>` : ''}
+        <div style="font-size:12px;color:${Math.abs(sum - 100) < 0.001 ? 'var(--green)' : 'var(--red)'};margin-top:10px">目前加總：${sum}%</div>
+        ${err ? `<div style="font-size:12px;color:var(--red);margin-top:6px">⚠ ${err}</div>` : ''}
+      ` : ''}
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn-copy-link" onclick="closePaymentPlanBuilder()">取消</button>
+        ${b.planKey ? `<button class="btn-save" style="padding:9px 18px" onclick="createPaymentPlan()">建立付款計畫</button>` : ''}
+      </div>
+    </div>`;
 }
 
 // ══════════════════════════════════════════════════
