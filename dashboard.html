@@ -385,6 +385,19 @@ async function loadDashboard() {
   try {
     const snap = await db.collection('quotes').orderBy('createdAt', 'desc').get();
     const all  = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // 方案 A：對每筆案件平行讀取 paymentMilestones subcollection，暫存在 _paymentMilestones（純前端用途，不寫回 Firestore）。
+    // 單一案件查詢失敗不應讓整個 Dashboard 白屏，fallback 成空陣列，讓其他案件正常顯示。
+    await Promise.all(all.map(async q => {
+      try {
+        const pmSnap = await db.collection('quotes').doc(q.id).collection('paymentMilestones').get();
+        q._paymentMilestones = pmSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (err) {
+        console.error(`讀取案件 ${q.id} 的 paymentMilestones 失敗：`, err);
+        q._paymentMilestones = [];
+      }
+    }));
+
     render(all);
   } catch (err) {
     document.getElementById('wrap').innerHTML =
@@ -441,6 +454,57 @@ function wonAmount(q) {
 }
 
 // ══════════════════════════════════════════════════
+//  PAYMENT MILESTONE HELPERS（v1 Dashboard 整合，方案 A）
+//  全部算法與 quote-detail.html 現有 Payment Milestone 邏輯一致；
+//  不修改 wonAmount() / wonMs() / getMonthBounds() / tsToMs() / isExpiredTs()。
+// ══════════════════════════════════════════════════
+
+// 共用 local-date helper：用瀏覽器本地時區產生 YYYY-MM-DD，避免 UTC 判斷錯一天（與 quote-detail.html 一致）
+function getLocalDateStr(d) {
+  const date = d instanceof Date ? d : new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function hasPaymentMilestones(q) {
+  return Array.isArray(q._paymentMilestones) && q._paymentMilestones.length > 0;
+}
+function paymentContractAmount(q) {
+  return Number((q.project && q.project.contractAmount) || 0);
+}
+function paymentPaidAmount(q) {
+  return (q._paymentMilestones || [])
+    .filter(p => p.status === 'paid')
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+}
+function paymentRemainingAmount(q) {
+  return paymentContractAmount(q) - paymentPaidAmount(q);
+}
+// Σ status==='pending' 且 dueDate < 今天 的 amount（已付款的過期項目不算，見規則 十四-H）
+function paymentOverdueAmount(q) {
+  const todayStr = getLocalDateStr();
+  return (q._paymentMilestones || [])
+    .filter(p => p.status === 'pending' && p.dueDate && p.dueDate < todayStr)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+}
+// 尚未 paid 且有 dueDate 中日期最早的一筆
+function paymentNextDue(q) {
+  const list = (q._paymentMilestones || []).filter(p => p.status !== 'paid' && p.dueDate);
+  if (!list.length) return null;
+  return list.sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0))[0];
+}
+// Σ status==='paid' 且 paidAt 落在本月 的 amount
+function paymentRevenueThisMonth(q) {
+  const { startMs, endMs } = getMonthBounds();
+  return (q._paymentMilestones || [])
+    .filter(p => p.status === 'paid' && p.paidAt)
+    .filter(p => { const ms = tsToMs(p.paidAt); return ms >= startMs && ms <= endMs; })
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+}
+
+// ══════════════════════════════════════════════════
 //  CALCULATIONS
 // ══════════════════════════════════════════════════
 function getMonthBounds() {
@@ -448,6 +512,11 @@ function getMonthBounds() {
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
   return { startMs: start.getTime(), endMs: end.getTime() };
+}
+
+// 待收款金額：有 Payment Milestone 用 Remaining，沒有則沿用 wonAmount()（既有邏輯，未改動）
+function pendingAmountFor(q) {
+  return hasPaymentMilestones(q) ? paymentRemainingAmount(q) : wonAmount(q);
 }
 
 function calcStats(all) {
@@ -469,16 +538,22 @@ function calcStats(all) {
   let pendingQuote = 0;                 // 待處理報價數（sent）
   // ── 報價狀態摘要 ──────────────────────────────
   let qDraft = 0, qSent = 0, qAccepted = 0, qRejected = 0, qNone = 0;
-  // ── 逾期報價 ──────────────────────────────────
+  // ── 逾期報價（quote 本身過期，與付款逾期是不同概念）──
   const overdueItems = [];
   // ── 待收款列表 ────────────────────────────────
   const pendingPayItems = [];
+  // ── 付款逾期／最近到期款（僅來自有 Payment Milestone 的案件，milestone 層級的攤平清單）──
+  let paymentOverdueTotal = 0;
+  const paymentOverdueItems = [];
+  const paymentUpcomingItems = [];
+  const todayStr = getLocalDateStr();
 
   all.forEach(q => {
     const status  = q.status || 'new';
     const qStatus = q.quotationStatus || '';
     const amount  = wonAmount(q);
     const createdMs = tsToMs(q.createdAt);
+    const hasPM = hasPaymentMilestones(q);
 
     // 整體計數
     if (status === 'new')        newCount++;
@@ -489,7 +564,16 @@ function calcStats(all) {
     if (status === 'new' || status === 'contacted') needContact++;
     if (qStatus === 'sent')  waitingConfirm++;
     if (status === 'developing') inDev++;
-    if (qStatus === 'accepted' && q.paymentStatus !== 'paid') {
+
+    // 待收款：有 Payment Milestone 用 Remaining（>0 才算），沒有則沿用既有 accepted && paymentStatus!=='paid' 判斷
+    if (hasPM) {
+      const remaining = paymentRemainingAmount(q);
+      if (remaining > 0) {
+        waitingPayment++;
+        pendingPayment += remaining; pendingPaymentCount++;
+        pendingPayItems.push(q);
+      }
+    } else if (qStatus === 'accepted' && q.paymentStatus !== 'paid') {
       waitingPayment++;
       if (amount > 0) { pendingPayment += amount; pendingPaymentCount++; }
       pendingPayItems.push(q);
@@ -501,13 +585,18 @@ function calcStats(all) {
     // 成交判定
     const isWon = status === 'done' || qStatus === 'accepted';
 
-    // 全部成交（平均客單）
+    // 全部成交（平均客單）—— 維持既有邏輯，不因 Payment Milestone 改變合約總額的認列方式
     if (isWon && amount > 0) { totalWon += amount; totalWonCount++; }
 
-    // 本月成交（日期用 wonMs）
-    const wMs = wonMs(q);
-    if (isWon && amount > 0 && wMs >= startMs && wMs <= endMs) {
-      kpiRevenue += amount; kpiWon++;
+    // 本月營收：有 Payment Milestone 用「本月實際已付款金額」；沒有則沿用既有「本月成交金額（wonMs）」
+    if (hasPM) {
+      const paidThisMonth = paymentRevenueThisMonth(q);
+      if (paidThisMonth > 0) { kpiRevenue += paidThisMonth; kpiWon++; }
+    } else {
+      const wMs = wonMs(q);
+      if (isWon && amount > 0 && wMs >= startMs && wMs <= endMs) {
+        kpiRevenue += amount; kpiWon++;
+      }
     }
 
     // 有報價的案件（成交率分母）
@@ -524,9 +613,22 @@ function calcStats(all) {
     else if (qStatus === 'accepted')  qAccepted++;
     else if (qStatus === 'rejected')  qRejected++;
 
-    // 逾期報價：validUntil 已過 & status 是 sent 或 draft
+    // 逾期報價：validUntil 已過 & status 是 sent 或 draft（既有邏輯，未改動）
     if (isExpiredTs(q.validUntil) && (qStatus === 'sent' || qStatus === 'draft')) {
       overdueItems.push(q);
+    }
+
+    // 付款逾期／最近到期款：攤平到 milestone 層級（同一案件多筆逾期就各自列出，最簡單也最不會漏資訊）
+    if (hasPM) {
+      (q._paymentMilestones || []).forEach(p => {
+        if (p.status === 'pending' && p.dueDate && p.dueDate < todayStr) {
+          paymentOverdueTotal += Number(p.amount) || 0;
+          paymentOverdueItems.push({ q, milestone: p });
+        }
+        if (p.status !== 'paid' && p.dueDate) {
+          paymentUpcomingItems.push({ q, milestone: p });
+        }
+      });
     }
   });
 
@@ -541,7 +643,10 @@ function calcStats(all) {
     pendingPayment, pendingPaymentCount, pendingQuote,
     qDraft, qSent, qAccepted, qRejected, qNone,
     overdueItems:    overdueItems.sort((a,b) => tsToMs(a.validUntil) - tsToMs(b.validUntil)).slice(0,5),
-    pendingPayItems: pendingPayItems.sort((a,b) => wonAmount(b) - wonAmount(a)).slice(0,5),
+    pendingPayItems: pendingPayItems.sort((a,b) => pendingAmountFor(b) - pendingAmountFor(a)).slice(0,5),
+    paymentOverdueTotal,
+    paymentOverdueItems:  paymentOverdueItems.sort((a,b) => a.milestone.dueDate < b.milestone.dueDate ? -1 : 1).slice(0,5),
+    paymentUpcomingItems: paymentUpcomingItems.sort((a,b) => a.milestone.dueDate < b.milestone.dueDate ? -1 : 1).slice(0,5),
   };
 }
 
@@ -588,9 +693,21 @@ function render(all) {
       </a>`;
   }
 
-  // ── 待收款 row（顯示金額） ──────────────────────
+  // ── 待收款 row（有 Payment Milestone 顯示已收/剩餘/逾期；沒有則維持原本只顯示金額）──
   function pendingPayRow(q) {
-    const amount = wonAmount(q);
+    const hasPM = hasPaymentMilestones(q);
+    const amountBlock = hasPM
+      ? (() => {
+          const contract  = paymentContractAmount(q);
+          const paid      = paymentPaidAmount(q);
+          const remaining = paymentRemainingAmount(q);
+          const overdue   = paymentOverdueAmount(q);
+          return `
+            <div class="qr-amount">已收 ${fmtMoney(paid)} / ${fmtMoney(contract)}</div>
+            <div style="font-size:11px;color:var(--ink-60)">剩餘 ${fmtMoney(remaining)}</div>
+            ${overdue > 0 ? `<div style="font-size:11px;color:var(--red);font-weight:700">逾期 ${fmtMoney(overdue)}</div>` : ''}`;
+        })()
+      : `<div class="qr-amount">${wonAmount(q) > 0 ? fmtMoney(wonAmount(q)) : '—'}</div>`;
     return `
       <a class="qr-link" href="quote-detail.html?id=${encodeURIComponent(q.id)}">
         <div class="quote-row">
@@ -599,8 +716,42 @@ function render(all) {
             <div class="qr-name">${escapeHtml(q.name || '—')}</div>
             <div class="qr-type">${escapeHtml(q.projectType || '—')}</div>
           </div>
-          <div class="qr-amount">${amount > 0 ? fmtMoney(amount) : '—'}</div>
+          <div>${amountBlock}</div>
           <div class="qr-date">${fmtDate(q.createdAt)}</div>
+        </div>
+      </a>`;
+  }
+
+  // ── 付款逾期 row（milestone 層級）──────────────
+  function paymentOverdueRow({ q, milestone }) {
+    return `
+      <a class="qr-link" href="quote-detail.html?id=${encodeURIComponent(q.id)}">
+        <div class="quote-row">
+          <div class="qr-id">${escapeHtml(q.quoteId || q.id)}</div>
+          <div>
+            <div class="qr-name">${escapeHtml(q.name || '—')}</div>
+            <div class="qr-type">${escapeHtml(milestone.title || '—')}</div>
+          </div>
+          <div class="qr-amount" style="color:var(--red)">${fmtMoney(milestone.amount)}</div>
+          <div class="qr-overdue">到期 ${escapeHtml(milestone.dueDate || '—')}</div>
+        </div>
+      </a>`;
+  }
+
+  // ── 最近到期款 row（milestone 層級）─────────────
+  function paymentUpcomingRow({ q, milestone }) {
+    const todayStr = getLocalDateStr();
+    const isOverdue = milestone.status === 'pending' && milestone.dueDate && milestone.dueDate < todayStr;
+    return `
+      <a class="qr-link" href="quote-detail.html?id=${encodeURIComponent(q.id)}">
+        <div class="quote-row">
+          <div class="qr-id">${escapeHtml(q.quoteId || q.id)}</div>
+          <div>
+            <div class="qr-name">${escapeHtml(q.name || '—')}</div>
+            <div class="qr-type">${escapeHtml(milestone.title || '—')}</div>
+          </div>
+          <div class="qr-amount">${fmtMoney(milestone.amount)}</div>
+          <div class="qr-date" style="${isOverdue ? 'color:var(--red);font-weight:700' : ''}">${escapeHtml(milestone.dueDate || '—')}${isOverdue ? '（已逾期）' : ''}</div>
         </div>
       </a>`;
   }
@@ -656,6 +807,7 @@ function render(all) {
         </div>
         <div class="kpi-value money">${s.kpiRevenue > 0 ? fmtMoney(s.kpiRevenue) : '—'}</div>
         <div class="kpi-sub">${s.kpiWon} 筆成交 ・ quotationUpdatedAt</div>
+        <div style="font-size:10px;color:var(--ink-30);margin-top:2px">付款里程碑案件依實際收款日計算；舊案件沿用成交日。</div>
       </div>
 
       <div class="kpi-card">
@@ -754,7 +906,7 @@ function render(all) {
 
         <div class="card">
           <div class="card-title">
-            逾期報價
+            報價逾期
             ${s.overdueItems.length > 0 ? `<span style="font-size:10px;color:var(--red);font-weight:700;text-transform:none;letter-spacing:0">⚠ ${s.overdueItems.length} 件需處理</span>` : ''}
           </div>
           ${s.overdueItems.length === 0
@@ -778,6 +930,31 @@ function render(all) {
         ${s.pendingPaymentCount > 5
           ? `<div style="font-size:11px;color:var(--ink-30);margin-top:10px;text-align:center">顯示金額最高的 5 筆，共 ${s.pendingPaymentCount} 筆</div>`
           : ''}
+      </div>
+
+    </div>
+
+    <!-- ③.5 付款追蹤（僅來自有 Payment Milestone 的案件）-->
+    <div class="section-title">付款追蹤</div>
+    <div class="two-col" style="gap:16px">
+
+      <div class="card">
+        <div class="card-title">
+          付款逾期
+          ${s.paymentOverdueTotal > 0 ? `<span style="font-size:11px;color:var(--red);font-weight:700;text-transform:none;letter-spacing:0">${fmtMoney(s.paymentOverdueTotal)}</span>` : ''}
+        </div>
+        ${s.paymentOverdueItems.length === 0
+          ? '<div class="empty-row">✓ 無付款逾期</div>'
+          : s.paymentOverdueItems.map(item => paymentOverdueRow(item)).join('')
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-title">最近到期款</div>
+        ${s.paymentUpcomingItems.length === 0
+          ? '<div class="empty-row">✓ 目前沒有待追蹤的到期款</div>'
+          : s.paymentUpcomingItems.map(item => paymentUpcomingRow(item)).join('')
+        }
       </div>
 
     </div>
