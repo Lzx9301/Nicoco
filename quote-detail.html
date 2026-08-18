@@ -301,6 +301,7 @@ body {
 .timeline-dot.type-development  { background: #ea580c; }
 .timeline-dot.type-note         { background: var(--ink-30); }
 .timeline-dot.type-change_request { background: var(--purple); }
+.timeline-dot.type-agreement { background: #4f46e5; }
 .timeline-line { flex: 1; width: 1px; background: var(--ink-10); margin-top: 4px; }
 
 .timeline-body { flex: 1; min-width: 0; }
@@ -316,6 +317,7 @@ body {
 .timeline-type-tag.type-development  { background: #fff7ed; color: #ea580c; }
 .timeline-type-tag.type-note         { background: var(--ink-10); color: var(--ink-60); }
 .timeline-type-tag.type-change_request { background: var(--purple-light); color: var(--purple); }
+.timeline-type-tag.type-agreement { background: #eef2ff; color: #4f46e5; }
 .timeline-time { font-size: 11px; color: var(--ink-30); }
 .timeline-by   { font-size: 11px; color: var(--ink-30); }
 .timeline-content { font-size: 13px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; }
@@ -385,8 +387,9 @@ const ACTIVITY_TYPE_LABELS = {
   development: '開發進度',
   note:        '一般備註',
   change_request: '變更需求',
+  agreement:   '合約',
 };
-const ACTIVITY_TYPE_ORDER = ['contact','meeting','quote','payment','development','note','change_request'];
+const ACTIVITY_TYPE_ORDER = ['contact','meeting','quote','payment','development','note','change_request','agreement'];
 
 // ══════════════════════════════════════════════════
 //  PROJECT SCOPE & PROGRESS TRACKING v1 — CONFIG
@@ -727,6 +730,12 @@ let paymentPlanBuilder = null;
 let changeRequests = [];
 // 建立/編輯 CR 時的前端草稿；null=未開啟；{ id:null=新建/否則為編輯中的CR id, title, description, requestedBy, requestedAt, items:[...] }
 let crBuilder = null;
+// Agreement Generator v1：quotes/{quoteId}/agreements subcollection 的本地快取（獨立於 Project 是否存在）
+let agreements = [];
+// 建立/編輯 Agreement 時的前端草稿；null=未開啟
+let agreementBuilder = null;
+// settings/studio 文件的本地快取（承攬方資料來源），同一頁面內只需讀取一次
+let studioSettingsCache = null;
 // Existing Project Initialization v1：純前端 Draft State，只在「確認套用」時才寫入 Firestore
 let initPanel = { open:false, step:'edit', draft:{} };
 // Phase / Scope Group 展開收合狀態，僅為前端 UI 狀態，不寫入 Firestore、不跨頁面持久化
@@ -765,6 +774,7 @@ async function loadDetail() {
     currentData = docSnap.data();
     renderDetail();
     renderProjectSection();
+    renderAgreementSection();
   } catch (err) {
     console.error(err);
     wrap.innerHTML = `<div class="error-state">⚠ 讀取失敗：${escapeHtml(err.message || String(err))}</div>`;
@@ -875,6 +885,9 @@ function renderDetail() {
 
     <!-- ── 專案管理 Project Scope & Progress（Backward compatible：舊報價無 project 欄位時顯示建立按鈕）── -->
     <div id="projectSection"></div>
+
+    <!-- ── Agreement／合約（獨立於 Project 是否建立，任何案件都可以直接建立合約）── -->
+    <div id="agreementSection"></div>
 
     <!-- ── Phase 4.5：案件紀錄 Timeline ── -->
     <div class="card">
@@ -3135,6 +3148,548 @@ function renderCrBuilder() {
       <div style="display:flex;gap:8px;margin-top:14px">
         <button class="btn-copy-link" onclick="closeCrBuilder()">取消</button>
         <button class="btn-save" style="padding:9px 18px" onclick="saveCrDraft()">${b.id ? '儲存草稿' : '建立草稿'}</button>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  AGREEMENT GENERATOR v1
+//  quotes/{quoteId}/agreements/{agreementId}
+//  獨立於 Project 是否建立；所有 snapshot（Scope/付款計畫/合約金額）皆為「建立當下的純資料複製」，
+//  不是即時引用；simple 一旦進入 signed/active/completed，內容永久鎖定，不可再由一般編輯函式修改。
+//  本輪不做：PDF、Email、電子簽名、客戶端頁面、自動建立 Project、自動建立 Payment Milestones、版本控制、AI 產生。
+// ══════════════════════════════════════════════════
+
+const AGREEMENT_STATUS_LABELS = { draft:'草稿', ready:'已備妥', signed:'已簽署', active:'執行中', completed:'已完成', cancelled:'已取消' };
+const AGREEMENT_STATUS_COLOR  = { draft:'var(--ink-30)', ready:'var(--amber)', signed:'var(--green)', active:'#0891b2', completed:'var(--green)', cancelled:'var(--ink-30)' };
+const AGREEMENT_STATUS_BG     = { draft:'var(--ink-10)', ready:'var(--amber-light)', signed:'var(--green-light)', active:'#ecfeff', completed:'var(--green-light)', cancelled:'var(--ink-10)' };
+// 進入這些狀態後，合約內容視為歷史定案資料，一律不可再編輯
+const AGREEMENT_LOCKED_STATUSES = ['signed', 'active', 'completed'];
+
+const AGREEMENT_DEFAULT_TEXT = {
+  paymentTermsText: '依本合約所列付款計畫分期支付，正式開發原則於收到約定之啟動款後開始進行。',
+  changeRequestPolicy: '合約簽署後，如客戶提出超出原合約範圍之新增功能、頁面或重大設計變更，需另行評估工時與費用，經雙方確認後執行（Change Request）。原合約範圍內之細節調整依約定修改額度處理。',
+  acceptancePolicy: '客戶收到驗收通知後，原則上於 14 天內確認合約範圍內功能，並提出必要之 Bug 或範圍內修改事項；逾期未回覆者，專案將進入待交付狀態。',
+  warrantyPolicy: '專案交付後提供 30 天原功能 Bug 免費保固；保固期後如需維護服務，可另行洽談維護方案。',
+  thirdPartyFeeNotice: '網域、主機、資料庫、金流手續費、Email、簡訊及其他第三方服務所產生之費用，由客戶依實際使用方案自行負擔，不包含於本合約報價。',
+  ipDeliverablesPolicy: '專案完成並收訖全部合約款項後，成果交付予客戶；著作財產權歸屬依雙方另行約定，若無約定則以完成交付並付清全部款項為權利移轉之時點。',
+  terminationPolicy: '如任一方欲終止合作，應提前以書面通知對方；已完成之工作項目依進度比例計費，已收款項不予退還已完成部分之對應金額。',
+};
+
+// ── settings/studio 快取讀取（承攬方資料來源，同一頁面只讀一次）──
+async function getStudioSettings() {
+  if (studioSettingsCache) return studioSettingsCache;
+  try {
+    const snap = await db.collection('settings').doc('studio').get();
+    studioSettingsCache = snap.exists ? snap.data() : {};
+  } catch (err) {
+    console.error('讀取 settings/studio 失敗：', err);
+    studioSettingsCache = {};
+  }
+  return studioSettingsCache;
+}
+
+// ── Agreement Number：AGR-{quoteId}-{seq}，quoteId 本身已全域唯一，seq 只需在同一 quote 底下遞增，
+//    天生跨案件不重號，不需要 global counter / Transaction ──
+function nextAgreementNumber() {
+  const prefix = `AGR-${currentId}-`;
+  let maxSeq = 0;
+  agreements.forEach(a => {
+    if (a.agreementNumber && a.agreementNumber.startsWith(prefix)) {
+      const m = /-(\d+)$/.exec(a.agreementNumber);
+      if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+    }
+  });
+  return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+}
+
+// ── 合約總額 fallback：project.contractAmount → quotationTotal → officialPrice → 0 ──
+function resolveAgreementContractAmount() {
+  const proj = currentData.project;
+  if (proj && Number(proj.contractAmount) > 0) return { amount: Number(proj.contractAmount), source: 'project.contractAmount' };
+  if (Number(currentData.quotationTotal) > 0) return { amount: Number(currentData.quotationTotal), source: 'quotationTotal' };
+  if (Number(currentData.officialPrice) > 0) return { amount: Number(currentData.officialPrice), source: 'officialPrice' };
+  return { amount: 0, source: 'none' };
+}
+const AGREEMENT_SOURCE_LABELS = {
+  'project.contractAmount': '沿用 Payment Milestone 合約金額快照',
+  'quotationTotal': '沿用正式報價金額',
+  'officialPrice': '沿用議定金額',
+  'manual': '管理者手動輸入',
+  'none': '尚未設定',
+};
+
+// ── Scope snapshot 預設值：projectScopes → quotationItems → includedItems/selectedItems → 空
+//    三種情況都完全可在 Builder 內自由編輯，不因來源不同而鎖死 ──
+function buildScopeSnapshotDefault() {
+  if (projectScopes && projectScopes.length) {
+    return projectScopes.map(s => ({ name: s.name || '', description: s.description || '', source: s.source || 'initial_scope', crId: s.crId || null }));
+  }
+  if (currentData.quotationItems && currentData.quotationItems.length) {
+    return currentData.quotationItems.map(i => ({ name: i.name || '', description: i.description || '', source: 'quotation_item', crId: null }));
+  }
+  const estimateNames = [...(currentData.includedItems || []), ...(currentData.selectedItems || [])];
+  if (estimateNames.length) {
+    return estimateNames.map(name => ({ name, description: '', source: 'quote_estimate', crId: null }));
+  }
+  return [];
+}
+
+// ── Payment Plan snapshot 預設值：有既有 Payment Milestones 就預填（不複製 status/paidAt，
+//    Agreement 記錄的是「當初約定的付款計畫」而非「現在付到哪」）；沒有則給一筆可編輯的預設列 ──
+function buildPaymentPlanSnapshotDefault(contractAmountSnapshot) {
+  if (paymentMilestones && paymentMilestones.length) {
+    return [...paymentMilestones].sort((a, b) => (a.order || 0) - (b.order || 0)).map((p, idx) => ({
+      order: idx, title: p.title || '', percentage: Number(p.percentage) || 0,
+      amount: Number(p.amount) || 0, dueDate: p.dueDate || null, note: p.note || '',
+    }));
+  }
+  return [{ order: 0, title: '全額付款', percentage: 100, amount: contractAmountSnapshot, dueDate: null, note: '' }];
+}
+
+// 每次百分比或合約總額變動後重新計算金額：前 N-1 筆四捨五入，最後一筆吸收 rounding difference，
+// 沿用既有 Payment Milestone 的 rounding 規則（Σ amount 永遠精確等於合約總額）
+function agrRecomputePaymentAmounts() {
+  if (!agreementBuilder) return;
+  const items = agreementBuilder.paymentPlanSnapshot;
+  const contractAmount = Number(agreementBuilder.contractAmountSnapshot) || 0;
+  let runningSum = 0;
+  items.forEach((item, idx) => {
+    if (idx === items.length - 1) {
+      item.amount = contractAmount - runningSum;
+    } else {
+      item.amount = Math.round(contractAmount * (Number(item.percentage) || 0) / 100);
+      runningSum += item.amount;
+    }
+  });
+}
+
+// ── Draft Builder：開啟 ──
+async function openAgreementBuilder(agreementId) {
+  if (agreementId) {
+    const existing = agreements.find(a => a.id === agreementId);
+    if (!existing) return;
+    if (existing.status !== 'draft') { showToast('⚠ 此合約已非草稿狀態，內容已鎖定，無法編輯'); return; }
+    agreementBuilder = {
+      id: existing.id,
+      client: { ...existing.client },
+      provider: { ...existing.provider },
+      projectName: existing.projectName || '',
+      scopeSnapshot: (existing.scopeSnapshot || []).map(s => ({ ...s })),
+      contractAmountSnapshot: Number(existing.contractAmountSnapshot) || 0,
+      contractAmountSource: existing.contractAmountSource || 'manual',
+      paymentPlanSnapshot: (existing.paymentPlanSnapshot || []).map(p => ({ ...p })),
+      timeline: { ...(existing.timeline || {}) },
+      paymentTermsText: existing.paymentTermsText || '',
+      changeRequestPolicy: existing.changeRequestPolicy || '',
+      acceptancePolicy: existing.acceptancePolicy || '',
+      warrantyPolicy: existing.warrantyPolicy || '',
+      thirdPartyFeeNotice: existing.thirdPartyFeeNotice || '',
+      ipDeliverablesPolicy: existing.ipDeliverablesPolicy || '',
+      terminationPolicy: existing.terminationPolicy || '',
+      note: existing.note || '',
+    };
+  } else {
+    const provider = await getStudioSettings();
+    const { amount, source } = resolveAgreementContractAmount();
+    agreementBuilder = {
+      id: null,
+      client: {
+        name: currentData.name || '', company: currentData.company || '', email: currentData.email || '', phone: currentData.phone || '',
+        taxId: '', address: '', representative: '',
+      },
+      provider: {
+        studioName: provider.studioName || '', taxId: provider.taxId || '', address: provider.address || '',
+        contactEmail: provider.contactEmail || '', phone: provider.phone || '', bankInfo: provider.bankInfo || '',
+      },
+      projectName: currentData.projectType || '',
+      scopeSnapshot: buildScopeSnapshotDefault(),
+      contractAmountSnapshot: amount,
+      contractAmountSource: source,
+      paymentPlanSnapshot: buildPaymentPlanSnapshotDefault(amount),
+      timeline: { estimatedStartDate: null, estimatedDurationDays: null, estimatedCompletionDate: null },
+      paymentTermsText: AGREEMENT_DEFAULT_TEXT.paymentTermsText,
+      changeRequestPolicy: AGREEMENT_DEFAULT_TEXT.changeRequestPolicy,
+      acceptancePolicy: AGREEMENT_DEFAULT_TEXT.acceptancePolicy,
+      warrantyPolicy: AGREEMENT_DEFAULT_TEXT.warrantyPolicy,
+      thirdPartyFeeNotice: AGREEMENT_DEFAULT_TEXT.thirdPartyFeeNotice,
+      ipDeliverablesPolicy: AGREEMENT_DEFAULT_TEXT.ipDeliverablesPolicy,
+      terminationPolicy: AGREEMENT_DEFAULT_TEXT.terminationPolicy,
+      note: '',
+    };
+  }
+  renderAgreementUI();
+}
+function closeAgreementBuilder() {
+  agreementBuilder = null;
+  renderAgreementUI();
+}
+
+// ── Draft Builder：欄位編輯（純前端，未按「建立/儲存草稿」前完全不寫 Firestore）──
+function agrSetField(path, value) {
+  if (!agreementBuilder) return;
+  const parts = path.split('.');
+  let obj = agreementBuilder;
+  for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+  obj[parts[parts.length - 1]] = value;
+  renderAgreementUI();
+}
+function agrSetContractAmount(value) {
+  if (!agreementBuilder) return;
+  agreementBuilder.contractAmountSnapshot = Number.isFinite(Number(value)) ? Number(value) : 0;
+  agreementBuilder.contractAmountSource = 'manual';
+  agrRecomputePaymentAmounts();
+  renderAgreementUI();
+}
+function agrAddScopeRow() {
+  if (!agreementBuilder) return;
+  agreementBuilder.scopeSnapshot.push({ name: '', description: '', source: 'manual', crId: null });
+  renderAgreementUI();
+}
+function agrRemoveScopeRow(idx) {
+  if (!agreementBuilder) return;
+  agreementBuilder.scopeSnapshot.splice(idx, 1);
+  renderAgreementUI();
+}
+function agrSetScopeField(idx, field, value) {
+  if (!agreementBuilder || !agreementBuilder.scopeSnapshot[idx]) return;
+  agreementBuilder.scopeSnapshot[idx][field] = value;
+  renderAgreementUI();
+}
+function agrAddPaymentRow() {
+  if (!agreementBuilder) return;
+  agreementBuilder.paymentPlanSnapshot.push({ order: agreementBuilder.paymentPlanSnapshot.length, title: '', percentage: 0, amount: 0, dueDate: null, note: '' });
+  agrRecomputePaymentAmounts();
+  renderAgreementUI();
+}
+function agrRemovePaymentRow(idx) {
+  if (!agreementBuilder) return;
+  if (agreementBuilder.paymentPlanSnapshot.length <= 1) { showToast('至少需要保留 1 筆付款節點'); return; }
+  agreementBuilder.paymentPlanSnapshot.splice(idx, 1);
+  agrRecomputePaymentAmounts();
+  renderAgreementUI();
+}
+function agrSetPaymentField(idx, field, value) {
+  if (!agreementBuilder || !agreementBuilder.paymentPlanSnapshot[idx]) return;
+  agreementBuilder.paymentPlanSnapshot[idx][field] = value;
+  if (field === 'percentage') agrRecomputePaymentAmounts();
+  renderAgreementUI();
+}
+
+function validateAgreementBuilder() {
+  if (!agreementBuilder) return '尚未開始建立';
+  if (!agreementBuilder.client.name && !agreementBuilder.client.company) return '客戶名稱或公司名稱至少填一項';
+  if (!agreementBuilder.projectName || !agreementBuilder.projectName.trim()) return '專案名稱不可空白';
+  if (!Number.isFinite(Number(agreementBuilder.contractAmountSnapshot)) || Number(agreementBuilder.contractAmountSnapshot) <= 0) return '合約總額必須是大於 0 的有效數字';
+  if (!agreementBuilder.paymentPlanSnapshot.length) return '至少需要 1 筆付款節點';
+  for (const p of agreementBuilder.paymentPlanSnapshot) {
+    if (!p.title || !p.title.trim()) return '每筆付款節點都需要名稱';
+    if (!Number.isFinite(Number(p.percentage)) || Number(p.percentage) <= 0) return '每筆付款比例必須大於 0';
+  }
+  const sumPct = agreementBuilder.paymentPlanSnapshot.reduce((s, p) => s + (Number(p.percentage) || 0), 0);
+  if (Math.abs(sumPct - 100) > 0.001) return `付款比例加總必須為 100%（目前為 ${sumPct}%）`;
+  const sumAmt = agreementBuilder.paymentPlanSnapshot.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  if (sumAmt !== Number(agreementBuilder.contractAmountSnapshot)) return '付款金額加總與合約總額不符，請重新確認比例';
+  return null;
+}
+
+// ── 建立新 Agreement 或儲存既有 draft 的編輯 ──
+async function saveAgreementDraft() {
+  const validationErr = validateAgreementBuilder();
+  if (validationErr) { showToast(`⚠ ${validationErr}`); return; }
+
+  const b = agreementBuilder;
+  const cleanScope = b.scopeSnapshot.map(s => ({ name: (s.name || '').trim(), description: s.description || '', source: s.source || 'manual', crId: s.crId || null })).filter(s => s.name);
+  const cleanPayment = b.paymentPlanSnapshot.map((p, idx) => ({ order: idx, title: (p.title || '').trim(), percentage: Number(p.percentage) || 0, amount: Number(p.amount) || 0, dueDate: p.dueDate || null, note: p.note || '' }));
+  const commonPayload = {
+    client: b.client, provider: b.provider, projectName: b.projectName.trim(),
+    scopeSnapshot: cleanScope,
+    contractAmountSnapshot: Number(b.contractAmountSnapshot), contractAmountSource: b.contractAmountSource,
+    paymentPlanSnapshot: cleanPayment, timeline: b.timeline,
+    paymentTermsText: b.paymentTermsText, changeRequestPolicy: b.changeRequestPolicy,
+    acceptancePolicy: b.acceptancePolicy, warrantyPolicy: b.warrantyPolicy,
+    thirdPartyFeeNotice: b.thirdPartyFeeNotice, ipDeliverablesPolicy: b.ipDeliverablesPolicy,
+    terminationPolicy: b.terminationPolicy, note: b.note,
+  };
+
+  try {
+    const agrColl = db.collection('quotes').doc(currentId).collection('agreements');
+
+    if (b.id) {
+      const existing = agreements.find(a => a.id === b.id);
+      if (!existing || existing.status !== 'draft') {
+        showToast('⚠ 此合約已不是草稿狀態，無法編輯');
+        agreementBuilder = null; renderAgreementUI(); return;
+      }
+      const patch = { ...commonPayload, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+      await agrColl.doc(b.id).update(patch);
+      Object.assign(existing, patch);
+      showToast(`✓ 已更新 ${existing.agreementNumber}`);
+    } else {
+      const agreementNumber = nextAgreementNumber();
+      const ref = agrColl.doc();
+      const data = {
+        agreementNumber, quoteId: currentId, status: 'draft',
+        ...commonPayload,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        signedAt: null,
+      };
+      const newLog = {
+        id: genActivityId(), type: 'agreement',
+        content: `建立合約草稿 ${agreementNumber}：${data.projectName}，合約金額 NT$${data.contractAmountSnapshot.toLocaleString()}`,
+        createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
+      };
+      const batch = db.batch();
+      batch.set(ref, data);
+      batch.update(db.collection('quotes').doc(currentId), { activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog) });
+      await batch.commit();
+
+      agreements.push({ id: ref.id, ...data });
+      if (!currentData.activityLogs) currentData.activityLogs = [];
+      currentData.activityLogs.push(newLog);
+      showToast(`✓ 已建立 ${agreementNumber}`);
+      syncTimelineUI();
+    }
+    agreementBuilder = null;
+    renderAgreementUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 儲存失敗：${err.message || err}`);
+  }
+}
+
+// ── 狀態轉換：一般 helper（單次 batch：Agreement 狀態 + Activity Log）──
+async function agrUpdateStatus(agr, newStatus, extra, logText) {
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const agrRef = quoteRef.collection('agreements').doc(agr.id);
+    const newLog = { id: genActivityId(), type: 'agreement', content: logText, createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me' };
+
+    const batch = db.batch();
+    batch.update(agrRef, { status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), ...extra });
+    batch.update(quoteRef, { activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog) });
+    await batch.commit();
+
+    Object.assign(agr, { status: newStatus, ...extra });
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast(`✓ ${logText}`);
+    renderAgreementUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+// 狀態流：draft → ready → signed → active → completed；cancelled 只能從 draft/ready 觸發。
+// signed/active/completed 一律鎖死，不允許改回其他狀態、不允許取消。
+async function agrMarkReady(id) {
+  const a = agreements.find(x => x.id === id); if (!a || a.status !== 'draft') return;
+  if (!confirm(`確定要將 ${a.agreementNumber} 標記為「已備妥」嗎？`)) return;
+  await agrUpdateStatus(a, 'ready', {}, `${a.agreementNumber} 已備妥`);
+}
+async function agrBackToDraft(id) {
+  const a = agreements.find(x => x.id === id); if (!a || a.status !== 'ready') return;
+  if (!confirm(`確定要將 ${a.agreementNumber} 退回草稿嗎？`)) return;
+  await agrUpdateStatus(a, 'draft', {}, `${a.agreementNumber} 已退回草稿`);
+}
+async function agrMarkSigned(id) {
+  const a = agreements.find(x => x.id === id); if (!a || a.status !== 'ready') return;
+  if (!confirm(`確定要將 ${a.agreementNumber} 標記為「已簽署」嗎？\n簽署後所有合約內容（客戶/承攬方資料、Scope、金額、付款計畫、條款文字）將永久鎖定，不能再編輯，如需更正請建立新的合約。`)) return;
+  await agrUpdateStatus(a, 'signed', { signedAt: firebase.firestore.FieldValue.serverTimestamp() }, `${a.agreementNumber} 已簽署`);
+}
+async function agrMarkActive(id) {
+  const a = agreements.find(x => x.id === id); if (!a || a.status !== 'signed') return;
+  if (!confirm(`確定要將 ${a.agreementNumber} 標記為「執行中」嗎？`)) return;
+  await agrUpdateStatus(a, 'active', {}, `${a.agreementNumber} 已進入執行中`);
+}
+async function agrMarkCompleted(id) {
+  const a = agreements.find(x => x.id === id); if (!a || a.status !== 'active') return;
+  if (!confirm(`確定要將 ${a.agreementNumber} 標記為「已完成」嗎？`)) return;
+  await agrUpdateStatus(a, 'completed', {}, `${a.agreementNumber} 已完成`);
+}
+async function agrCancel(id) {
+  const a = agreements.find(x => x.id === id); if (!a || (a.status !== 'draft' && a.status !== 'ready')) return;
+  if (!confirm(`確定要取消 ${a.agreementNumber} 嗎？此操作不會刪除紀錄，僅標記為已取消。`)) return;
+  await agrUpdateStatus(a, 'cancelled', {}, `${a.agreementNumber} 已取消`);
+}
+
+function computeAgreementSummary() {
+  let draftCount = 0, activeCount = 0;
+  agreements.forEach(a => {
+    if (a.status === 'draft' || a.status === 'ready') draftCount++;
+    if (a.status === 'signed' || a.status === 'active') activeCount++;
+  });
+  return { draftCount, activeCount, total: agreements.length };
+}
+
+// ── 渲染：Agreement 卡片（獨立於 Project 是否建立）──
+function renderAgreementUI() {
+  const el = document.getElementById('agreementSection');
+  if (!el) return;
+  if (agreementBuilder) { el.innerHTML = renderAgreementBuilder(); return; }
+
+  const summary = computeAgreementSummary();
+  const sorted = [...agreements].sort((a, b) => (b.agreementNumber || '').localeCompare(a.agreementNumber || ''));
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-title">Agreement／合約</div>
+      ${agreements.length ? `
+      <div class="info-grid" style="margin-bottom:14px">
+        <div class="info-box"><div class="info-label">草稿／備妥中</div><div class="info-value">${summary.draftCount}</div></div>
+        <div class="info-box"><div class="info-label">已簽署／執行中</div><div class="info-value">${summary.activeCount}</div></div>
+        <div class="info-box"><div class="info-label">合約總數</div><div class="info-value">${summary.total}</div></div>
+      </div>
+      ${sorted.map(renderAgreementRow).join('')}
+      ` : `<div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">尚未建立合約。此功能不需要先建立專案，任何案件都可以直接建立合約。</div>`}
+      <button class="btn-save" onclick="openAgreementBuilder()">＋ 建立 Agreement</button>
+    </div>`;
+}
+
+function renderAgreementRow(a) {
+  const statusLabel = AGREEMENT_STATUS_LABELS[a.status] || a.status;
+  const statusColor = AGREEMENT_STATUS_COLOR[a.status] || 'var(--ink-30)';
+  const statusBg    = AGREEMENT_STATUS_BG[a.status] || 'var(--ink-10)';
+  const detailKey = 'agr_' + a.id;
+  const detailOpen = collapsedGroups.has(detailKey); // 借用既有 collapsedGroups Set：預設收合，點擊展開細節
+  const locked = AGREEMENT_LOCKED_STATUSES.includes(a.status);
+
+  const actions = [];
+  if (a.status === 'draft') {
+    actions.push(`<button class="btn-copy-link" onclick="openAgreementBuilder('${a.id}')">編輯</button>`);
+    actions.push(`<button class="btn-copy-link" onclick="agrMarkReady('${a.id}')">標記已備妥</button>`);
+    actions.push(`<button class="btn-copy-link" style="color:var(--red)" onclick="agrCancel('${a.id}')">取消</button>`);
+  } else if (a.status === 'ready') {
+    actions.push(`<button class="btn-copy-link" onclick="agrBackToDraft('${a.id}')">退回草稿</button>`);
+    actions.push(`<button class="btn-copy-link" style="color:var(--green)" onclick="agrMarkSigned('${a.id}')">標記已簽署</button>`);
+    actions.push(`<button class="btn-copy-link" style="color:var(--red)" onclick="agrCancel('${a.id}')">取消</button>`);
+  } else if (a.status === 'signed') {
+    actions.push(`<button class="btn-copy-link" onclick="agrMarkActive('${a.id}')">標記執行中</button>`);
+  } else if (a.status === 'active') {
+    actions.push(`<button class="btn-copy-link" onclick="agrMarkCompleted('${a.id}')">標記已完成</button>`);
+  }
+  actions.push(`<button class="btn-copy-link" onclick="toggleGroupCollapse('${detailKey}')">${detailOpen ? '收合' : '查看詳細'}</button>`);
+
+  const detail = detailOpen ? `
+      <div style="margin-top:8px;border-top:1px solid var(--ink-10);padding-top:8px;font-size:11.5px;color:var(--ink-60)">
+        <div style="margin-bottom:4px">客戶：${escapeHtml(a.client.name || '—')}${a.client.company ? `／${escapeHtml(a.client.company)}` : ''}</div>
+        <div style="margin-bottom:4px">承攬方：${escapeHtml(a.provider.studioName || '—')}</div>
+        <div style="margin-bottom:4px">合約金額：NT$${(Number(a.contractAmountSnapshot) || 0).toLocaleString()}（${AGREEMENT_SOURCE_LABELS[a.contractAmountSource] || a.contractAmountSource}）</div>
+        <div style="margin-bottom:4px">Scope（${(a.scopeSnapshot || []).length} 項）：${(a.scopeSnapshot || []).map(s => escapeHtml(s.name)).join('、') || '—'}</div>
+        <div style="margin-bottom:4px">付款計畫（${(a.paymentPlanSnapshot || []).length} 期）：${(a.paymentPlanSnapshot || []).map(p => `${escapeHtml(p.title)} ${p.percentage}%`).join('、') || '—'}</div>
+        ${a.timeline && (a.timeline.estimatedStartDate || a.timeline.estimatedCompletionDate) ? `<div style="margin-bottom:4px">預計期間：${a.timeline.estimatedStartDate || '—'} ～ ${a.timeline.estimatedCompletionDate || '—'}</div>` : ''}
+        ${locked ? `<div style="color:var(--ink-30);margin-top:6px">此合約內容已鎖定為歷史定案資料，如需更正請建立新的 Agreement。</div>` : ''}
+      </div>` : '';
+
+  return `
+    <div style="border:1.5px solid var(--ink-10);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px">
+          <div style="font-size:13.5px;font-weight:600;color:var(--ink)">
+            ${escapeHtml(a.agreementNumber)}　${escapeHtml(a.projectName)}
+            <span class="dtag" style="margin-left:6px;background:${statusBg};color:${statusColor}">${statusLabel}</span>
+          </div>
+          <div style="font-size:11px;color:var(--ink-60);margin-top:4px">
+            ${escapeHtml(a.client.name || a.client.company || '—')}　NT$${(Number(a.contractAmountSnapshot) || 0).toLocaleString()}
+          </div>
+          ${detail}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${actions.join('')}</div>
+      </div>
+    </div>`;
+}
+
+function renderAgreementBuilder() {
+  const b = agreementBuilder;
+  const err = validateAgreementBuilder();
+  const sumPct = b.paymentPlanSnapshot.reduce((s, p) => s + (Number(p.percentage) || 0), 0);
+
+  const scopeRows = b.scopeSnapshot.map((s, idx) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+      <input class="field-input" style="flex:1;min-width:140px" placeholder="Scope 名稱" value="${escapeHtml(s.name)}" onchange="agrSetScopeField(${idx},'name',this.value)">
+      <input class="field-input" style="flex:1;min-width:140px" placeholder="說明（可留空）" value="${escapeHtml(s.description || '')}" onchange="agrSetScopeField(${idx},'description',this.value)">
+      <button class="btn-copy-link" style="color:var(--red)" onclick="agrRemoveScopeRow(${idx})">刪除</button>
+    </div>`).join('');
+
+  const paymentRows = b.paymentPlanSnapshot.map((p, idx) => `
+    <div style="border:1px solid var(--ink-10);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+        <input class="field-input" style="flex:1;min-width:120px" placeholder="付款節點名稱" value="${escapeHtml(p.title)}" onchange="agrSetPaymentField(${idx},'title',this.value)">
+        <input type="number" step="0.01" class="field-input" style="width:90px" value="${p.percentage}" onchange="agrSetPaymentField(${idx},'percentage',parseFloat(this.value)||0)">
+        <span style="font-size:11px;color:var(--ink-60)">%　＝ NT$${(Number(p.amount) || 0).toLocaleString()}</span>
+        ${b.paymentPlanSnapshot.length > 1 ? `<button class="btn-copy-link" style="color:var(--red)" onclick="agrRemovePaymentRow(${idx})">刪除</button>` : ''}
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <input type="date" class="field-input" style="width:auto" value="${p.dueDate || ''}" onchange="agrSetPaymentField(${idx},'dueDate',this.value||null)">
+        <input class="field-input" style="flex:1;min-width:140px" placeholder="備註（可留空）" value="${escapeHtml(p.note || '')}" onchange="agrSetPaymentField(${idx},'note',this.value)">
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="card" style="border:2px solid var(--ink)">
+      <div class="card-title">${b.id ? '編輯 Agreement 草稿' : '建立 Agreement'}</div>
+
+      <div style="margin:6px 0 10px;font-size:12px;color:var(--ink-60)">客戶／委託方</div>
+      <div class="field-row">
+        <div class="field"><label class="field-label">姓名</label><input class="field-input" value="${escapeHtml(b.client.name)}" onchange="agrSetField('client.name',this.value)"></div>
+        <div class="field"><label class="field-label">公司</label><input class="field-input" value="${escapeHtml(b.client.company)}" onchange="agrSetField('client.company',this.value)"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label class="field-label">Email</label><input class="field-input" value="${escapeHtml(b.client.email)}" onchange="agrSetField('client.email',this.value)"></div>
+        <div class="field"><label class="field-label">電話</label><input class="field-input" value="${escapeHtml(b.client.phone)}" onchange="agrSetField('client.phone',this.value)"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label class="field-label">統一編號</label><input class="field-input" value="${escapeHtml(b.client.taxId)}" onchange="agrSetField('client.taxId',this.value)"></div>
+        <div class="field"><label class="field-label">簽約代表人</label><input class="field-input" value="${escapeHtml(b.client.representative)}" onchange="agrSetField('client.representative',this.value)"></div>
+      </div>
+      <div class="field"><label class="field-label">地址</label><input class="field-input" value="${escapeHtml(b.client.address)}" onchange="agrSetField('client.address',this.value)"></div>
+
+      <div style="margin:14px 0 10px;font-size:12px;color:var(--ink-60)">承攬方（來自 Studio 設定，可個別覆寫）</div>
+      <div class="field-row">
+        <div class="field"><label class="field-label">工作室名稱</label><input class="field-input" value="${escapeHtml(b.provider.studioName)}" onchange="agrSetField('provider.studioName',this.value)"></div>
+        <div class="field"><label class="field-label">統一編號</label><input class="field-input" value="${escapeHtml(b.provider.taxId)}" onchange="agrSetField('provider.taxId',this.value)"></div>
+      </div>
+      <div class="field"><label class="field-label">地址</label><input class="field-input" value="${escapeHtml(b.provider.address)}" onchange="agrSetField('provider.address',this.value)"></div>
+
+      <div style="margin:14px 0 10px;font-size:12px;color:var(--ink-60)">專案</div>
+      <div class="field"><label class="field-label">專案名稱</label><input class="field-input" value="${escapeHtml(b.projectName)}" onchange="agrSetField('projectName',this.value)"></div>
+
+      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">工作內容／Scope：</div>
+      ${scopeRows || '<div style="font-size:11.5px;color:var(--ink-30);margin-bottom:8px">尚無項目，可手動新增</div>'}
+      <button class="btn-copy-link" onclick="agrAddScopeRow()">＋ 新增項目</button>
+
+      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">合約總額（來源：${AGREEMENT_SOURCE_LABELS[b.contractAmountSource] || b.contractAmountSource}）</div>
+      <input type="number" class="field-input" style="max-width:200px" value="${b.contractAmountSnapshot}" onchange="agrSetContractAmount(this.value)">
+
+      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">付款計畫：</div>
+      ${paymentRows}
+      <button class="btn-copy-link" onclick="agrAddPaymentRow()">＋ 新增付款節點</button>
+      <div style="font-size:12px;color:${Math.abs(sumPct - 100) < 0.001 ? 'var(--green)' : 'var(--red)'};margin-top:6px">目前比例加總：${sumPct}%</div>
+
+      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">專案時程</div>
+      <div class="field-row">
+        <div class="field"><label class="field-label">預計開始日</label><input type="date" class="field-input" value="${b.timeline.estimatedStartDate || ''}" onchange="agrSetField('timeline.estimatedStartDate',this.value||null)"></div>
+        <div class="field"><label class="field-label">預計完成日</label><input type="date" class="field-input" value="${b.timeline.estimatedCompletionDate || ''}" onchange="agrSetField('timeline.estimatedCompletionDate',this.value||null)"></div>
+      </div>
+
+      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">合約條款（可編輯，皆有預設文字）</div>
+      <div class="field"><label class="field-label">付款條件</label><textarea class="field-textarea" onchange="agrSetField('paymentTermsText',this.value)">${escapeHtml(b.paymentTermsText)}</textarea></div>
+      <div class="field"><label class="field-label">修改與追加需求（Change Request）條款</label><textarea class="field-textarea" onchange="agrSetField('changeRequestPolicy',this.value)">${escapeHtml(b.changeRequestPolicy)}</textarea></div>
+      <div class="field"><label class="field-label">驗收方式</label><textarea class="field-textarea" onchange="agrSetField('acceptancePolicy',this.value)">${escapeHtml(b.acceptancePolicy)}</textarea></div>
+      <div class="field"><label class="field-label">保固／維護條件</label><textarea class="field-textarea" onchange="agrSetField('warrantyPolicy',this.value)">${escapeHtml(b.warrantyPolicy)}</textarea></div>
+      <div class="field"><label class="field-label">第三方服務費說明</label><textarea class="field-textarea" onchange="agrSetField('thirdPartyFeeNotice',this.value)">${escapeHtml(b.thirdPartyFeeNotice)}</textarea></div>
+      <div class="field"><label class="field-label">智慧財產權／成果交付條件</label><textarea class="field-textarea" onchange="agrSetField('ipDeliverablesPolicy',this.value)">${escapeHtml(b.ipDeliverablesPolicy)}</textarea></div>
+      <div class="field"><label class="field-label">終止合作／未付款處理</label><textarea class="field-textarea" onchange="agrSetField('terminationPolicy',this.value)">${escapeHtml(b.terminationPolicy)}</textarea></div>
+      <div class="field"><label class="field-label">備註</label><textarea class="field-textarea" onchange="agrSetField('note',this.value)">${escapeHtml(b.note)}</textarea></div>
+
+      ${err ? `<div style="font-size:12px;color:var(--red);margin-top:10px">⚠ ${err}</div>` : ''}
+
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn-copy-link" onclick="closeAgreementBuilder()">取消</button>
+        <button class="btn-save" style="padding:9px 18px" onclick="saveAgreementDraft()">${b.id ? '儲存草稿' : '建立草稿'}</button>
       </div>
     </div>`;
 }
