@@ -302,6 +302,7 @@ body {
 .timeline-dot.type-note         { background: var(--ink-30); }
 .timeline-dot.type-change_request { background: var(--purple); }
 .timeline-dot.type-agreement { background: #4f46e5; }
+.timeline-dot.type-acceptance { background: #0d9488; }
 .timeline-line { flex: 1; width: 1px; background: var(--ink-10); margin-top: 4px; }
 
 .timeline-body { flex: 1; min-width: 0; }
@@ -318,6 +319,7 @@ body {
 .timeline-type-tag.type-note         { background: var(--ink-10); color: var(--ink-60); }
 .timeline-type-tag.type-change_request { background: var(--purple-light); color: var(--purple); }
 .timeline-type-tag.type-agreement { background: #eef2ff; color: #4f46e5; }
+.timeline-type-tag.type-acceptance { background: #f0fdfa; color: #0d9488; }
 .timeline-time { font-size: 11px; color: var(--ink-30); }
 .timeline-by   { font-size: 11px; color: var(--ink-30); }
 .timeline-content { font-size: 13px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; }
@@ -388,8 +390,9 @@ const ACTIVITY_TYPE_LABELS = {
   note:        '一般備註',
   change_request: '變更需求',
   agreement:   '合約',
+  acceptance:  '驗收／保固',
 };
-const ACTIVITY_TYPE_ORDER = ['contact','meeting','quote','payment','development','note','change_request','agreement'];
+const ACTIVITY_TYPE_ORDER = ['contact','meeting','quote','payment','development','note','change_request','agreement','acceptance'];
 
 // ══════════════════════════════════════════════════
 //  PROJECT SCOPE & PROGRESS TRACKING v1 — CONFIG
@@ -736,12 +739,25 @@ let agreements = [];
 let agreementBuilder = null;
 // settings/studio 文件的本地快取（承攬方資料來源），同一頁面內只需讀取一次
 let studioSettingsCache = null;
+// Activity Timeline 資訊密度優化：預設只顯示最近 5 筆，不改動 activityLogs 資料本身
+let timelineExpanded = false;
 // Existing Project Initialization v1：純前端 Draft State，只在「確認套用」時才寫入 Firestore
 let initPanel = { open:false, step:'edit', draft:{} };
 // Phase / Scope Group 展開收合狀態，僅為前端 UI 狀態，不寫入 Firestore、不跨頁面持久化
 const collapsedGroups = new Set();
 function toggleGroupCollapse(key) {
   if (collapsedGroups.has(key)) collapsedGroups.delete(key); else collapsedGroups.add(key);
+  renderProjectUI();
+}
+// Scope Items 資訊密度優化：預設收合，只有 collapsedGroups 內有這個 key 才代表「已展開顯示細節」
+// （與 CR／Agreement 卡片「查看詳細」共用同一套 Set，但各自命名空間獨立不衝突）
+function scopeDetailKey(scopeId) { return 'scopeItem_' + scopeId; }
+function expandAllScopes() {
+  projectScopes.forEach(s => collapsedGroups.add(scopeDetailKey(s.id)));
+  renderProjectUI();
+}
+function collapseAllScopes() {
+  projectScopes.forEach(s => collapsedGroups.delete(scopeDetailKey(s.id)));
   renderProjectUI();
 }
 
@@ -1417,7 +1433,13 @@ function renderProjectUI() {
     ${renderInitPanel(m)}
 
     <div class="card">
-      <div class="card-title">Scope Items（${projectScopes.length}）</div>
+      <div class="card-title">
+        Scope Items（${projectScopes.length}）
+        ${projectScopes.length ? `<span style="display:inline-flex;gap:6px;margin-left:8px">
+          <button class="btn-copy-link" onclick="expandAllScopes()">全部展開</button>
+          <button class="btn-copy-link" onclick="collapseAllScopes()">全部收合</button>
+        </span>` : ''}
+      </div>
       ${projectScopes.length ? projectScopes.map(renderScopeRow).join('') : '<div class="tag-empty">尚無 Scope，可於下方新增</div>'}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         <input class="field-input" id="new-scope-name" placeholder="新增 Scope 名稱" style="flex:1;min-width:160px">
@@ -1434,6 +1456,8 @@ function renderProjectUI() {
       <div class="card-title">Development Tasks（Phase → Scope 分組，${projectTasks.length} 項）</div>
       ${projectTasks.length ? PHASES.map(p => renderPhaseTaskGroup(p, m)).join('') : '<div class="tag-empty">尚無 Task，請先在上方 Scope 按「展開成開發任務」</div>'}
     </div>
+
+    ${renderAcceptanceWarrantySection()}
 
     ${renderPaymentSection()}
 
@@ -1456,18 +1480,26 @@ function renderScopeRow(s) {
   // fallback 顯示未知/人工寫入的 source 值時，一律 escape 後才插入 innerHTML，避免 XSS
   const sourceLabel = escapeHtml(SCOPE_SOURCE_LABELS[s.source] || s.source || '');
 
+  const detailKey = scopeDetailKey(s.id);
+  const expanded = collapsedGroups.has(detailKey);
+
   return `
     <div style="border:1.5px solid var(--ink-10);border-radius:var(--r);padding:12px 14px;margin-bottom:8px${!isActive ? ';opacity:.6' : ''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;cursor:pointer" onclick="toggleGroupCollapse('${detailKey}')">
         <div style="flex:1;min-width:180px">
-          <div style="font-size:13.5px;font-weight:600;color:var(--ink)">${escapeHtml(s.name)}
+          <div style="font-size:13.5px;font-weight:600;color:var(--ink)">
+            <span style="font-size:10px;color:var(--ink-30);margin-right:4px;display:inline-block;width:10px">${expanded ? '▼' : '▶'}</span>
+            ${escapeHtml(s.name)}
             <span class="dtag" style="margin-left:6px" title="Source">${sourceLabel}</span>
             ${!isActive ? '<span class="dtag" style="background:#fef2f2;color:var(--red)">已停用</span>' : ''}
             ${isActive && !includeProgress ? '<span class="dtag" style="background:var(--amber-light);color:var(--amber)">不計入總進度</span>' : ''}
           </div>
-          ${s.description ? `<div style="font-size:12px;color:var(--ink-60);margin-top:3px">${escapeHtml(s.description)}</div>` : ''}
           <div style="font-size:11px;color:var(--ink-60);margin-top:4px">Task 數：${taskCount}　Scope Progress：${progressDisplay}</div>
         </div>
+      </div>
+      ${expanded ? `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--ink-10)">
+        ${s.description ? `<div style="font-size:12px;color:var(--ink-60);margin-bottom:8px">${escapeHtml(s.description)}</div>` : ''}
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-copy-link" onclick="expandScopeToTasks('${s.id}')">展開成開發任務</button>
           <button class="btn-copy-link" onclick="editScopeField('${s.id}')">編輯</button>
@@ -1475,7 +1507,7 @@ function renderScopeRow(s) {
           <button class="btn-copy-link" onclick="toggleScopeFlag('${s.id}','includeInProgress',${includeProgress})">${!includeProgress ? '計入總進度' : '不計入總進度'}</button>
           <button class="btn-copy-link" style="color:var(--red)" onclick="deleteScope('${s.id}')">刪除</button>
         </div>
-      </div>
+      </div>` : ''}
     </div>`;
 }
 
@@ -2624,6 +2656,215 @@ function renderPaymentPlanBuilder() {
 }
 
 // ══════════════════════════════════════════════════
+//  ACCEPTANCE & WARRANTY v1
+//  存在 project.acceptance / project.warranty（沿用既有 quote 文件的 project 欄位，不新增 collection）。
+//  流程：未送驗 → 送出驗收 → 驗收中 → 完成驗收 → 保固開始 → 保固到期。
+//  Bug／驗收問題只記 note／Timeline；超出 Scope 的新需求仍走既有 Change Request，不混成同一套資料。
+// ══════════════════════════════════════════════════
+
+const ACCEPTANCE_STATUS_LABELS = { not_started: '未送驗', in_review: '驗收中', accepted: '已完成驗收' };
+const WARRANTY_STATUS_LABELS   = { not_started: '尚未開始', active: '保固中', expired: '已到期' };
+
+// ── 送出驗收：not_started → in_review。若仍有未完成 Task 只提示，不硬性阻止。──
+async function submitForAcceptance() {
+  if (!currentData.project) { showToast('⚠ 尚未建立專案，無法送出驗收'); return; }
+  const current = currentData.project.acceptance || { status: 'not_started' };
+  if (current.status !== 'not_started') { showToast('⚠ 此專案已經送出過驗收'); return; }
+
+  const incompleteCount = projectTasks.filter(t => t.active !== false && t.status !== 'completed').length;
+  const warnMsg = incompleteCount > 0 ? `目前仍有 ${incompleteCount} 個 Task 尚未完成，` : '';
+  const dueDateInput = prompt(`${warnMsg}確定要送出驗收嗎？\n可設定預計驗收期限（格式 YYYY-MM-DD，留空可略過）：`, '');
+  if (dueDateInput === null) return;
+  const trimmed = dueDateInput.trim();
+  if (trimmed && !isValidCalendarDateStr(trimmed)) { showToast('⚠ 日期格式需為 YYYY-MM-DD 且必須是真實存在的日期'); return; }
+
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const acceptance = { status: 'in_review', submittedAt: firebase.firestore.FieldValue.serverTimestamp(), dueDate: trimmed || null, acceptedAt: null, note: current.note || '' };
+    const newLog = {
+      id: genActivityId(), type: 'acceptance',
+      content: `已送出驗收${trimmed ? `，預計期限 ${trimmed}` : ''}${incompleteCount > 0 ? `（尚有 ${incompleteCount} 個 Task 未完成）` : ''}`,
+      createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
+    };
+    const batch = db.batch();
+    batch.update(quoteRef, {
+      'project.status': 'review',
+      'project.acceptance': acceptance,
+      'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp(),
+      activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog),
+    });
+    await batch.commit();
+
+    currentData.project.status = 'review';
+    currentData.project.acceptance = { ...acceptance, submittedAt: firebase.firestore.Timestamp.now() };
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast('✓ 已送出驗收');
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+// ── 完成驗收：in_review → accepted，以 acceptedAt 為基準開始保固（durationDays 預設 30，可人工修改，
+//    不從 Agreement warrantyPolicy 文字自動解析）。──
+async function completeAcceptance() {
+  if (!currentData.project) return;
+  const acceptance = currentData.project.acceptance;
+  if (!acceptance || acceptance.status !== 'in_review') { showToast('⚠ 目前不是「驗收中」狀態'); return; }
+
+  const durationInput = prompt('確定要標記完成驗收嗎？\n請設定保固天數（預設 30 天）：', '30');
+  if (durationInput === null) return;
+  const durationDays = parseInt(durationInput, 10);
+  if (!Number.isFinite(durationDays) || durationDays <= 0) { showToast('⚠ 保固天數必須是大於 0 的整數'); return; }
+
+  const startDateStr = getLocalDateStr();
+  const endDateObj = new Date(startDateStr + 'T00:00:00');
+  endDateObj.setDate(endDateObj.getDate() + durationDays);
+  const endDateStr = getLocalDateStr(endDateObj);
+
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const acceptedAtLocal = firebase.firestore.Timestamp.now();
+    const newAcceptanceForFirestore = { ...acceptance, status: 'accepted', acceptedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    const newWarranty = { status: 'active', startDate: startDateStr, endDate: endDateStr, durationDays, note: (currentData.project.warranty && currentData.project.warranty.note) || '' };
+    const newLog = {
+      id: genActivityId(), type: 'acceptance',
+      content: `驗收完成，保固期 ${durationDays} 天（${startDateStr} ～ ${endDateStr}）`,
+      createdAt: acceptedAtLocal, createdBy: 'me',
+    };
+
+    const batch = db.batch();
+    batch.update(quoteRef, {
+      'project.acceptance': newAcceptanceForFirestore,
+      'project.warranty': newWarranty,
+      'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp(),
+      activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog),
+    });
+    await batch.commit();
+
+    currentData.project.acceptance = { ...acceptance, status: 'accepted', acceptedAt: acceptedAtLocal };
+    currentData.project.warranty = newWarranty;
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast('✓ 驗收完成，保固已開始');
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+// ── 標記保固到期：純人工動作，系統不會自動把 Project 設為 completed，也不會自動改寫此欄位 ──
+async function markWarrantyExpired() {
+  if (!currentData.project || !currentData.project.warranty) return;
+  if (currentData.project.warranty.status !== 'active') return;
+  if (!confirm('確定要將保固標記為已到期嗎？')) return;
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const newLog = { id: genActivityId(), type: 'acceptance', content: '保固已標記到期', createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me' };
+    const batch = db.batch();
+    batch.update(quoteRef, {
+      'project.warranty.status': 'expired',
+      'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp(),
+      activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog),
+    });
+    await batch.commit();
+    currentData.project.warranty.status = 'expired';
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast('✓ 已標記保固到期');
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+// ── 驗收／保固備註：Bug 或驗收問題記在這裡（或 Timeline），不混進 Change Request 資料 ──
+async function editAcceptanceNote() {
+  if (!currentData.project || !currentData.project.acceptance) return;
+  const current = currentData.project.acceptance.note || '';
+  const newNote = prompt('驗收備註（例如 Bug 記錄、驗收問題）：', current);
+  if (newNote === null) return;
+  try {
+    await db.collection('quotes').doc(currentId).update({ 'project.acceptance.note': newNote, 'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp() });
+    currentData.project.acceptance.note = newNote;
+    showToast('✓ 已更新驗收備註');
+    renderProjectUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+async function editWarrantyNote() {
+  if (!currentData.project || !currentData.project.warranty) return;
+  const current = currentData.project.warranty.note || '';
+  const newNote = prompt('保固備註：', current);
+  if (newNote === null) return;
+  try {
+    await db.collection('quotes').doc(currentId).update({ 'project.warranty.note': newNote, 'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp() });
+    currentData.project.warranty.note = newNote;
+    showToast('✓ 已更新保固備註');
+    renderProjectUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+// ── 渲染：驗收與保固卡片（Project 未建立時完全不顯示，隨 renderProjectUI 一起渲染）──
+function renderAcceptanceWarrantySection() {
+  if (!currentData.project) return '';
+  const proj = currentData.project;
+  const acceptance = proj.acceptance || { status: 'not_started' };
+  const warranty = proj.warranty || { status: 'not_started' };
+  const todayStr = getLocalDateStr();
+  // 保固到期只在畫面上動態判斷顯示，不自動寫回 Firestore、不自動改變 Project 狀態
+  const computedExpired = warranty.status === 'active' && warranty.endDate && warranty.endDate < todayStr;
+
+  const acceptanceActions = [];
+  if (acceptance.status === 'not_started') acceptanceActions.push(`<button class="btn-copy-link" onclick="submitForAcceptance()">送出驗收</button>`);
+  if (acceptance.status === 'in_review') acceptanceActions.push(`<button class="btn-copy-link" style="color:var(--green)" onclick="completeAcceptance()">完成驗收</button>`);
+  if (acceptance.status !== 'not_started') acceptanceActions.push(`<button class="btn-copy-link" onclick="editAcceptanceNote()">編輯驗收備註</button>`);
+
+  const warrantyActions = [];
+  if (warranty.status === 'active') {
+    warrantyActions.push(`<button class="btn-copy-link" onclick="editWarrantyNote()">編輯保固備註</button>`);
+    if (computedExpired) warrantyActions.push(`<button class="btn-copy-link" style="color:var(--red)" onclick="markWarrantyExpired()">標記保固到期</button>`);
+  }
+
+  const warrantyStatusText = computedExpired ? '已到期（尚未標記）' : (WARRANTY_STATUS_LABELS[warranty.status] || warranty.status);
+
+  return `
+    <div class="card">
+      <div class="card-title">驗收與保固 Acceptance &amp; Warranty</div>
+      <div class="info-grid" style="margin-bottom:14px">
+        <div class="info-box">
+          <div class="info-label">驗收狀態</div>
+          <div class="info-value" style="font-size:15px">${ACCEPTANCE_STATUS_LABELS[acceptance.status] || acceptance.status}</div>
+        </div>
+        <div class="info-box">
+          <div class="info-label">保固狀態</div>
+          <div class="info-value" style="font-size:15px;color:${computedExpired ? 'var(--red)' : 'inherit'}">${warrantyStatusText}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink-60);line-height:1.7;margin-bottom:10px">
+        ${acceptance.dueDate ? `預計驗收期限：${escapeHtml(acceptance.dueDate)}<br>` : ''}
+        ${warranty.startDate ? `保固期間：${escapeHtml(warranty.startDate)} ～ ${escapeHtml(warranty.endDate)}（${warranty.durationDays} 天）<br>` : ''}
+        ${acceptance.note ? `驗收備註：${escapeHtml(acceptance.note)}<br>` : ''}
+        ${warranty.note ? `保固備註：${escapeHtml(warranty.note)}<br>` : ''}
+        <span style="color:var(--ink-30)">原功能 Bug／原 Scope 內調整請記錄於備註或 Timeline；超出 Scope 的新需求請改用 Change Request。</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${acceptanceActions.join('')}${warrantyActions.join('')}</div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════
 //  CHANGE REQUEST v1
 //  quotes/{quoteId}/changeRequests/{crId}
 //  本輪：CR 資料結構、CRUD、狀態流程（draft/proposed/approved/rejected/cancelled）、
@@ -3726,6 +3967,12 @@ function fmtTimelineTime(ts) {
          ' ' + d.toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
 }
 
+function toggleTimelineExpanded() {
+  timelineExpanded = !timelineExpanded;
+  const el = document.getElementById('timelineList');
+  if (el) el.innerHTML = renderTimelineList(currentData.activityLogs || []);
+}
+
 function renderTimelineList(logs) {
   if (!logs || logs.length === 0) {
     return '<div class="timeline-empty">尚無紀錄，新增第一筆吧。</div>';
@@ -3738,11 +3985,15 @@ function renderTimelineList(logs) {
     return tb - ta;
   });
 
-  return sorted.map((log, idx) => `
+  // 資訊密度優化：預設只顯示最近 5 筆，資料本身（sorted 的內容/文字）完全不截斷、不改寫，
+  // 只是控制「顯示幾筆」，超過 5 筆才出現展開/收合按鈕。
+  const displayLogs = timelineExpanded ? sorted : sorted.slice(0, 5);
+
+  const entriesHtml = displayLogs.map((log, idx) => `
     <div class="timeline-entry">
       <div class="timeline-dot-col">
         <div class="timeline-dot type-${log.type}"></div>
-        ${idx < sorted.length - 1 ? '<div class="timeline-line"></div>' : ''}
+        ${idx < displayLogs.length - 1 ? '<div class="timeline-line"></div>' : ''}
       </div>
       <div class="timeline-body">
         <div class="timeline-meta">
@@ -3750,10 +4001,18 @@ function renderTimelineList(logs) {
           <span class="timeline-time">${fmtTimelineTime(log.createdAt)}</span>
           <span class="timeline-by">by ${escapeHtml(log.createdBy || 'me')}</span>
         </div>
-        <div class="timeline-content">${escapeHtml(log.content || '')}</div>
+        <div class="timeline-content" style="max-height:4.8em;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical" title="${escapeHtml(log.content || '')}">${escapeHtml(log.content || '')}</div>
       </div>
       <button class="timeline-delete-btn" onclick="deleteActivityLog('${log.id}')" title="刪除這筆紀錄">✕</button>
     </div>`).join('');
+
+  const toggleHtml = sorted.length > 5
+    ? `<div style="text-align:center;margin-top:10px">
+         <button class="btn-copy-link" onclick="toggleTimelineExpanded()">${timelineExpanded ? '收合紀錄' : `查看全部紀錄（${sorted.length}）`}</button>
+       </div>`
+    : '';
+
+  return entriesHtml + toggleHtml;
 }
 
 // ── 新增紀錄：讀取現有 activityLogs 後合併，不覆蓋原資料 ──

@@ -268,6 +268,7 @@ body {
 .tl-dot.type-note        { background: var(--ink-30); }
 .tl-dot.type-change_request { background: var(--purple); }
 .tl-dot.type-agreement { background: #4f46e5; }
+.tl-dot.type-acceptance { background: #0d9488; }
 .tl-line { flex: 1; width: 1px; background: var(--ink-10); margin-top: 4px; }
 .tl-body { flex: 1; min-width: 0; }
 .tl-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; flex-wrap: wrap; }
@@ -283,6 +284,7 @@ body {
 .tl-type-tag.type-note        { background: var(--ink-10); color: var(--ink-60); }
 .tl-type-tag.type-change_request { background: var(--purple-light); color: var(--purple); }
 .tl-type-tag.type-agreement { background: #eef2ff; color: #4f46e5; }
+.tl-type-tag.type-acceptance { background: #f0fdfa; color: #0d9488; }
 .tl-qid  { font-size: 10px; color: var(--accent); font-family: var(--mono); text-decoration: none; }
 .tl-qid:hover { text-decoration: underline; }
 .tl-time { font-size: 10px; color: var(--ink-30); margin-left: auto; white-space: nowrap; }
@@ -359,7 +361,7 @@ const STATUS_LABELS = {
 const ACTIVITY_TYPE_LABELS = {
   contact:'聯絡紀錄', meeting:'需求訪談', quote:'報價紀錄',
   payment:'付款紀錄', development:'開發進度', note:'一般備註',
-  change_request:'變更需求', agreement:'合約',
+  change_request:'變更需求', agreement:'合約', acceptance:'驗收／保固',
 };
 
 // ══════════════════════════════════════════════════
