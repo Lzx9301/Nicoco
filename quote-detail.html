@@ -3526,6 +3526,24 @@ function computeAgreementSummary() {
 }
 
 // ── 渲染：Agreement 卡片（獨立於 Project 是否建立）──
+// ── 讀取 Firestore：quotes/{quoteId}/agreements，填入 agreements 陣列後呼叫 renderAgreementUI() ──
+// （對應 renderProjectSection() 之於 renderProjectUI() 的角色；獨立於 Project 是否建立）
+async function renderAgreementSection() {
+  const el = document.getElementById('agreementSection');
+  if (!el) return;
+
+  el.innerHTML = `<div class="card"><div class="card-title">Agreement／合約</div><div class="loading-state" style="padding:40px 0"><div class="spinner"></div>載入合約資料中…</div></div>`;
+
+  try {
+    const snap = await db.collection('quotes').doc(currentId).collection('agreements').get();
+    agreements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAgreementUI();
+  } catch (err) {
+    console.error(err);
+    el.innerHTML = `<div class="card"><div class="card-title">Agreement／合約</div><div class="error-state">⚠ 讀取合約資料失敗：${escapeHtml(err.message || String(err))}</div></div>`;
+  }
+}
+
 function renderAgreementUI() {
   const el = document.getElementById('agreementSection');
   if (!el) return;
