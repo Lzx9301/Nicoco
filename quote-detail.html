@@ -300,6 +300,7 @@ body {
 .timeline-dot.type-payment      { background: var(--green); }
 .timeline-dot.type-development  { background: #ea580c; }
 .timeline-dot.type-note         { background: var(--ink-30); }
+.timeline-dot.type-change_request { background: var(--purple); }
 .timeline-line { flex: 1; width: 1px; background: var(--ink-10); margin-top: 4px; }
 
 .timeline-body { flex: 1; min-width: 0; }
@@ -314,6 +315,7 @@ body {
 .timeline-type-tag.type-payment      { background: var(--green-light); color: var(--green); }
 .timeline-type-tag.type-development  { background: #fff7ed; color: #ea580c; }
 .timeline-type-tag.type-note         { background: var(--ink-10); color: var(--ink-60); }
+.timeline-type-tag.type-change_request { background: var(--purple-light); color: var(--purple); }
 .timeline-time { font-size: 11px; color: var(--ink-30); }
 .timeline-by   { font-size: 11px; color: var(--ink-30); }
 .timeline-content { font-size: 13px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; }
@@ -382,8 +384,9 @@ const ACTIVITY_TYPE_LABELS = {
   payment:     '付款紀錄',
   development: '開發進度',
   note:        '一般備註',
+  change_request: '變更需求',
 };
-const ACTIVITY_TYPE_ORDER = ['contact','meeting','quote','payment','development','note'];
+const ACTIVITY_TYPE_ORDER = ['contact','meeting','quote','payment','development','note','change_request'];
 
 // ══════════════════════════════════════════════════
 //  PROJECT SCOPE & PROGRESS TRACKING v1 — CONFIG
@@ -720,6 +723,10 @@ let projectTasks = [];
 let paymentMilestones = [];
 // 建立付款計畫時的前端草稿，未按「建立付款計畫」前完全不寫 Firestore
 let paymentPlanBuilder = null;
+// Change Request v1：quotes/{quoteId}/changeRequests subcollection 的本地快取
+let changeRequests = [];
+// 建立/編輯 CR 時的前端草稿；null=未開啟；{ id:null=新建/否則為編輯中的CR id, title, description, requestedBy, requestedAt, items:[...] }
+let crBuilder = null;
 // Existing Project Initialization v1：純前端 Draft State，只在「確認套用」時才寫入 Firestore
 let initPanel = { open:false, step:'edit', draft:{} };
 // Phase / Scope Group 展開收合狀態，僅為前端 UI 狀態，不寫入 Firestore、不跨頁面持久化
@@ -1245,14 +1252,16 @@ async function renderProjectSection() {
   el.innerHTML = `<div class="card"><div class="card-title">專案管理 Project</div><div class="loading-state" style="padding:40px 0"><div class="spinner"></div>載入專案資料中…</div></div>`;
 
   try {
-    const [scopeSnap, taskSnap, paymentSnap] = await Promise.all([
+    const [scopeSnap, taskSnap, paymentSnap, crSnap] = await Promise.all([
       db.collection('quotes').doc(currentId).collection('scopes').orderBy('order').get(),
       db.collection('quotes').doc(currentId).collection('tasks').get(),
       db.collection('quotes').doc(currentId).collection('paymentMilestones').orderBy('order').get(),
+      db.collection('quotes').doc(currentId).collection('changeRequests').get(),
     ]);
     projectScopes = scopeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     projectTasks  = taskSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     paymentMilestones = paymentSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    changeRequests = crSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     await runTaskTemplateMigrationIfNeeded();
     await runProductScopeMigrationIfNeeded();
     renderProjectUI();
@@ -1413,7 +1422,9 @@ function renderProjectUI() {
       ${projectTasks.length ? PHASES.map(p => renderPhaseTaskGroup(p, m)).join('') : '<div class="tag-empty">尚無 Task，請先在上方 Scope 按「展開成開發任務」</div>'}
     </div>
 
-    ${renderPaymentSection()}`;
+    ${renderPaymentSection()}
+
+    ${renderChangeRequestSection()}`;
 }
 
 function renderScopeRow(s) {
@@ -2508,9 +2519,12 @@ function renderPaymentSection() {
   const todayStr = getLocalDateStr();
   const sorted = [...paymentMilestones].sort((a, b) => (a.order || 0) - (b.order || 0));
 
-  const nextDueText = summary.nextDue === 'DONE'
-    ? '已全部完成'
-    : summary.nextDue
+  // Next Due 文案修正：所有「目前已存在」的 Payment Milestone 都 paid 時，
+  // 若 remaining 仍 > 0（例如 CR 已核准但尚未建立追加付款），不應該誤導顯示「已全部完成」，
+  // 改為明確提示還有多少錢尚未安排付款節點；純文案/判斷調整，不建立任何新 Payment Milestone。
+  const nextDueText = summary.allPaid
+    ? (summary.remaining === 0 ? '已全部完成' : `尚有 NT$${summary.remaining.toLocaleString()} 未安排付款`)
+    : (summary.nextDue && summary.nextDue !== 'DONE')
       ? `${escapeHtml(summary.nextDue.title)}（${summary.nextDue.dueDate}）`
       : '尚未設定';
 
@@ -2592,6 +2606,535 @@ function renderPaymentPlanBuilder() {
       <div style="display:flex;gap:8px;margin-top:14px">
         <button class="btn-copy-link" onclick="closePaymentPlanBuilder()">取消</button>
         ${b.planKey ? `<button class="btn-save" style="padding:9px 18px" onclick="createPaymentPlan()">建立付款計畫</button>` : ''}
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  CHANGE REQUEST v1
+//  quotes/{quoteId}/changeRequests/{crId}
+//  本輪：CR 資料結構、CRUD、狀態流程（draft/proposed/approved/rejected/cancelled）、
+//  核准後重算 project.currentContractValue、CR → Scope（沿用既有 source/crId 欄位）、Activity Log。
+//  不做：客戶端確認、Email、PDF、電子簽名、Agreement Generator、自動修改既有 Payment Milestones、複雜 CR 報表。
+// ══════════════════════════════════════════════════
+
+const CR_STATUS_LABELS = { draft:'草稿', proposed:'待確認', approved:'已核准', rejected:'已拒絕', cancelled:'已取消' };
+const CR_STATUS_COLOR  = { draft:'var(--ink-30)', proposed:'var(--amber)', approved:'var(--green)', rejected:'var(--red)', cancelled:'var(--ink-30)' };
+const CR_STATUS_BG     = { draft:'var(--ink-10)', proposed:'var(--amber-light)', approved:'var(--green-light)', rejected:'#fef2f2', cancelled:'var(--ink-10)' };
+const CR_ITEM_TYPE_LABELS = { add:'新增', modify:'修改', remove:'刪除' };
+const CR_REQUESTED_BY_LABELS = { client:'客戶提出', internal:'內部提出' };
+
+function genCrItemId() {
+  return 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+// 唯一 crNumber：讀取目前所有 CR 的 crNumber，取數字部分最大值 +1，補零 3 位。
+// 單一管理員使用，不需要 Transaction / Counter document。
+function nextCrNumber() {
+  let maxNum = 0;
+  changeRequests.forEach(cr => {
+    const m = /^CR-(\d+)$/.exec(cr.crNumber || '');
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  });
+  return 'CR-' + String(maxNum + 1).padStart(3, '0');
+}
+
+function crComputeAmountDelta(items) {
+  return items.reduce((s, i) => s + (Number.isFinite(Number(i.amountDelta)) ? Number(i.amountDelta) : 0), 0);
+}
+function crComputeDurationDelta(items) {
+  return items.reduce((s, i) => s + (Number.isFinite(Number(i.durationDeltaDays)) ? Number(i.durationDeltaDays) : 0), 0);
+}
+
+function validateCrBuilder() {
+  if (!crBuilder) return '尚未開始建立';
+  if (!crBuilder.title || !crBuilder.title.trim()) return '標題不可空白';
+  if (!crBuilder.items.length) return '至少需要 1 個變更項目';
+  for (const i of crBuilder.items) {
+    if (!i.name || !i.name.trim()) return '每個變更項目都需要名稱';
+    if (!Number.isFinite(Number(i.amountDelta))) return '金額變更必須是有效數字';
+    if (!Number.isFinite(Number(i.durationDeltaDays))) return '工期變更必須是有效數字';
+  }
+  const originalValue = resolvePaymentContractValue();
+  const amountDelta = crComputeAmountDelta(crBuilder.items);
+  const resultingValue = originalValue + amountDelta;
+  if (resultingValue < 0) return `變更後總額不得小於 0（目前將變成 NT$${resultingValue.toLocaleString()}）`;
+  return null;
+}
+
+// ── Draft Builder：純前端操作，按「建立草稿／儲存草稿」前完全不寫 Firestore ──
+function openCrBuilder(existingCr) {
+  if (existingCr) {
+    crBuilder = {
+      id: existingCr.id,
+      title: existingCr.title || '',
+      description: existingCr.description || '',
+      requestedBy: existingCr.requestedBy || 'client',
+      requestedAt: (existingCr.requestedAt && existingCr.requestedAt.toDate) ? getLocalDateStr(existingCr.requestedAt.toDate()) : getLocalDateStr(),
+      items: (existingCr.items || []).map(i => ({ ...i })),
+    };
+  } else {
+    crBuilder = {
+      id: null,
+      title: '',
+      description: '',
+      requestedBy: 'client',
+      requestedAt: getLocalDateStr(),
+      items: [{ id: genCrItemId(), type: 'add', name: '', description: '', amountDelta: 0, durationDeltaDays: 0 }],
+    };
+  }
+  renderProjectUI();
+}
+function editCrDraft(crId) {
+  const cr = changeRequests.find(c => c.id === crId);
+  if (cr && cr.status === 'draft') openCrBuilder(cr);
+}
+function closeCrBuilder() {
+  crBuilder = null;
+  renderProjectUI();
+}
+function crSetField(field, value) {
+  if (!crBuilder) return;
+  crBuilder[field] = value;
+  renderProjectUI();
+}
+function crAddItem() {
+  if (!crBuilder) return;
+  crBuilder.items.push({ id: genCrItemId(), type: 'add', name: '', description: '', amountDelta: 0, durationDeltaDays: 0 });
+  renderProjectUI();
+}
+function crRemoveItem(idx) {
+  if (!crBuilder) return;
+  if (crBuilder.items.length <= 1) { showToast('至少需要保留 1 個變更項目'); return; }
+  crBuilder.items.splice(idx, 1);
+  renderProjectUI();
+}
+function crSetItemField(idx, field, value) {
+  if (!crBuilder || !crBuilder.items[idx]) return;
+  crBuilder.items[idx][field] = value;
+  renderProjectUI();
+}
+
+// ── 建立新 CR 或儲存既有 draft 的編輯（draft 才可編輯；儲存時一律重新計算 amountDelta 等衍生欄位）──
+async function saveCrDraft() {
+  const validationErr = validateCrBuilder();
+  if (validationErr) { showToast(`⚠ ${validationErr}`); return; }
+
+  const amountDelta = crComputeAmountDelta(crBuilder.items);
+  const durationDeltaDays = crComputeDurationDelta(crBuilder.items);
+  const originalContractValue = resolvePaymentContractValue();
+  const resultingContractValue = originalContractValue + amountDelta;
+  const cleanItems = crBuilder.items.map(i => ({
+    id: i.id, type: i.type, name: i.name.trim(), description: i.description || '',
+    amountDelta: Number(i.amountDelta), durationDeltaDays: Number(i.durationDeltaDays),
+  }));
+  const requestedAtTs = firebase.firestore.Timestamp.fromDate(new Date(crBuilder.requestedAt + 'T00:00:00'));
+
+  try {
+    const crColl = db.collection('quotes').doc(currentId).collection('changeRequests');
+
+    if (crBuilder.id) {
+      // 編輯既有 draft：originalContractValue／resultingContractValue 一律重新抓「目前最新」的專案總額重算，
+      // 因為 Draft 尚未送出確認，理應反映其他 CR 核准後帶來的最新基準。
+      const existing = changeRequests.find(c => c.id === crBuilder.id);
+      if (!existing || existing.status !== 'draft') {
+        showToast('⚠ 此 CR 已不是草稿狀態，無法編輯');
+        crBuilder = null; renderProjectUI(); return;
+      }
+      const patch = {
+        title: crBuilder.title.trim(), description: crBuilder.description || '',
+        requestedBy: crBuilder.requestedBy, requestedAt: requestedAtTs,
+        items: cleanItems, amountDelta, durationDeltaDays, originalContractValue, resultingContractValue,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+      await crColl.doc(crBuilder.id).update(patch);
+      Object.assign(existing, patch, { requestedAt: requestedAtTs });
+      showToast(`✓ 已更新 ${existing.crNumber}`);
+    } else {
+      const crNumber = nextCrNumber();
+      const ref = crColl.doc();
+      const data = {
+        crNumber, title: crBuilder.title.trim(), description: crBuilder.description || '',
+        status: 'draft', requestedBy: crBuilder.requestedBy, requestedAt: requestedAtTs,
+        items: cleanItems, amountDelta, durationDeltaDays,
+        originalContractValue, resultingContractValue,
+        scopeIds: [],
+        approvedAt: null,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+      const amountText = amountDelta >= 0 ? `+NT$${amountDelta.toLocaleString()}` : `-NT$${Math.abs(amountDelta).toLocaleString()}`;
+      const newLog = {
+        id: genActivityId(), type: 'change_request',
+        content: `建立 ${crNumber}：${data.title}，金額變更 ${amountText}`,
+        createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
+      };
+      const batch = db.batch();
+      batch.set(ref, data);
+      batch.update(db.collection('quotes').doc(currentId), { activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog) });
+      await batch.commit();
+
+      changeRequests.push({ id: ref.id, ...data });
+      if (!currentData.activityLogs) currentData.activityLogs = [];
+      currentData.activityLogs.push(newLog);
+      showToast(`✓ 已建立 ${crNumber}`);
+      syncTimelineUI();
+    }
+
+    crBuilder = null;
+    renderProjectUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 儲存失敗：${err.message || err}`);
+  }
+}
+
+// ── 一般狀態轉換：單次 batch（CR 狀態 + activityLog）──
+async function crUpdateStatus(cr, newStatus, firestoreExtra, localExtra, logText) {
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const crRef = quoteRef.collection('changeRequests').doc(cr.id);
+    const newLog = { id: genActivityId(), type: 'change_request', content: logText, createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me' };
+
+    const batch = db.batch();
+    batch.update(crRef, { status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), ...firestoreExtra });
+    batch.update(quoteRef, { activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog) });
+    await batch.commit();
+
+    Object.assign(cr, { status: newStatus, ...localExtra });
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast(`✓ ${logText}`);
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 更新失敗：${err.message || err}`);
+  }
+}
+
+async function crSubmitForProposal(crId) {
+  const cr = changeRequests.find(c => c.id === crId);
+  if (!cr || cr.status !== 'draft') return;
+  if (!confirm(`確定要送出 ${cr.crNumber} 供確認嗎？送出後將無法再編輯項目與金額，如需修改請先退回草稿。`)) return;
+  await crUpdateStatus(cr, 'proposed', {}, {}, `${cr.crNumber} 已送出確認`);
+}
+async function crRevertToDraft(crId) {
+  const cr = changeRequests.find(c => c.id === crId);
+  if (!cr || cr.status !== 'proposed') return;
+  if (!confirm(`確定要將 ${cr.crNumber} 退回草稿嗎？`)) return;
+  await crUpdateStatus(cr, 'draft', {}, {}, `${cr.crNumber} 已退回草稿`);
+}
+async function crReject(crId) {
+  const cr = changeRequests.find(c => c.id === crId);
+  if (!cr || cr.status !== 'proposed') return;
+  if (!confirm(`確定要拒絕 ${cr.crNumber} 嗎？此操作不會影響專案總額。`)) return;
+  await crUpdateStatus(cr, 'rejected', {}, {}, `${cr.crNumber} 已拒絕`);
+}
+async function crCancel(crId) {
+  const cr = changeRequests.find(c => c.id === crId);
+  if (!cr || cr.status !== 'draft') return;
+  if (!confirm(`確定要取消 ${cr.crNumber} 嗎？此操作不會刪除紀錄，僅標記為已取消。`)) return;
+  await crUpdateStatus(cr, 'cancelled', {}, {}, `${cr.crNumber} 已取消`);
+}
+
+// ── 核准（本輪最重要的動作）：絕不使用 += ；重新讀取全部 CR 並重新加總，單一 batch 原子性寫入 CR 狀態 + 專案金額 + Activity Log。
+//    選用 batch 而非 Transaction：changeRequestTotal 是在「寫入前」用一次乾淨的 fresh read 重新算好的完整值
+//    （不是依賴讀取到的舊值做增量運算），不需要 Transaction 的樂觀鎖/自動重試機制；
+//    batch 本身已保證「CR 狀態」與「專案金額」要嘛一起成功、要嘛一起失敗，不會出現半套狀態。
+async function crApprove(crId) {
+  const cr = changeRequests.find(c => c.id === crId);
+  if (!cr || cr.status !== 'proposed') return;
+  if (!confirm(`確定要核准 ${cr.crNumber} 嗎？核准後金額與項目將無法再修改，如需更正請建立新的 Change Request。`)) return;
+
+  try {
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const crColl = quoteRef.collection('changeRequests');
+
+    // 重新讀取所有 CR（不信任本地快取），確保加總以 Firestore 現有資料為準
+    const freshSnap = await crColl.get();
+    const freshCrs = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    let changeRequestTotal = 0;
+    freshCrs.forEach(c => {
+      const effectiveStatus = c.id === crId ? 'approved' : c.status; // 這筆 CR 核准後也要算進去
+      if (effectiveStatus === 'approved') changeRequestTotal += Number(c.amountDelta) || 0;
+    });
+
+    const baseContractAmount = Number(currentData.project && currentData.project.contractAmount) || 0;
+    const currentContractValue = baseContractAmount + changeRequestTotal;
+    const approvedAtLocal = firebase.firestore.Timestamp.now();
+
+    const newLog = {
+      id: genActivityId(), type: 'change_request',
+      content: `${cr.crNumber} 已核准，目前專案總額更新為 NT$${currentContractValue.toLocaleString()}`,
+      createdAt: approvedAtLocal, createdBy: 'me',
+    };
+
+    const batch = db.batch();
+    batch.update(crColl.doc(crId), {
+      status: 'approved',
+      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    batch.update(quoteRef, {
+      'project.changeRequestTotal': changeRequestTotal,
+      'project.currentContractValue': currentContractValue,
+      'project.updatedAt': firebase.firestore.FieldValue.serverTimestamp(),
+      activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog),
+    });
+    await batch.commit();
+
+    // Firestore 成功後才同步 local state
+    Object.assign(cr, { status: 'approved', approvedAt: approvedAtLocal });
+    currentData.project = currentData.project || {};
+    currentData.project.changeRequestTotal = changeRequestTotal;
+    currentData.project.currentContractValue = currentContractValue;
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+
+    showToast(`✓ ${cr.crNumber} 已核准`);
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 核准失敗：${err.message || err}`);
+  }
+}
+
+// ── CR → Scope：只有 approved CR 才能建立，沿用既有 Scope 資料模型的 source/crId 欄位；
+//    不自動展開 Task（沿用「展開成開發任務」永遠是獨立人工動作的既有原則）。
+async function createScopeFromCR(crId) {
+  const cr = changeRequests.find(c => c.id === crId);
+  if (!cr || cr.status !== 'approved') return;
+  if (!currentData.project) { showToast('⚠ 尚未建立專案，無法建立 Scope'); return; }
+
+  const already = (cr.scopeIds || []).length > 0;
+  const confirmMsg = already
+    ? `${cr.crNumber} 已經建立過追加 Scope，確定要再建立一個嗎？`
+    : `確定要為 ${cr.crNumber} 建立追加 Scope「${cr.title}」嗎？（僅建立 Scope，不會自動展開 Task）`;
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const maxOrder = projectScopes.reduce((mx, s) => Math.max(mx, s.order || 0), 0);
+    const mapped = SCOPE_TASK_TEMPLATE_MAP[cr.title];
+    const taskTemplateKey = mapped ? mapped.tpl : 'minor_addon';
+
+    const scopeColl = db.collection('quotes').doc(currentId).collection('scopes');
+    const scopeRef = scopeColl.doc();
+    const scopeData = {
+      name: cr.title, description: cr.description || '',
+      source: 'change_request', crId: cr.id, sourceQuoteItem: null,
+      active: true, includeInProgress: true, order: maxOrder + 10,
+      taskTemplateKey, tasksGenerated: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const newScopeIds = [...(cr.scopeIds || []), scopeRef.id];
+    const newLog = {
+      id: genActivityId(), type: 'change_request',
+      content: `已從 ${cr.crNumber} 建立追加 Scope：${cr.title}`,
+      createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
+    };
+
+    const batch = db.batch();
+    batch.set(scopeRef, scopeData);
+    batch.update(db.collection('quotes').doc(currentId).collection('changeRequests').doc(crId), {
+      scopeIds: newScopeIds, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    batch.update(db.collection('quotes').doc(currentId), { activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog) });
+    await batch.commit();
+
+    projectScopes.push({ id: scopeRef.id, ...scopeData });
+    cr.scopeIds = newScopeIds;
+    if (!currentData.activityLogs) currentData.activityLogs = [];
+    currentData.activityLogs.push(newLog);
+    showToast(`✓ 已建立追加 Scope：${cr.title}`);
+    renderProjectUI();
+    syncTimelineUI();
+  } catch (err) {
+    console.error(err);
+    showToast(`⚠ 建立追加 Scope 失敗：${err.message || err}`);
+  }
+}
+
+function computeCrSummary() {
+  let approvedTotal = 0, inProgress = 0;
+  changeRequests.forEach(cr => {
+    if (cr.status === 'approved') approvedTotal += Number(cr.amountDelta) || 0;
+    if (cr.status === 'draft' || cr.status === 'proposed') inProgress++;
+  });
+  return { approvedTotal, inProgress };
+}
+
+// ── 渲染：Change Requests 卡片（Project 未建立時完全不顯示）──
+function renderChangeRequestSection() {
+  if (!currentData.project) return '';
+  if (crBuilder) return renderCrBuilder();
+
+  const summary = computeCrSummary();
+  const sorted = [...changeRequests].sort((a, b) => (b.crNumber || '').localeCompare(a.crNumber || ''));
+
+  return `
+    <div class="card">
+      <div class="card-title">Change Requests</div>
+
+      ${changeRequests.length ? `
+      <div class="info-grid" style="margin-bottom:14px">
+        <div class="info-box"><div class="info-label">已核准變更金額</div><div class="info-value" style="color:${summary.approvedTotal >= 0 ? 'var(--green)' : 'var(--red)'}">${summary.approvedTotal >= 0 ? '+' : '-'}NT$${Math.abs(summary.approvedTotal).toLocaleString()}</div></div>
+        <div class="info-box"><div class="info-label">進行中</div><div class="info-value">${summary.inProgress}</div></div>
+      </div>
+      ${sorted.map(renderCrRow).join('')}
+      ` : `<div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">尚未建立變更需求。</div>`}
+
+      <button class="btn-save" onclick="openCrBuilder()">＋ 建立 Change Request</button>
+    </div>`;
+}
+
+function renderCrRow(cr) {
+  const statusLabel = CR_STATUS_LABELS[cr.status] || cr.status;
+  const statusColor = CR_STATUS_COLOR[cr.status] || 'var(--ink-30)';
+  const statusBg    = CR_STATUS_BG[cr.status] || 'var(--ink-10)';
+  const amt = Number(cr.amountDelta) || 0;
+  const amountText = amt >= 0 ? `+NT$${amt.toLocaleString()}` : `-NT$${Math.abs(amt).toLocaleString()}`;
+  const dur = Number(cr.durationDeltaDays) || 0;
+  const durationText = dur === 0 ? '' : (dur > 0 ? `+${dur} 天` : `${dur} 天`);
+  const requestedAtStr = (cr.requestedAt && cr.requestedAt.toDate) ? getLocalDateStr(cr.requestedAt.toDate()) : (cr.requestedAt || '—');
+  const detailKey = 'cr_' + cr.id;
+  const detailOpen = collapsedGroups.has(detailKey); // 借用既有 collapsedGroups Set：預設收合，點擊展開細節
+
+  const actions = [];
+  if (cr.status === 'draft') {
+    actions.push(`<button class="btn-copy-link" onclick="editCrDraft('${cr.id}')">編輯</button>`);
+    actions.push(`<button class="btn-copy-link" onclick="crSubmitForProposal('${cr.id}')">送出確認</button>`);
+    actions.push(`<button class="btn-copy-link" style="color:var(--red)" onclick="crCancel('${cr.id}')">取消 CR</button>`);
+  } else if (cr.status === 'proposed') {
+    actions.push(`<button class="btn-copy-link" onclick="crRevertToDraft('${cr.id}')">退回草稿</button>`);
+    actions.push(`<button class="btn-copy-link" style="color:var(--green)" onclick="crApprove('${cr.id}')">核准</button>`);
+    actions.push(`<button class="btn-copy-link" style="color:var(--red)" onclick="crReject('${cr.id}')">拒絕</button>`);
+  } else if (cr.status === 'approved') {
+    actions.push(`<button class="btn-copy-link" onclick="createScopeFromCR('${cr.id}')">建立追加 Scope</button>`);
+  }
+  actions.push(`<button class="btn-copy-link" onclick="toggleGroupCollapse('${detailKey}')">${detailOpen ? '收合' : '查看詳細'}</button>`);
+
+  const itemDetail = detailOpen ? `
+      <div style="margin-top:8px;border-top:1px solid var(--ink-10);padding-top:8px">
+        ${(cr.items || []).map(i => `
+          <div style="font-size:11.5px;color:var(--ink-60);margin-bottom:4px">
+            <span class="dtag" style="margin-right:4px">${CR_ITEM_TYPE_LABELS[i.type] || i.type}</span>
+            ${escapeHtml(i.name)}${i.description ? `　${escapeHtml(i.description)}` : ''}
+            　<span style="color:${(Number(i.amountDelta)||0)>=0?'var(--green)':'var(--red)'}">${(Number(i.amountDelta)||0)>=0?'+':'-'}NT$${Math.abs(Number(i.amountDelta)||0).toLocaleString()}</span>
+          </div>`).join('')}
+        ${(cr.scopeIds && cr.scopeIds.length) ? `<div style="font-size:11px;color:var(--ink-30);margin-top:4px">已建立 ${cr.scopeIds.length} 個追加 Scope</div>` : ''}
+      </div>` : '';
+
+  return `
+    <div style="border:1.5px solid var(--ink-10);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px">
+          <div style="font-size:13.5px;font-weight:600;color:var(--ink)">
+            ${escapeHtml(cr.crNumber)}　${escapeHtml(cr.title)}
+            <span class="dtag" style="margin-left:6px;background:${statusBg};color:${statusColor}">${statusLabel}</span>
+          </div>
+          <div style="font-size:11px;color:var(--ink-60);margin-top:4px">
+            ${CR_REQUESTED_BY_LABELS[cr.requestedBy] || cr.requestedBy}　${requestedAtStr}　${(cr.items || []).length} 個變更項目
+          </div>
+          <div style="font-size:12px;margin-top:4px">
+            <span style="color:${amt >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:600">${amountText}</span>
+            ${durationText ? `　<span style="color:var(--ink-60)">${durationText}</span>` : ''}
+          </div>
+          ${cr.status === 'approved'
+            ? `<div style="font-size:11px;color:var(--ink-30);margin-top:4px">已核准的變更需求不可直接修改，如需更正請建立新的 Change Request。</div>`
+            : ''}
+          ${itemDetail}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${actions.join('')}</div>
+      </div>
+    </div>`;
+}
+
+function renderCrBuilder() {
+  const b = crBuilder;
+  const amountDelta = crComputeAmountDelta(b.items);
+  const durationDeltaDays = crComputeDurationDelta(b.items);
+  const originalValue = resolvePaymentContractValue();
+  const resultingValue = originalValue + amountDelta;
+  const err = validateCrBuilder();
+  const crNumberDisplay = b.id ? ((changeRequests.find(c => c.id === b.id) || {}).crNumber || '—') : nextCrNumber();
+
+  const itemRows = b.items.map((item, idx) => `
+    <div style="border:1px solid var(--ink-10);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+        <select class="field-select" style="width:auto" onchange="crSetItemField(${idx},'type',this.value)">
+          <option value="add" ${item.type === 'add' ? 'selected' : ''}>新增</option>
+          <option value="modify" ${item.type === 'modify' ? 'selected' : ''}>修改</option>
+          <option value="remove" ${item.type === 'remove' ? 'selected' : ''}>刪除</option>
+        </select>
+        <input class="field-input" style="flex:1;min-width:140px" placeholder="項目名稱" value="${escapeHtml(item.name)}" onchange="crSetItemField(${idx},'name',this.value)">
+        ${b.items.length > 1 ? `<button class="btn-copy-link" style="color:var(--red)" onclick="crRemoveItem(${idx})">刪除項目</button>` : ''}
+      </div>
+      <input class="field-input" style="width:100%;margin-bottom:8px" placeholder="說明（可留空）" value="${escapeHtml(item.description || '')}" onchange="crSetItemField(${idx},'description',this.value)">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:9.5px;color:var(--ink-60);text-transform:uppercase;letter-spacing:.04em">金額變更</span>
+          <input type="number" step="1" class="field-input" style="width:130px" value="${item.amountDelta}" onchange="crSetItemField(${idx},'amountDelta',parseFloat(this.value))">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:9.5px;color:var(--ink-60);text-transform:uppercase;letter-spacing:.04em">工期變更（天）</span>
+          <input type="number" step="1" class="field-input" style="width:100px" value="${item.durationDeltaDays}" onchange="crSetItemField(${idx},'durationDeltaDays',parseFloat(this.value))">
+        </div>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="card" style="border:2px solid var(--ink)">
+      <div class="card-title">${b.id ? '編輯 Change Request' : '建立 Change Request'}</div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">CR 編號</label>
+          <input class="field-input" value="${escapeHtml(crNumberDisplay)}" disabled style="background:var(--ink-10);color:var(--ink-60)">
+        </div>
+        <div class="field">
+          <label class="field-label">提出者</label>
+          <select class="field-select" onchange="crSetField('requestedBy',this.value)">
+            <option value="client" ${b.requestedBy === 'client' ? 'selected' : ''}>客戶</option>
+            <option value="internal" ${b.requestedBy === 'internal' ? 'selected' : ''}>內部</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">標題</label>
+          <input class="field-input" placeholder="例如：新增優惠券系統" value="${escapeHtml(b.title)}" onchange="crSetField('title',this.value)">
+        </div>
+        <div class="field">
+          <label class="field-label">提出日期</label>
+          <input type="date" class="field-input" value="${b.requestedAt}" onchange="crSetField('requestedAt',this.value)">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">說明（可留空）</label>
+        <input class="field-input" value="${escapeHtml(b.description || '')}" onchange="crSetField('description',this.value)">
+      </div>
+
+      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">變更項目：</div>
+      ${itemRows}
+      <button class="btn-copy-link" onclick="crAddItem()">＋ 新增項目</button>
+
+      <div style="margin-top:14px;padding:12px 14px;background:var(--ink-10);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px"><span>目前專案總額</span><span>NT$${originalValue.toLocaleString()}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px"><span>本次變更</span><span style="color:${amountDelta >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:600">${amountDelta >= 0 ? '+' : '-'}NT$${Math.abs(amountDelta).toLocaleString()}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:700;border-top:1px solid var(--ink-10);padding-top:6px;margin-top:4px"><span>變更後總額</span><span>NT$${resultingValue.toLocaleString()}</span></div>
+        ${durationDeltaDays !== 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink-60);margin-top:4px"><span>工期變更</span><span>${durationDeltaDays > 0 ? '+' : ''}${durationDeltaDays} 天</span></div>` : ''}
+      </div>
+
+      ${err ? `<div style="font-size:12px;color:var(--red);margin-top:10px">⚠ ${err}</div>` : ''}
+
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn-copy-link" onclick="closeCrBuilder()">取消</button>
+        <button class="btn-save" style="padding:9px 18px" onclick="saveCrDraft()">${b.id ? '儲存草稿' : '建立草稿'}</button>
       </div>
     </div>`;
 }
