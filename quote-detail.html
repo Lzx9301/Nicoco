@@ -760,6 +760,18 @@ function collapseAllScopes() {
   projectScopes.forEach(s => collapsedGroups.delete(scopeDetailKey(s.id)));
   renderProjectUI();
 }
+// 資訊密度優化第二輪：Development Tasks 整張卡片預設收合；Scope Items 預設不 render 任何 Scope row，
+// 需先點「管理 Scope」才顯示完整清單。兩者皆為純前端 UI 狀態，每次重新載入案件時重置為預設收合。
+let devTasksExpanded = false;
+function toggleDevTasksExpanded() {
+  devTasksExpanded = !devTasksExpanded;
+  renderProjectUI();
+}
+let scopeListExpanded = false;
+function toggleScopeListExpanded() {
+  scopeListExpanded = !scopeListExpanded;
+  renderProjectUI();
+}
 
 // ══════════════════════════════════════════════════
 //  GET ?id= FROM URL
@@ -1433,28 +1445,47 @@ function renderProjectUI() {
     ${renderInitPanel(m)}
 
     <div class="card">
-      <div class="card-title">
-        Scope Items（${projectScopes.length}）
-        ${projectScopes.length ? `<span style="display:inline-flex;gap:6px;margin-left:8px">
+      <div class="card-title">Scope Items（${projectScopes.length}）</div>
+      <div class="info-grid" style="margin-bottom:14px">
+        <div class="info-box"><div class="info-label">總 Scope 數</div><div class="info-value">${projectScopes.length}</div></div>
+        <div class="info-box"><div class="info-label">initial_scope</div><div class="info-value">${projectScopes.filter(s => s.source === 'initial_scope').length}</div></div>
+        <div class="info-box"><div class="info-label">change_request</div><div class="info-value">${projectScopes.filter(s => s.source === 'change_request').length}</div></div>
+        <div class="info-box"><div class="info-label">internal</div><div class="info-value">${projectScopes.filter(s => s.source === 'internal').length}</div></div>
+      </div>
+      <button class="btn-save" onclick="toggleScopeListExpanded()">${scopeListExpanded ? '收合 Scope 清單' : '管理 Scope'}</button>
+
+      ${scopeListExpanded ? `
+      <div style="margin-top:14px">
+        ${projectScopes.length ? `<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
           <button class="btn-copy-link" onclick="expandAllScopes()">全部展開</button>
           <button class="btn-copy-link" onclick="collapseAllScopes()">全部收合</button>
-        </span>` : ''}
-      </div>
-      ${projectScopes.length ? projectScopes.map(renderScopeRow).join('') : '<div class="tag-empty">尚無 Scope，可於下方新增</div>'}
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <input class="field-input" id="new-scope-name" placeholder="新增 Scope 名稱" style="flex:1;min-width:160px">
-        <select class="field-select" id="new-scope-source" style="width:auto">
-          <option value="internal">internal（內部技術項目）</option>
-          <option value="initial_scope">initial_scope</option>
-          <option value="change_request">change_request</option>
-        </select>
-        <button class="btn-save" style="padding:9px 18px" onclick="addManualScope()">新增 Scope</button>
-      </div>
+        </div>` : ''}
+        ${projectScopes.length ? projectScopes.map(renderScopeRow).join('') : '<div class="tag-empty">尚無 Scope，可於下方新增</div>'}
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <input class="field-input" id="new-scope-name" placeholder="新增 Scope 名稱" style="flex:1;min-width:160px">
+          <select class="field-select" id="new-scope-source" style="width:auto">
+            <option value="internal">internal（內部技術項目）</option>
+            <option value="initial_scope">initial_scope</option>
+            <option value="change_request">change_request</option>
+          </select>
+          <button class="btn-save" style="padding:9px 18px" onclick="addManualScope()">新增 Scope</button>
+        </div>
+      </div>` : ''}
     </div>
 
     <div class="card">
-      <div class="card-title">Development Tasks（Phase → Scope 分組，${projectTasks.length} 項）</div>
-      ${projectTasks.length ? PHASES.map(p => renderPhaseTaskGroup(p, m)).join('') : '<div class="tag-empty">尚無 Task，請先在上方 Scope 按「展開成開發任務」</div>'}
+      <div class="card-title">Development Tasks</div>
+      <div class="info-grid" style="margin-bottom:14px">
+        <div class="info-box"><div class="info-label">Overall Progress</div><div class="info-value">${m.overall.toFixed(1)}%</div></div>
+        <div class="info-box"><div class="info-label">Scope 數量</div><div class="info-value">${new Set(projectTasks.map(t => t.scopeId)).size}</div></div>
+        <div class="info-box"><div class="info-label">Task 數量</div><div class="info-value">${projectTasks.length}</div></div>
+      </div>
+      <button class="btn-save" onclick="toggleDevTasksExpanded()">${devTasksExpanded ? '收合 Development Tasks' : '展開 Development Tasks'}</button>
+
+      ${devTasksExpanded ? `
+      <div style="margin-top:14px">
+        ${projectTasks.length ? PHASES.map(p => renderPhaseTaskGroup(p, m)).join('') : '<div class="tag-empty">尚無 Task，請先在上方 Scope 按「展開成開發任務」</div>'}
+      </div>` : ''}
     </div>
 
     ${renderAcceptanceWarrantySection()}
