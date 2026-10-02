@@ -9,6 +9,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<!-- Requirement Definition（ecom v1）：此頁只使用 renderSnapshotHtml() 唯讀顯示客戶原始需求 -->
+<script src="requirements-ecom-v1.js"></script>
 <script>
 const FB_CONFIG = {
   apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
@@ -824,6 +826,32 @@ function fmtPriceRange(q) {
   return `NT$${Number(q.priceMid).toLocaleString()}（${q.priceRange || '—'}）`;
 }
 
+// ── Requirement + Estimate v1：客戶原始需求（唯讀）──
+// requirementSnapshot 只在客戶送出估價時寫入一次；本頁沒有任何寫入此欄位的程式碼。
+// 舊案件沒有此欄位時只顯示說明文字，不報錯、不 backfill。
+function renderRequirementSnapshotCard(q) {
+  const snap = q && q.requirementSnapshot;
+  let body;
+  if (!snap) {
+    body = '<div class="tag-empty">此案件建立於需求書功能之前</div>';
+  } else if (!window.NicocoRequirements || !Array.isArray(snap.categories)) {
+    body = '<div class="tag-empty">⚠ 無法顯示需求內容（需求模組未載入或資料格式不符），原始資料仍完整保存於 requirementSnapshot。</div>';
+  } else {
+    const submitted = snap.submittedAt ? fmtDate(snap.submittedAt) : (snap.submittedAtClient || '—');
+    body = `
+      <div style="font-size:12px;color:var(--ink-60);line-height:1.6;margin-bottom:12px">
+        客戶送出時的原始需求（唯讀，送出時間 ${escapeHtml(submitted)}）。此內容不會被後續管理操作修改；討論後確認的正式需求將另外記錄。
+        ${snap.requiresManualReview ? '<br><span style="color:var(--amber);font-weight:600">⚠ 包含需人工確認的需求，尚未列入正式 Scope。</span>' : ''}
+      </div>
+      ${window.NicocoRequirements.renderSnapshotHtml(snap, { mode: 'admin' })}`;
+  }
+  return `
+    <div class="card">
+      <div class="card-title">客戶原始需求</div>
+      ${body}
+    </div>`;
+}
+
 function renderDetail() {
   const q = currentData;
   const wrap = document.getElementById('wrap');
@@ -910,6 +938,9 @@ function renderDetail() {
         <div style="font-size:13px;color:var(--ink-60);line-height:1.6">${escapeHtml(q.message || '無')}</div>
       </div>
     </div>
+
+    <!-- ── 客戶原始需求（Requirement Snapshot，唯讀）── -->
+    ${renderRequirementSnapshotCard(q)}
 
     <!-- ── 專案管理 Project Scope & Progress（Backward compatible：舊報價無 project 欄位時顯示建立按鈕）── -->
     <div id="projectSection"></div>

@@ -8,6 +8,8 @@
 <!-- Firebase SDK (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<!-- Requirement Definition（ecom v1）：與 FEATURES 分離，index.html 與 quote-detail.html 共用 -->
+<script src="requirements-ecom-v1.js"></script>
 <script>
 // ══════════════════════════════════════════════════
 //  FIREBASE CONFIG（compat 版，不用 import / module）
@@ -27,7 +29,7 @@ const db = firebase.firestore();
 // ── 寫入 Firestore：quotes/{quoteId} ──────────────────
 // 暫時不做流水號查詢，quoteId 直接沿用 state.quoteId（前端產生的隨機編號）
 async function saveQuoteToFirestore(quoteId, data) {
-  await db.collection('quotes').doc(quoteId).set({
+  const docData = {
     quoteId,
     name:            data.name,
     company:         data.company,
@@ -61,7 +63,16 @@ async function saveQuoteToFirestore(quoteId, data) {
     pricingBreakdown: data.pricingBreakdown || null,
     status:          'new',
     createdAt:       firebase.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  // Requirement + Estimate v1：客戶原始需求 Snapshot（additive；只在送出時寫入一次，後台不會改寫此欄位）。
+  // 非 ecom 類型沒有需求書，完全不寫入此欄位，文件結構與改版前相同。
+  if (data.requirementSnapshot) {
+    docData.requirementSnapshot = {
+      ...data.requirementSnapshot,
+      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+  }
+  await db.collection('quotes').doc(quoteId).set(docData);
 }
 
 // 掛到 window，讓主程式呼叫
@@ -307,6 +318,66 @@ body {
   font-size: 13px; color: #92400e; line-height: 1.6; margin-bottom: 20px;
 }
 .evaluate-notice strong { font-weight: 600; }
+
+/* ── Requirement（ecom 需求確認）────────────────────────────── */
+.feature-item.locked .feature-row { cursor: not-allowed; }
+.feature-item.locked .feature-check { opacity: .55; }
+.badge-derived { background: var(--accent-light); color: var(--accent); }
+.badge-inc { background: var(--green-light); color: var(--green); }
+.req-intro {
+  background: var(--green-light); border: 1px solid #bbf7d0; border-radius: var(--r);
+  padding: 12px 14px; font-size: 13px; color: #166534; line-height: 1.6; margin-bottom: 16px;
+}
+.req-cat { border: 1.5px solid var(--ink-10); border-radius: var(--r); margin-bottom: 8px; background: var(--white); }
+.req-cat.open { border-color: var(--ink-30); }
+.req-cat-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; user-select: none; }
+.req-cat-name { font-size: 15px; font-weight: 600; color: var(--ink); }
+.req-cat-count { margin-left: auto; font-size: 12px; color: var(--ink-60); }
+.req-cat-caret { width: 18px; text-align: center; font-size: 16px; color: var(--ink-30); }
+.req-cat-body { padding: 0 16px 16px; }
+.req-base { background: var(--ink-10); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+.req-base-title, .req-sub-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-30); margin-bottom: 6px;
+}
+.req-base-list { font-size: 12.5px; color: var(--ink-60); line-height: 1.7; }
+.req-note { font-size: 11.5px; color: var(--ink-60); line-height: 1.6; margin-top: 6px; }
+.req-node { margin-bottom: 6px; }
+.req-check {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+  border: 1.5px solid var(--ink-10); border-radius: 8px; cursor: pointer;
+}
+.req-check.selected { border-color: var(--ink); }
+.req-check.disabled { cursor: not-allowed; background: var(--ink-10); }
+.req-check.disabled .req-label { color: var(--ink-30); }
+.req-box {
+  flex: none; width: 16px; height: 16px; margin-top: 2px; border: 1.5px solid var(--ink-30); border-radius: 4px;
+  font-size: 11px; line-height: 13px; text-align: center; color: var(--white);
+}
+.req-check.selected .req-box { background: var(--ink); border-color: var(--ink); }
+.req-main { flex: 1; min-width: 0; }
+.req-label { font-size: 13px; font-weight: 500; color: var(--ink); }
+.req-hint { font-size: 11.5px; color: var(--ink-60); line-height: 1.5; margin-top: 2px; }
+.req-dep { font-size: 11.5px; color: var(--amber); line-height: 1.5; margin-top: 2px; }
+.req-tag { flex: none; font-size: 11px; color: var(--ink-60); white-space: nowrap; margin-top: 2px; }
+.req-tag.base { color: var(--green); }
+.req-tag.eval { color: var(--amber); font-weight: 600; }
+.req-children { margin: 6px 0 8px 14px; padding-left: 12px; border-left: 2px solid var(--ink-10); }
+.req-q { margin: 10px 0 12px; }
+.req-q-label { font-size: 12.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.req-opts { display: flex; flex-direction: column; gap: 5px; }
+.req-opt {
+  display: flex; align-items: flex-start; gap: 8px; padding: 8px 11px; font-size: 12.5px; color: var(--ink-60);
+  border: 1.5px solid var(--ink-10); border-radius: 8px; cursor: pointer;
+}
+.req-opt.selected { border-color: var(--ink); color: var(--ink); font-weight: 500; }
+.req-opt.disabled { cursor: not-allowed; background: var(--ink-10); color: var(--ink-30); }
+.req-opt .req-box { margin-top: 1px; }
+.req-opt.radio .req-box { border-radius: 50%; }
+.req-opt.selected .req-box { background: var(--ink); border-color: var(--ink); }
+.req-text {
+  width: 100%; font: inherit; font-size: 13px; color: var(--ink); padding: 8px 10px; margin-top: 5px;
+  border: 1.5px solid var(--ink-10); border-radius: 8px; background: var(--white); resize: vertical;
+}
 
 /* ── YN Toggle ───────────────────────────────────────────────── */
 .yn-row { display: flex; gap: 8px; margin-bottom: 12px; }
@@ -586,7 +657,7 @@ body {
     <div data-step="2">
       <div class="step-eyebrow">Step 2 · 5</div>
       <div class="step-title" id="s2title">需要哪些功能？</div>
-      <div class="step-sub">已為你帶入建議項目，可依需求調整。點 <strong>?</strong> 查看說明。</div>
+      <div class="step-sub" id="s2sub">已為你帶入建議項目，可依需求調整。點 <strong>?</strong> 查看說明。</div>
 
       <!-- 客製提示 -->
       <div class="evaluate-notice" id="customNotice" style="display:none">
@@ -604,8 +675,8 @@ body {
     <!-- Step 3: 會員 / 電商細節 -->
     <div data-step="3">
       <div class="step-eyebrow">Step 3 · 5</div>
-      <div class="step-title">進階功能</div>
-      <div class="step-sub">選擇需要的進階功能。這些項目會影響預估費用。</div>
+      <div class="step-title" id="s3title">進階功能</div>
+      <div class="step-sub" id="s3sub">選擇需要的進階功能。這些項目會影響預估費用。</div>
       <div id="advancedContainer"></div>
       <div class="step-actions">
         <button class="btn btn-ghost" onclick="prevStep()">← 上一步</button>
@@ -722,7 +793,7 @@ body {
 
     <!-- Step 5: 摘要 -->
     <div data-step="5">
-      <div class="step-eyebrow">估價摘要</div>
+      <div class="step-eyebrow" id="s5eyebrow">估價摘要</div>
       <div class="step-title">你的需求估算結果</div>
       <div class="step-sub">以下為系統自動估算，正式報價仍需進一步需求訪談。</div>
       <div id="summaryContent"></div>
@@ -979,6 +1050,11 @@ const state = {
   conds: { timeline:0, warrantyFlat:0, warrantyLabel:'30 天內含保固', complexity:0, revisionKey:'standard', revisionLabel:'2 次內含', maintKey:'none', maintLabel:'不需要' },
   contact: {},
   quoteId: genQid(),
+  // Requirement + Estimate v1（僅 ecom 使用）
+  req: { answers: {} },        // 客戶對需求書的回答（key → true / 'value' / ['v1','v2'] / '文字'）
+  reqOpen: new Set(),          // 目前展開的需求區塊（純 UI 狀態）
+  reqEval: null,               // NicocoRequirements.evaluate() 的結果
+  reqDerived: new Set(),       // 由需求內容帶入的既有 pricing key（'group:id'）
 };
 
 function genQid() {
@@ -1000,6 +1076,8 @@ window.addEventListener('DOMContentLoaded', () => {
 //  PROGRESS BAR
 // ══════════════════════════════════════════════════
 const STEP_LABELS = ['專案類型','功能需求','進階功能','條件 & 聯絡','估價摘要'];
+// ecom：Step 2 為電商需求確認（Requirement），Step 3 為其他功能／加購
+const STEP_LABELS_ECOM = ['專案類型','電商需求確認','其他功能／加購','條件 & 聯絡','需求與估價摘要'];
 
 function renderProgress() {
   const bar = document.getElementById('progressBar');
@@ -1018,7 +1096,7 @@ function renderProgress() {
     s.className = 'prog-step' + (isActive ? ' active' : isDone ? ' done' : '');
     s.innerHTML = `
       <div class="prog-dot">${isDone ? '✓' : idx + 1}</div>
-      <div class="prog-label">${STEP_LABELS[stepNum - 1]}</div>`;
+      <div class="prog-label">${(isReqType() ? STEP_LABELS_ECOM : STEP_LABELS)[stepNum - 1]}</div>`;
     if (isDone) s.onclick = () => goTo(stepNum);
     bar.appendChild(s);
   });
@@ -1073,10 +1151,31 @@ function selectType(el, type) {
     if (state.selected[k]) preset[k].forEach(id => state.selected[k].add(id));
   });
 
+  // Requirement 狀態：切換類型時一律重置（只有 ecom 會使用）
+  state.req = { answers: {} };
+  state.reqOpen = new Set();
+  recomputeReq();
+  applyStepTexts();
+
   // Render step 2
   renderFeatures();
   renderAdvanced();
   updateSidebar();
+}
+
+// 依類型切換 Step 2／3／5 的標題文字（非 ecom 維持原本文案）
+function applyStepTexts() {
+  const ecom = isReqType();
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  set('s2title', ecom ? '電商需求確認' : '需要哪些功能？');
+  set('s2sub', ecom
+    ? '你的方案已包含以下六大系統。請點開各區塊，確認是否還有額外或特殊需求；沒有的話可以直接下一步。'
+    : '已為你帶入建議項目，可依需求調整。點 <strong>?</strong> 查看說明。');
+  set('s3title', ecom ? '其他功能／加購' : '進階功能');
+  set('s3sub', ecom
+    ? '方案已包含的項目無法取消；由需求內容帶入的項目請回上一步調整。其餘可依需要加選。點 <strong>?</strong> 查看說明。'
+    : '選擇需要的進階功能。這些項目會影響預估費用。');
+  set('s5eyebrow', ecom ? '需求與估價摘要' : '估價摘要');
 }
 
 // ══════════════════════════════════════════════════
@@ -1088,6 +1187,9 @@ function renderFeatures() {
 
   // Custom notice
   notice.style.display = state.type === 'custom' ? 'block' : 'none';
+
+  // ecom：Step 2 改為電商需求確認（Requirement），功能清單整體移到 Step 3
+  if (isReqType()) { renderRequirements(); return; }
 
   const sections = TYPE_SECTIONS[state.type] || [];
   let html = '';
@@ -1110,7 +1212,17 @@ function renderFeatures() {
 
 function renderAdvanced() {
   const container = document.getElementById('advancedContainer');
-  if (state.type === 'ecom') {
+  if (isReqType()) {
+    // ecom：Step 3 顯示全部功能群組（原 Step 2 + 原 Step 3 的內容），計價方式完全不變
+    let html = '';
+    (TYPE_SECTIONS.ecom || []).forEach(sec => {
+      const items = FEATURES[sec.key];
+      if (!items || !items.length) return;
+      html += renderSection(sec.label, sec.key, items);
+    });
+    container.innerHTML = html;
+  } else if (state.type === 'ecom') {
+    // 後備：需求定義檔載入失敗時，維持改版前的 ecom Step 3
     let html = renderSection('電商功能', 'ecom', FEATURES.ecom);
     html += renderSection('會員功能', 'member', FEATURES.member);
     container.innerHTML = html;
@@ -1129,9 +1241,13 @@ function renderSection(label, group, items) {
   if (label) html += `<div class="feature-group-title">${label}${isEval ? ' — 以下項目需要專案評估，不計入自動估價' : ''}</div>`;
   html += `<div class="feature-list">`;
   items.forEach(item => {
-    const sel = state.selected[group] && state.selected[group].has(item.id);
+    const sel = isSelected(group, item.id);
     const evalItem = item.evaluate;
     const included = isIncluded(group, item.id);
+    const lockedInc = isLockedIncluded(group, item.id);   // ecom 方案已包含 → 不可取消
+    const derived = isReqDerived(group, item.id);         // 由需求內容帶入 → 需回需求確認調整
+    const lockBadge = lockedInc ? '<span class="badge badge-inc">方案已包含</span>'
+                    : derived   ? '<span class="badge badge-derived">由需求內容帶入</span>' : '';
     const hiPrice = item.priceHigh || (item.isModule ? Math.round(item.price * 1.55) : null);
     const priceStr = item.free    ? '已含於建置費' :
                      evalItem     ? '需評估' :
@@ -1142,12 +1258,12 @@ function renderSection(label, group, items) {
                        evalItem  ? 'evaluate' :
                        included  ? 'free' : '';  // 同樣用綠色表示「不計費」
     html += `
-      <div class="feature-item${sel?' selected':''}${evalItem?' evaluate':''}" data-group="${group}" data-id="${item.id}">
+      <div class="feature-item${sel?' selected':''}${evalItem?' evaluate':''}${(lockedInc||derived)?' locked':''}" data-group="${group}" data-id="${item.id}">
         <div class="feature-row" onclick="toggleFeature('${group}','${item.id}',event)">
           <div class="feature-check"></div>
           <div class="feature-name-wrap">
             <span class="feature-name">${item.name}</span>
-            <span class="badge badge-${item.badge}">${badgeLabel(item.badge)}</span>
+            <span class="badge badge-${item.badge}">${badgeLabel(item.badge)}</span>${lockBadge}
           </div>
           <span class="feature-price ${priceClass}">${priceStr}</span>
           <div class="info-btn" onclick="toggleDesc('${group}-${item.id}',event)">?</div>
@@ -1167,9 +1283,15 @@ function toggleFeature(group, id, event) {
   if (event.target.classList.contains('info-btn')) return;
   const s = state.selected[group];
   if (!s) return;
+  // ecom：方案已包含的項目不可取消（取消後價格不變，但建立專案時對應 Scope 會消失）
+  if (isLockedIncluded(group, id)) { showToast('此項目已包含在方案內，無法取消'); return; }
+  // 由需求內容帶入的 pricing key：只能回「電商需求確認」調整，避免兩邊狀態不一致
+  if (isReqDerived(group, id)) { showToast('此項目由需求內容帶入，請回上一步「電商需求確認」調整'); return; }
   if (s.has(id)) s.delete(id); else s.add(id);
   const el = document.querySelector(`[data-group="${group}"][data-id="${id}"]`);
   if (el) el.classList.toggle('selected', s.has(id));
+  // 需求書中有 dependency 指向功能清單（例如優惠券）→ 功能變動後重新計算需求狀態
+  if (isReqType()) { recomputeReq(); renderRequirements(); renderAdvanced(); }
   updateSidebar();
 }
 
@@ -1212,8 +1334,203 @@ function selectRevisionOpt(el, key, label) {
 }
 
 // ══════════════════════════════════════════════════
+//  REQUIREMENT（ecom 需求確認）— Step 2
+//  定義來自 requirements-ecom-v1.js；這裡只負責 render 與互動。
+//  價格完全由既有 FEATURES / calcPrice 負責，需求節點不帶任何金額。
+// ══════════════════════════════════════════════════
+function reqCtx() {
+  return {
+    // dependency 判斷用：只看「方案已含或客戶手動勾選」的功能，不含需求帶入項（避免循環）
+    hasFeature: (group, id) => !!(state.selected[group] && state.selected[group].has(id)),
+    // Snapshot 用：保存當時的功能名稱與是否方案內含
+    featureInfo: (group, id) => {
+      const item = (FEATURES[group] || []).find(i => i.id === id);
+      return { name: item ? item.name : '', included: isIncluded(group, id) };
+    },
+  };
+}
+
+// 重新計算需求狀態 → 更新由需求帶入的 pricing key
+function recomputeReq() {
+  if (!isReqType()) { state.reqEval = null; state.reqDerived = new Set(); return; }
+  state.reqEval = NicocoRequirements.evaluate(state.req.answers, reqCtx());
+  state.reqDerived = new Set(state.reqEval.derivedKeySet);
+}
+
+function buildRequirementSnapshot() {
+  return NicocoRequirements.buildSnapshot(state.req.answers, reqCtx());
+}
+
+function reqChanged() {
+  recomputeReq();
+  renderRequirements();
+  renderAdvanced();   // Step 3 的「由需求內容帶入」標示同步更新
+  updateSidebar();
+}
+
+function reqToggleCat(catKey) {
+  if (state.reqOpen.has(catKey)) state.reqOpen.delete(catKey); else state.reqOpen.add(catKey);
+  renderRequirements();
+}
+function reqToggle(sk) {
+  state.req.answers[sk] = !state.req.answers[sk];
+  reqChanged();
+}
+function reqSingle(sk, val) {
+  state.req.answers[sk] = state.req.answers[sk] === val ? null : val;
+  reqChanged();
+}
+function reqMulti(sk, val) {
+  const cur = Array.isArray(state.req.answers[sk]) ? state.req.answers[sk].slice() : [];
+  const i = cur.indexOf(val);
+  if (i === -1) cur.push(val); else cur.splice(i, 1);
+  state.req.answers[sk] = cur;
+  reqChanged();
+}
+// 文字輸入：只更新 state，不重繪（避免輸入時 focus 跳掉）
+function reqText(sk, val) { state.req.answers[sk] = val; }
+function reqBlocked(msg) { showToast(msg); }
+
+// 需求節點右側的計價提示（金額一律讀既有 FEATURES，不在需求定義內保存價格）
+function reqPricingTag(pricing) {
+  if (!pricing) return '';
+  if (pricing.mode === 'base') return '<span class="req-tag base">方案內含</span>';
+  if (pricing.mode === 'evaluate') return '<span class="req-tag eval">需人工確認</span>';
+  if (pricing.mode === 'feature') {
+    if (isIncluded(pricing.group, pricing.id)) return '<span class="req-tag base">方案內含</span>';
+    const item = (FEATURES[pricing.group] || []).find(i => i.id === pricing.id);
+    if (!item) return '';
+    return `<span class="req-tag">加購 ${(item.price/1000).toFixed(0)}k–${(itemHigh(item)/1000).toFixed(0)}k</span>`;
+  }
+  return '';
+}
+
+function reqRenderNodes(nodes) {
+  const R = NicocoRequirements;
+  const a = state.req.answers;
+  const ctx = reqCtx();
+  let html = '';
+  (nodes || []).forEach(node => {
+    const sk = R.stateKeyOf(node);
+    const dep = R.checkRequires(node.requires, a, ctx);
+    const depMsg = dep.ok ? '' : R.depHint(dep);
+
+    if (node.type === 'check') {
+      const sel = !!a[sk] && dep.ok;
+      const pricing = sel ? R.resolvePricing(node, a) : (node.pricingRule ? null : node.pricing);
+      const click = dep.ok ? `reqToggle('${sk}')` : `reqBlocked('${escapeHTML(depMsg)}')`;
+      html += `<div class="req-node">
+        <div class="req-check${sel ? ' selected' : ''}${dep.ok ? '' : ' disabled'}" onclick="${click}">
+          <div class="req-box">${sel ? '✓' : ''}</div>
+          <div class="req-main">
+            <div class="req-label">${escapeHTML(node.label)}</div>
+            ${node.hint ? `<div class="req-hint">${escapeHTML(node.hint)}</div>` : ''}
+            ${depMsg ? `<div class="req-dep">${escapeHTML(depMsg)}</div>` : ''}
+          </div>
+          ${reqPricingTag(pricing)}
+        </div>
+        ${sel && node.children ? `<div class="req-children">${reqRenderNodes(node.children)}</div>` : ''}
+      </div>`;
+
+    } else if (node.type === 'single' || node.type === 'multi') {
+      const raw = a[sk];
+      const chosen = node.type === 'single' ? (raw ? [raw] : []) : (Array.isArray(raw) ? raw : []);
+      let opts = '', extra = '';
+      node.options.forEach(opt => {
+        const odep = R.checkRequires(opt.requires, a, ctx);
+        const ok = odep.ok && dep.ok;
+        const osel = chosen.indexOf(opt.value) !== -1 && ok;
+        const msg = ok ? '' : R.depHint(odep.ok ? dep : odep);
+        const fn = node.type === 'single' ? 'reqSingle' : 'reqMulti';
+        const click = ok ? `${fn}('${sk}','${opt.value}')` : `reqBlocked('${escapeHTML(msg)}')`;
+        opts += `<div class="req-opt${node.type === 'single' ? ' radio' : ''}${osel ? ' selected' : ''}${ok ? '' : ' disabled'}" onclick="${click}">
+          <div class="req-box">${osel && node.type === 'multi' ? '✓' : ''}</div>
+          <div class="req-main">
+            <div>${escapeHTML(opt.label)}</div>
+            ${opt.hint ? `<div class="req-hint">${escapeHTML(opt.hint)}</div>` : ''}
+            ${msg ? `<div class="req-dep">${escapeHTML(msg)}</div>` : ''}
+          </div>
+          ${reqPricingTag(opt.pricing)}
+        </div>`;
+        if (osel && opt.other) {
+          const ok2 = R.otherKeyOf(node.key, opt.value);
+          extra += `<input class="req-text" type="text" placeholder="${escapeHTML(opt.otherPlaceholder || '請簡述')}" value="${escapeHTML(a[ok2] || '')}" oninput="reqText('${ok2}', this.value)">`;
+        }
+        if (osel && opt.children) extra += `<div class="req-children">${reqRenderNodes(opt.children)}</div>`;
+      });
+      html += `<div class="req-q">
+        <div class="req-q-label">${escapeHTML(node.label)}</div>
+        ${node.hint ? `<div class="req-hint" style="margin-bottom:6px">${escapeHTML(node.hint)}</div>` : ''}
+        <div class="req-opts">${opts}</div>
+        ${extra}
+      </div>`;
+
+    } else if (node.type === 'text') {
+      html += `<div class="req-q">
+        <div class="req-q-label">${escapeHTML(node.label)}</div>
+        <textarea class="req-text" rows="2" placeholder="${escapeHTML(node.placeholder || '')}" oninput="reqText('${sk}', this.value)">${escapeHTML(a[sk] || '')}</textarea>
+      </div>`;
+    }
+  });
+  return html;
+}
+
+function renderRequirements() {
+  const container = document.getElementById('featuresContainer');
+  if (!container || !isReqType()) return;
+  const R = NicocoRequirements;
+  const counts = (state.reqEval && state.reqEval.selectedCountByCat) || {};
+
+  let html = `<div class="req-intro">你選擇的「小型電商網站」方案<strong>已包含</strong>商品、購物車、Checkout、會員、訂單與後台六大系統，不需要另外勾選。請點開各區塊，確認是否還有以下額外或特殊需求。</div>`;
+
+  R.CATEGORIES.forEach(cat => {
+    const open = state.reqOpen.has(cat.key);
+    const n = counts[cat.key] || 0;
+    html += `<div class="req-cat${open ? ' open' : ''}">
+      <div class="req-cat-head" onclick="reqToggleCat('${cat.key}')">
+        <span class="req-cat-name">${escapeHTML(cat.label)}</span>
+        <span class="badge badge-inc">方案已包含</span>
+        <span class="req-cat-count">${n ? `已確認 ${n} 項需求` : (open ? '' : '點開確認需求')}</span>
+        <span class="req-cat-caret">${open ? '−' : '+'}</span>
+      </div>`;
+    if (open) {
+      html += `<div class="req-cat-body">
+        <div class="req-base">
+          <div class="req-base-title">方案基本包含</div>
+          <div class="req-base-list">${cat.baseIncludes.map(b => '✓ ' + escapeHTML(b)).join('　')}</div>
+          ${(cat.notes || []).map(t => `<div class="req-note">${escapeHTML(t)}</div>`).join('')}
+        </div>
+        <div class="req-sub-title">是否有以下額外／特殊需求</div>
+        ${reqRenderNodes(cat.items)}
+      </div>`;
+    }
+    html += `</div>`;
+  });
+  container.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════
 //  PRICING
 // ══════════════════════════════════════════════════
+
+// ── Requirement + Estimate v1：選取狀態 helper ──────────────────────
+// 是否啟用需求書流程：v1 只有 ecom，且需求定義檔已成功載入
+function isReqType() {
+  return state.type === 'ecom' && !!window.NicocoRequirements;
+}
+// 該 pricing key 是否由需求內容帶入
+function isReqDerived(group, id) {
+  return isReqType() && state.reqDerived.has(group + ':' + id);
+}
+// 某功能是否視為「已選」＝ 客戶手動勾選 ∪ 需求內容帶入。
+// calcPrice 仍只走訪一次 FEATURES，因此同一個 pricing key 不論被幾個需求指到，都只會計價一次。
+function isSelected(group, id) {
+  return !!(state.selected[group] && state.selected[group].has(id)) || isReqDerived(group, id);
+}
+// ecom 方案已包含項目：鎖定為已選、不可取消（計價仍為 0 額外加價，Scope 對應維持原行為）
+function isLockedIncluded(group, id) {
+  return state.type === 'ecom' && isIncluded(group, id);
+}
 
 // 判斷某項目是否已包含於方案基礎費內
 function isIncluded(group, id) {
@@ -1249,7 +1566,7 @@ function calcPrice() {
   Object.keys(FEATURES).forEach(group => {
     if (group === 'evaluate') return;
     FEATURES[group].forEach(item => {
-      if (!state.selected[group] || !state.selected[group].has(item.id)) return;
+      if (!isSelected(group, item.id)) return;
 
       // ① free 項目（GA、GSC 等）—— 永不計費，也不列為 included
       if (item.free || item.price === 0) return;
@@ -1304,7 +1621,10 @@ function calcPrice() {
 
   const minTotal = subtotalMin + rushFeeMin + warrantyFee;
   const maxTotal = subtotalMax + rushFeeMax + warrantyFee;
-  const requiresManualReview = evalItems.length > 0;
+  // 需求書中的 evaluate 需求：只標示需人工確認，不加入 evalItems（evaluationItems），
+  // 因此不會在建立專案時自動變成 Scope。
+  const reqEvalItems = (isReqType() && state.reqEval) ? state.reqEval.evaluateItems.map(e => e.label) : [];
+  const requiresManualReview = evalItems.length > 0 || reqEvalItems.length > 0;
 
   // Duration
   const base = cfg.days + addons.length * 2;
@@ -1320,6 +1640,7 @@ function calcPrice() {
     rushFeeMin, rushFeeMax,
     warrantyFee,
     requiresManualReview,
+    reqEvalItems,
   };
 }
 
@@ -1465,7 +1786,14 @@ function updateSidebar() {
       ).join('')
     : '';
 
-  const hasAny = incHtml || addHtml || adjHtml || evalHtml;
+  // 段五：需求書中需人工確認的需求（不計入預估價格）
+  const reqEvalHtml = (result.reqEvalItems && result.reqEvalItems.length)
+    ? result.reqEvalItems.map(n =>
+        `<div class="addon-item"><span class="addon-name">◆ ${n}</span><span class="addon-eval">待確認</span></div>`
+      ).join('')
+    : '';
+
+  const hasAny = incHtml || addHtml || adjHtml || evalHtml || reqEvalHtml;
 
   if (!hasAny) {
     addonList.innerHTML = '<div class="sidebar-empty">尚未加選功能</div>';
@@ -1495,6 +1823,11 @@ function updateSidebar() {
       if (html) html += '<div style="height:10px"></div>';
       html += sectionTitle(`需評估（${result.evalItems.length} 項）`, 'var(--amber)');
       html += evalHtml;
+    }
+    if (reqEvalHtml) {
+      if (html) html += '<div style="height:10px"></div>';
+      html += sectionTitle(`需求待人工確認（${result.reqEvalItems.length} 項）`, 'var(--amber)');
+      html += reqEvalHtml;
     }
     addonList.innerHTML = html;
   }
@@ -1564,7 +1897,7 @@ function renderSummary() {
 
   Object.keys(FEATURES).forEach(group => {
     FEATURES[group].forEach(item => {
-      if (!state.selected[group] || !state.selected[group].has(item.id)) return;
+      if (!isSelected(group, item.id)) return;
       if (item.evaluate) { evalNames.push(item.name); return; }
       if (item.free || item.price === 0) return;
 
@@ -1624,6 +1957,16 @@ function renderSummary() {
     </div>
 
     ${priceHtml}
+
+    ${isReqType() ? `
+    <div class="final-card">
+      <div class="final-section" style="margin-bottom:0">
+        <div class="final-section-title">需求摘要（要做什麼）</div>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.6;margin-bottom:10px">以下是你這次確認的需求內容。這份內容會原樣保存為你的原始需求，後續討論確認的正式需求會另外記錄。</div>
+        ${NicocoRequirements.renderSnapshotHtml(buildRequirementSnapshot())}
+      </div>
+    </div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ink-30);margin:18px 0 8px">估價明細（目前預估多少錢）</div>` : ''}
 
     <div class="final-card">
       <div class="final-section">
@@ -1812,13 +2155,16 @@ async function submitQuote() {
 
   Object.keys(FEATURES).forEach(g => {
     FEATURES[g].forEach(item => {
-      if (!state.selected[g] || !state.selected[g].has(item.id)) return;
+      if (!isSelected(g, item.id)) return;
       if (item.evaluate)              { evalNames.push(item.name); return; }
       if (item.free || item.price===0) return;
       if (isIncluded(g, item.id))     includedNames.push(item.name);
       else                            selectedNames.push(item.name);
     });
   });
+
+  // Requirement Snapshot：非 ecom 為 null（不寫入）
+  const reqSnapshot = isReqType() ? buildRequirementSnapshot() : null;
 
   try {
     // ① 使用 state.quoteId（暫不查詢流水號）
@@ -1885,6 +2231,8 @@ async function submitQuote() {
           minTotal: result && !result.evaluate ? result.minTotal : null,
           maxTotal: result && !result.evaluate ? result.maxTotal : null,
         },
+        // 客戶原始需求 Snapshot（僅 ecom）；與 includedItems / selectedItems / evaluationItems 並存
+        requirementSnapshot: reqSnapshot,
       });
     }
 
@@ -1917,6 +2265,8 @@ async function submitQuote() {
       revision_policy: state.conds.revisionLabel,
       maintenance:   state.conds.maintLabel,
       manual_review: (result && !result.evaluate && result.requiresManualReview) ? '是' : '否',
+      // 需求摘要純文字（EmailJS template 未使用此變數時會自動忽略）
+      requirements_summary: reqSnapshot ? NicocoRequirements.snapshotToText(reqSnapshot) : '—',
       submit_date:   new Date().toLocaleDateString('zh-TW'),
     };
 
@@ -1957,7 +2307,7 @@ function downloadHTML() {
   const evalItems = [];
   Object.keys(FEATURES).forEach(g => {
     FEATURES[g].forEach(item => {
-      if (!state.selected[g] || !state.selected[g].has(item.id)) return;
+      if (!isSelected(g, item.id)) return;
       if (item.evaluate)                        { evalItems.push(item); return; }
       if (item.free || item.price === 0)         return;  // GA/GSC/firebase-base 等
       if (isIncluded(g, item.id))               { includedItems.push(item); return; }
@@ -2032,6 +2382,12 @@ function downloadHTML() {
       <span class="tag" style="background:#f0fdf4;color:#16a34a">✓ 基本 DNS 指向</span>
     </div>
   </div>
+
+  ${isReqType() ? `
+  <div class="sec">
+    <div class="sec-title">需求摘要（要做什麼）</div>
+    ${NicocoRequirements.renderSnapshotHtml(buildRequirementSnapshot())}
+  </div>` : ''}
 
   ${includedItems.length?`
   <div class="sec">
