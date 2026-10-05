@@ -1091,7 +1091,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ══════════════════════════════════════════════════
 const STEP_LABELS = ['專案類型','功能需求','進階功能','條件 & 聯絡','估價摘要'];
 // ecom：Step 2 為電商需求確認（Requirement），Step 3 為其他功能／加購
-const STEP_LABELS_ECOM = ['專案類型','電商需求確認','其他功能／加購','條件 & 聯絡','需求與估價摘要'];
+const STEP_LABELS_ECOM = ['專案類型','網站需求確認','其他功能／加購','條件 & 聯絡','需求與估價摘要'];
 
 function renderProgress() {
   const bar = document.getElementById('progressBar');
@@ -1219,7 +1219,7 @@ function selectType(el, type) {
 function applyStepTexts() {
   const ecom = isReqType();
   const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
-  set('s2title', ecom ? '電商需求確認' : '需要哪些功能？');
+  set('s2title', ecom ? '網站需求確認' : '需要哪些功能？');
   set('s2sub', ecom
     ? '你的方案已包含以下六大系統。請點開各區塊，確認是否還有額外或特殊需求；沒有的話可以直接下一步。'
     : '已為你帶入建議項目，可依需求調整。點 <strong>?</strong> 查看說明。');
@@ -1338,7 +1338,7 @@ function toggleFeature(group, id, event) {
   // ecom：方案已包含的項目不可取消（取消後價格不變，但建立專案時對應 Scope 會消失）
   if (isLockedIncluded(group, id)) { showToast('此項目已包含在方案內，無法取消'); return; }
   // 由需求內容帶入的 pricing key：只能回「電商需求確認」調整，避免兩邊狀態不一致
-  if (isReqDerived(group, id)) { showToast('此項目由需求內容帶入，請回上一步「電商需求確認」調整'); return; }
+  if (isReqDerived(group, id)) { showToast('此項目由需求內容帶入，請回上一步「網站需求確認」調整'); return; }
   if (s.has(id)) s.delete(id); else s.add(id);
   const el = document.querySelector(`[data-group="${group}"][data-id="${id}"]`);
   if (el) el.classList.toggle('selected', s.has(id));
