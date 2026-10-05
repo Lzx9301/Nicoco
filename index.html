@@ -616,6 +616,19 @@ body {
 
     <!-- Step 1: 專案類型 -->
     <div data-step="1" class="active">
+      <!-- 單一入口（過渡處理）：客戶不再四選一，按下後底層自動使用 type = ecom。 -->
+      <div id="singleEntry">
+        <div class="step-eyebrow">網站需求書</div>
+        <div class="step-title">建立網站需求書</div>
+        <div class="step-sub">依序確認你的網站需求，系統會同步整理成一份需求書並提供初步預估價格。大約 5–10 分鐘，送出後我會在 1–2 個工作天與你聯繫。</div>
+        <div class="step-actions">
+          <div></div>
+          <button class="btn btn-primary" id="btnStart" onclick="startRequirementBook()">建立網站需求書 →</button>
+        </div>
+      </div>
+
+      <!-- 舊的網站類型四選一（brand / cms / ecom / custom）：完整保留，SINGLE_ENTRY 為 true 時僅隱藏不顯示 -->
+      <div id="legacyTypeSelect" style="display:none">
       <div class="step-eyebrow">Step 1 · 5</div>
       <div class="step-title">這個網站是為了什麼？</div>
       <div class="step-sub">選擇最接近你需求的類型，系統會自動帶入適合的功能項目。</div>
@@ -651,6 +664,7 @@ body {
         <div></div>
         <button class="btn btn-primary" id="btn1" onclick="step1Next()" disabled style="opacity:.35;cursor:not-allowed">下一步 →</button>
       </div>
+      </div><!-- /legacyTypeSelect -->
     </div>
 
     <!-- Step 2: 功能需求 -->
@@ -844,7 +858,7 @@ body {
       <div id="priceBlock">
         <div class="price-label">預估總價</div>
         <div class="price-value" id="priceValue">NT$0</div>
-        <div class="price-range" id="priceRange">請先選擇專案類型</div>
+        <div class="price-range" id="priceRange">開始填寫後顯示預估</div>
       </div>
 
       <div class="duration-label">預估工期</div>
@@ -1096,7 +1110,7 @@ function renderProgress() {
     s.className = 'prog-step' + (isActive ? ' active' : isDone ? ' done' : '');
     s.innerHTML = `
       <div class="prog-dot">${isDone ? '✓' : idx + 1}</div>
-      <div class="prog-label">${(isReqType() ? STEP_LABELS_ECOM : STEP_LABELS)[stepNum - 1]}</div>`;
+      <div class="prog-label">${(stepNum === 1 && singleEntryActive()) ? '開始' : (isReqType() ? STEP_LABELS_ECOM : STEP_LABELS)[stepNum - 1]}</div>`;
     if (isDone) s.onclick = () => goTo(stepNum);
     bar.appendChild(s);
   });
@@ -1130,6 +1144,44 @@ function prevStep() {
 // ══════════════════════════════════════════════════
 //  STEP 1 – TYPE
 // ══════════════════════════════════════════════════
+// ── 單一入口（過渡處理）──────────────────────────────
+// true ：公開入口只顯示「建立網站需求書」，底層自動使用 type = ecom，前台不顯示方案類型名稱。
+// false：還原為原本的四選一入口（brand / cms / ecom / custom 流程皆完整保留）。
+const SINGLE_ENTRY = true;
+const SINGLE_ENTRY_TYPE = 'ecom';
+// 單一入口模式是否生效：需求定義檔載入失敗時自動退回四選一，避免客戶卡在無法填寫的入口
+function singleEntryActive() { return SINGLE_ENTRY && !!window.NicocoRequirements; }
+
+window.addEventListener('DOMContentLoaded', () => {
+  const on = singleEntryActive();
+  document.getElementById('singleEntry').style.display = on ? '' : 'none';
+  document.getElementById('legacyTypeSelect').style.display = on ? 'none' : '';
+  if (!on) document.getElementById('priceRange').textContent = '請先選擇專案類型';
+});
+
+// 入口按鈕：type = ecom 在這裡自動設定（沿用既有 selectType，不另寫一套初始化）
+function startRequirementBook() {
+  // 從後面步驟回到入口再按一次時，不重置已填寫的內容
+  if (state.type !== SINGLE_ENTRY_TYPE) {
+    const card = document.querySelector(`.type-card[data-type="${SINGLE_ENTRY_TYPE}"]`);
+    selectType(card, SINGLE_ENTRY_TYPE);
+  }
+  nextStep();
+}
+
+// 前台顯示用的方案名稱：單一入口模式下不顯示底層類型名稱（Firestore 的 projectType 仍照舊寫入）
+function clientTypeName(cfg) {
+  if (!cfg) return '';
+  return singleEntryActive() ? '網站基礎建置' : cfg.name;
+}
+// 功能說明文字中的方案名稱：只在顯示時替換，不修改 FEATURES 本身
+function clientDesc(desc) {
+  if (!singleEntryActive()) return desc;
+  return String(desc)
+    .replace('選擇「小型電商網站」時，', '本方案中，')
+    .replace(/小型電商方案/g, '基礎方案');
+}
+
 function step1Next() {
   if (!state.type) { showToast('請先選擇一種專案類型'); return; }
   nextStep();
@@ -1268,7 +1320,7 @@ function renderSection(label, group, items) {
           <span class="feature-price ${priceClass}">${priceStr}</span>
           <div class="info-btn" onclick="toggleDesc('${group}-${item.id}',event)">?</div>
         </div>
-        <div class="feature-desc" id="desc-${group}-${item.id}">${item.desc}</div>
+        <div class="feature-desc" id="desc-${group}-${item.id}">${clientDesc(item.desc)}</div>
       </div>`;
   });
   html += `</div></div>`;
@@ -1481,7 +1533,7 @@ function renderRequirements() {
   const R = NicocoRequirements;
   const counts = (state.reqEval && state.reqEval.selectedCountByCat) || {};
 
-  let html = `<div class="req-intro">你選擇的「小型電商網站」方案<strong>已包含</strong>商品、購物車、Checkout、會員、訂單與後台六大系統，不需要另外勾選。請點開各區塊，確認是否還有以下額外或特殊需求。</div>`;
+  let html = `<div class="req-intro">${singleEntryActive() ? '基礎建置' : '你選擇的「小型電商網站」方案'}<strong>已包含</strong>商品、購物車、Checkout、會員、訂單與後台六大系統，不需要另外勾選。請點開各區塊，確認是否還有以下額外或特殊需求。</div>`;
 
   R.CATEGORIES.forEach(cat => {
     const open = state.reqOpen.has(cat.key);
@@ -1671,7 +1723,7 @@ function updateSidebar() {
   const typeNameEl = document.getElementById('sidebarTypeName');
   if (cfg) {
     baseEl.style.display = 'block';
-    typeNameEl.textContent = cfg.name;
+    typeNameEl.textContent = clientTypeName(cfg);
   } else {
     baseEl.style.display = 'none';
   }
@@ -1697,7 +1749,7 @@ function updateSidebar() {
     if (_animFrame) cancelAnimationFrame(_animFrame);
     _dispPrice = 0;
     document.getElementById('priceValue').textContent = 'NT$0';
-    rangeEl.textContent = '請先選擇專案類型';
+    rangeEl.textContent = singleEntryActive() ? '開始填寫後顯示預估' : '請先選擇專案類型';
     durEl.textContent = '—';
     addonList.innerHTML = '<div class="sidebar-empty">尚未選擇任何功能</div>';
     addonLabel.style.display = 'none';
@@ -1971,7 +2023,7 @@ function renderSummary() {
     <div class="final-card">
       <div class="final-section">
         <div class="final-section-title">1. 基礎網站方案</div>
-        <div style="font-size:15px;font-weight:600;color:var(--ink)">${cfg.name}</div>
+        <div style="font-size:15px;font-weight:600;color:var(--ink)">${clientTypeName(cfg)}</div>
         <div style="font-size:13px;color:var(--ink-60);margin-top:2px">${cfg.priceMin ? `NT$${cfg.priceMin.toLocaleString()} – NT$${cfg.priceMax.toLocaleString()}` : '依需求專案評估'}</div>
         <div style="font-size:12px;color:var(--ink-60);margin-top:4px">含 RWD 響應式・基礎 SEO・SSL 憑證・基本部署・基本 DNS 指向</div>
       </div>
@@ -2272,7 +2324,9 @@ async function submitQuote() {
 
     emailjs.init(EJS_KEY);
     await emailjs.send(EJS_SERVICE, EJS_TEMPLATE,       params); // 管理者
-    await emailjs.send(EJS_SERVICE, 'template_p34lyxz', params); // 客戶
+    // 客戶確認信：單一入口模式下不顯示底層方案類型名稱（管理者通知信仍顯示實際類型）
+    await emailjs.send(EJS_SERVICE, 'template_p34lyxz',
+      singleEntryActive() ? { ...params, project_type: '網站需求書' } : params); // 客戶
 
     // ④ 全部成功才顯示成功畫面
     showSuccess();
@@ -2356,7 +2410,7 @@ function downloadHTML() {
 </style>
 </head><body>
   <h1>網站開發需求書</h1>
-  <div class="meta"><span>報價編號：${state.quoteId}</span><span>製作日期：${today}</span>${cfg?`<span>類型：${cfg.name}</span>`:''}</div>
+  <div class="meta"><span>報價編號：${state.quoteId}</span><span>製作日期：${today}</span>${(cfg && !singleEntryActive())?`<span>類型：${cfg.name}</span>`:''}</div>
 
   ${priceSection}
 
