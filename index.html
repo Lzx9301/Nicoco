@@ -729,7 +729,7 @@ body {
         </div>
         <div class="cond-group req-cond" style="display:none">
           <div class="cond-label">修改說明</div>
-          <div style="font-size:12.5px;color:var(--ink-60);line-height:1.6">本方案包含 2 次原確認 Scope 內的小幅修改；超出範圍或次數後，將依實際需求另行報價。</div>
+          <div style="font-size:12.5px;color:var(--ink-60);line-height:1.6">本方案包含 2 次原確認 Scope 內的小幅修改；超出修改次數或原確認 Scope 的需求，將依實際內容另行評估及報價。</div>
         </div>
         <div class="cond-group legacy-cond">
           <div class="cond-label">交件時間</div>
@@ -743,9 +743,9 @@ body {
           <div class="cond-label">修改次數</div>
           <div class="cond-opts" id="cond-revision">
             <div class="cond-opt selected" onclick="selectRevisionOpt(this,'standard','2 次內含')">2 次<span class="cond-modifier">內含</span></div>
-            <div class="cond-opt" onclick="selectRevisionOpt(this,'flexible','需要較多修改彈性')">需要較多修改彈性<span class="cond-modifier">按時計費</span></div>
+            <div class="cond-opt" onclick="selectRevisionOpt(this,'flexible','需要較多修改彈性')">需要較多修改彈性<span class="cond-modifier">另行報價</span></div>
           </div>
-          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">超出內含 2 次修改後，以 NT$800–1,500/hr 按時計費，不會自動加入開發總價，實際發生時另行計算工時。</div>
+          <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">本方案包含 2 次原確認 Scope 內的小幅修改；超出修改次數或原確認 Scope 的需求，將依實際內容另行評估及報價。</div>
         </div>
         <div class="cond-group">
           <div class="cond-label">保固期</div>
@@ -1289,7 +1289,7 @@ function buildProjectInfo() {
     revisionPolicy: REQ_REVISION_TEXT,
   };
 }
-const REQ_REVISION_TEXT = '本方案包含 2 次原確認 Scope 內的小幅修改；超出範圍或次數後，將依實際需求另行報價。';
+const REQ_REVISION_TEXT = '本方案包含 2 次原確認 Scope 內的小幅修改；超出修改次數或原確認 Scope 的需求，將依實際內容另行評估及報價。';
 function maintInterestLabel() {
   const v = state.projectInfo.maintInterest;
   return v === 'yes' ? '希望了解後續維護服務' : v === 'no' ? '不需要' : '未回答';
@@ -1468,7 +1468,7 @@ function selectMaint(el, key, label) {
   state.conds.maintLabel = label;
   updateSidebar();
 }
-// 修改次數不再以總價百分比計算，僅記錄 key/label 供估價摘要顯示，超出內含次數改按時計費
+// 修改次數不再以總價百分比計算，僅記錄 key/label 供估價摘要顯示，超出內含次數另行評估及報價
 function selectRevisionOpt(el, key, label) {
   document.querySelectorAll('#cond-revision .cond-opt').forEach(o => o.classList.remove('selected'));
   el.classList.add('selected');
@@ -1769,7 +1769,7 @@ function calcPrice() {
   const rushFeeMax = state.conds.timeline ? Math.round(subtotalMax * state.conds.timeline) : 0;
 
   // 保固期延長為一次性費用，計入總價；維護方案為選配持續性費用，不計入開發總價（見 state.conds.maintKey）
-  // 修改次數不再以總價百分比計算（見 state.conds.revisionKey），超出次數按時計費，不影響本次估價
+  // 修改次數不再以總價百分比計算（見 state.conds.revisionKey），超出次數另行評估及報價，不影響本次估價
   const warrantyFee = state.conds.warrantyFlat || 0;
 
   const minTotal = subtotalMin + rushFeeMin + warrantyFee;
@@ -2230,7 +2230,7 @@ function renderSummary() {
       <div class="final-section">
         <div class="final-section-title">修改次數</div>
         <div style="font-size:13px;color:var(--ink)">${state.conds.revisionLabel}</div>
-        <div style="font-size:11px;color:var(--ink-30);margin-top:4px">超出 2 次內含修改後，以 NT$800–1,500/hr 按時計費，不列入本次開發總價。</div>
+        <div style="font-size:11px;color:var(--ink-30);margin-top:4px">超出修改次數或原確認 Scope 的需求，將依實際內容另行評估及報價。</div>
       </div>`}
 
       ${contactRows ? `
@@ -2273,7 +2273,7 @@ function renderSummary() {
         <div class="final-section-title">12. 需求變更與追加報價（Change Request）</div>
         <div style="font-size:12px;color:var(--ink-60);line-height:1.7">
           <div style="margin-bottom:6px"><strong>A．原範圍內小幅修改</strong>（文案替換、圖片更換、字體/間距、小幅 Layout 微調）：原則上使用方案內含之修改額度（2 次內含）。</div>
-          <div style="margin-bottom:6px"><strong>B．超過修改額度但未變更 Scope</strong>：以 NT$800–1,500/hr 依實際工作內容評估計費，不使用專案總價百分比計費。</div>
+          <div style="margin-bottom:6px"><strong>B．超過修改額度但未變更 Scope</strong>：依實際內容另行評估及報價，不使用專案總價百分比計費。</div>
           <div style="margin-bottom:6px"><strong>C．追加需求／Scope Change</strong>（如首頁整體重新設計、大幅版型重整、新增 Section／頁面／會員功能／Login／第三方 API／預約系統／金流／CMS、商品架構重大修改等）：需重新評估工時與費用，經雙方確認後執行，流程為「客戶提出新需求 → 評估需求 → 提供追加報價 → 客戶確認 → 開始追加開發」。</div>
           <div style="font-size:11px;color:var(--ink-30);margin-top:4px">追加報價付款原則（可由雙方協調調整）：NT$10,000 以下之小額追加，原則上併入下一期款項或尾款；超過 NT$10,000 之大型追加，原則上 50% 追加需求啟動款＋50% 併入下一期款項或最終尾款。</div>
         </div>
@@ -2613,7 +2613,7 @@ function downloadHTML() {
   </div>` : `
   <div class="sec">
     <div class="sec-title">修改次數</div>
-    <div style="font-size:12px;color:#60636e">${state.conds.revisionLabel}。超出 2 次內含修改後，以 NT$800–1,500/hr 按時計費，不列入本次開發總價。</div>
+    <div style="font-size:12px;color:#60636e">${state.conds.revisionLabel}。超出修改次數或原確認 Scope 的需求，將依實際內容另行評估及報價。</div>
   </div>
 
   <div class="sec">
@@ -2647,7 +2647,7 @@ function downloadHTML() {
     <div class="sec-title">需求變更與追加報價（Change Request）</div>
     <div style="font-size:12px;color:#60636e;line-height:1.7">
       A．原範圍內小幅修改（文案/圖片/字體間距/小幅 Layout）：使用方案內含修改額度（2 次）。<br>
-      B．超過修改額度但未變更 Scope：NT$800–1,500/hr 按實際工作內容計費。<br>
+      B．超過修改額度但未變更 Scope：依實際內容另行評估及報價。<br>
       C．追加需求／Scope Change（大幅設計重做、新增頁面/會員功能/Login/第三方 API/預約系統/金流/CMS、商品架構重大修改等）：需重新評估工時與費用，經確認後執行。<br>
       追加報價付款原則：NT$10,000 以下原則上併入下一期款項或尾款；超過 NT$10,000 原則上 50% 追加啟動款＋50% 併入下一期款項或最終尾款。
     </div>
