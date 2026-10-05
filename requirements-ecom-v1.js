@@ -20,7 +20,7 @@
   'use strict';
 
   var SCHEMA_VERSION = 1;
-  var DEFINITION_VERSION = 'ecom-v1.0.0';
+  var DEFINITION_VERSION = 'ecom-v1.1.0';
   var PROJECT_TYPE_KEY = 'ecom';
 
   // ── 責任類型 ──────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@
     {
       key: 'cart', label: '購物車',
       baseIncludes: ['加入購物車', '查看購物車', '修改商品數量', '移除商品', '商品小計／訂單金額', '前往結帳'],
-      notes: ['優惠碼／折扣碼不包含於基本購物車。如需要，請於下一步「其他功能／加購」選擇「優惠券 / 折扣碼」。'],
+      notes: ['優惠碼／折扣碼不包含於基本購物車。如需要，請於下一步「其他需求與附加服務」選擇「優惠券 / 折扣碼」。'],
       items: [
         { key: 'cart.guest', label: '未登入也可使用購物車', type: 'check', pricing: BASE },
         { key: 'cart.keepAfterLogin', label: '登入後保留購物車', type: 'check', pricing: BASE, requires: [REQ_MEMBER] },
@@ -338,7 +338,7 @@
                 { value: 'discount', label: '折扣' },
                 {
                   value: 'coupon', label: '專屬優惠券',
-                  requires: [{ type: 'feature', group: 'ecom', id: 'coupon', label: '「其他功能／加購」中的「優惠券 / 折扣碼」' }],
+                  requires: [{ type: 'feature', group: 'ecom', id: 'coupon', label: '「其他需求與附加服務」中的「優惠券 / 折扣碼」' }],
                 },
                 { value: 'exclusive', label: '專屬商品／內容' },
                 { value: 'other', label: '其他權益', other: true },
@@ -441,14 +441,27 @@
           ],
         },
         {
-          key: 'order.notifications', label: '訂單通知（可複選）', type: 'multi',
-          hint: 'Email 自動通知不含於基礎方案，選擇任一項即加入「Email 自動通知」（多選仍只計一次）。',
+          // 「是否需要這套功能」決定 pricing；「這套功能裡要哪些行為」只描述 Scope，不另計價。
+          key: 'order.emailAuto', label: '是否需要 Email 自動通知？', type: 'single',
+          hint: 'Email 自動通知不含於基礎建置。',
           options: [
-            { value: 'order_confirm', label: '下單確認 Email', pricing: FEAT('integrations', 'email-auto'), thirdParty: ['email_service'] },
-            { value: 'merchant_new_order', label: '店家新訂單通知', pricing: FEAT('integrations', 'email-auto'), thirdParty: ['email_service'] },
-            { value: 'status_update', label: '訂單狀態更新通知', pricing: FEAT('integrations', 'email-auto'), thirdParty: ['email_service'] },
-            { value: 'shipped', label: '出貨通知', pricing: FEAT('integrations', 'email-auto'), thirdParty: ['email_service'] },
-            { value: 'other', label: '其他', other: true },
+            { value: 'no', label: '不需要', pricing: NONE },
+            {
+              value: 'yes', label: '需要', pricing: FEAT('integrations', 'email-auto'), thirdParty: ['email_service'],
+              children: [
+                {
+                  key: 'order.emailAuto.types', label: '希望哪些情況自動寄送 Email？（可複選）', type: 'multi',
+                  hint: '以下為需求細節，不另外計價。',
+                  options: [
+                    { value: 'order_confirm', label: '顧客下單確認' },
+                    { value: 'merchant_new_order', label: '店家收到新訂單' },
+                    { value: 'status_update', label: '訂單狀態更新' },
+                    { value: 'shipped', label: '商品出貨通知' },
+                    { value: 'other', label: '其他', other: true },
+                  ],
+                },
+              ],
+            },
           ],
         },
         { key: 'order.other', label: '其他訂單需求', type: 'text', placeholder: '例如：訂單匯出格式、部分出貨…' },
@@ -507,6 +520,30 @@
       ],
     },
   ];
+
+  // ── Step 3「其他需求與附加服務」中的需求題（不屬於六大區塊；同樣寫入 Snapshot）──
+  var EXTRA = {
+    key: 'extra', label: '其他需求與附加服務',
+    items: [
+      {
+        key: 'extra.externalIntegration', label: '是否需要串接其他外部系統或服務？', type: 'single',
+        hint: '例如既有的進銷存、會計、訂位、會員或行銷工具。實際串接方式與費用會在需求確認後評估。',
+        options: [
+          { value: 'no', label: '不需要', pricing: NONE },
+          {
+            value: 'yes', label: '需要', summaryLabel: '外部系統／服務串接',
+            // 不直接對應既有「第三方 API 串接」計價項目：正式 pricing mapping 留待人工確認
+            pricing: { mode: 'evaluate', reason: '外部系統串接需人工確認串接方式與範圍', relatedFeature: { group: 'integrations', id: 'api-3rd' } },
+            children: [
+              { key: 'extra.externalIntegration.serviceName', label: '服務／系統名稱', type: 'text', rows: 1, placeholder: '例如：某某進銷存系統' },
+              { key: 'extra.externalIntegration.purpose', label: '希望串接的用途', type: 'text', rows: 2, placeholder: '例如：訂單成立後自動同步庫存' },
+              { key: 'extra.externalIntegration.notes', label: '補充說明', type: 'text', rows: 2, placeholder: '' },
+            ],
+          },
+        ],
+      },
+    ],
+  };
 
   // ══════════════════════════════════════════════════════════════════════
   //  純函式
@@ -636,7 +673,7 @@
               dependencies.push({ key: node.key + ':' + opt.value, label: node.label + '：' + opt.label, satisfied: odep.ok, requires: odep.list });
             }
             if (osel) {
-              var olabel = node.label.replace(/（可複選）/g, '') + '：' + opt.label;
+              var olabel = opt.summaryLabel || (node.label.replace(/（可複選）/g, '') + '：' + opt.label);
               addEffects(opt.pricing, opt.thirdParty, node.key + ':' + opt.value, olabel, cat);
               if (opt.other) {
                 var t = String(answers[otherKeyOf(node.key, opt.value)] || '').trim();
@@ -669,10 +706,13 @@
       });
     });
 
+    var extraOut = { key: EXTRA.key, label: EXTRA.label, items: walk(EXTRA.items, EXTRA) };
+
     var derived = Object.keys(derivedMap).map(function (k) { return derivedMap[k]; });
     var thirdParty = Object.keys(thirdPartyMap).map(function (k) { return thirdPartyMap[k]; });
     return {
       categories: catOut,
+      extra: extraOut,
       derived: derived,
       derivedKeySet: derived.map(function (d) { return d.group + ':' + d.id; }),
       evaluateItems: evaluateItems,
@@ -711,6 +751,8 @@
       projectTypeKey: PROJECT_TYPE_KEY,
       submittedAtClient: new Date().toISOString(),
       categories: ev.categories,
+      // Step 3 的需求題（外部系統串接等）。additionalServices／projectInfo 由 index.html 補上。
+      additionalRequirements: ev.extra,
       derivedPricingKeys: derivedPricingKeys,
       evaluateRequirements: ev.evaluateItems,
       thirdPartyResponsibilities: thirdParty,
@@ -800,6 +842,42 @@
       html += '</div>';
     });
 
+    var addSvc = snap.additionalServices || [];
+    var addReq = snap.additionalRequirements || null;
+    if (addSvc.length || addReq) {
+      var xl = [], xu = [];
+      if (addReq) collectLines(addReq.items, snap, admin, 0, xl, xu);
+      html += '<div style="border:1px solid #f0f1f4;border-radius:8px;padding:12px 14px;margin-bottom:10px">';
+      html += '<div style="font-size:14px;font-weight:600;color:#0f1117;margin-bottom:6px">其他需求與附加服務</div>';
+      html += '<div style="font-size:13px;color:#0f1117;line-height:1.6">';
+      if (addSvc.length) {
+        html += addSvc.map(function (a) {
+          return '<div style="margin:3px 0">✓ ' + esc(a.name) +
+                 (a.evaluate ? '<span style="font-size:11px;padding:1px 7px;border-radius:10px;margin-left:6px;background:#fffbeb;color:#d97706">需評估</span>' : '') +
+                 (admin ? '<span style="font-size:11px;color:#9ca3af;margin-left:6px">' + esc(a.group + '/' + a.id) + '</span>' : '') + '</div>';
+        }).join('');
+      }
+      html += xl.join('');
+      if (!addSvc.length && !xl.length) html += '<div style="color:#9ca3af;font-size:12px">無</div>';
+      html += '</div></div>';
+    }
+
+    var pi = snap.projectInfo || null;
+    if (pi) {
+      var rows = [];
+      var row = function (k, v) { rows.push('<div style="margin:3px 0"><span style="color:#60636e">' + esc(k) + '：</span>' + esc(v) + '</div>'); };
+      row('指定上線日期', pi.hasTargetLaunchDate === true ? (pi.targetLaunchDate || '有（未填日期）') : pi.hasTargetLaunchDate === false ? '沒有' : '未回答');
+      row('後續維護服務', pi.interestedInMaintenance === true ? '希望了解' : pi.interestedInMaintenance === false ? '不需要' : '未回答');
+      if (pi.warrantyLabel) row('保固期間', pi.warrantyLabel);
+      if (pi.budget) row('預算區間', pi.budget);
+      if (pi.revisionPolicy) row('修改說明', pi.revisionPolicy);
+      html += '<div style="border:1px solid #f0f1f4;border-radius:8px;padding:12px 14px;margin-bottom:10px">';
+      html += '<div style="' + titleStyle + '">專案資訊</div>';
+      html += '<div style="font-size:13px;color:#0f1117;line-height:1.6">' + rows.join('') + '</div>';
+      if (pi.hasTargetLaunchDate === true) html += '<div style="font-size:11px;color:#9ca3af;line-height:1.6;margin-top:4px">實際開發時程與是否涉及急件安排，將於需求確認後評估。</div>';
+      html += '</div>';
+    }
+
     var evals = snap.evaluateRequirements || [];
     if (evals.length) {
       html += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:10px">';
@@ -884,6 +962,17 @@
       lines(cat.items, 0);
       if (out.length === before + 1) out.push('- 無額外需求');
     });
+    if ((snap.additionalServices || []).length || snap.additionalRequirements) {
+      out.push('【其他需求與附加服務】');
+      (snap.additionalServices || []).forEach(function (a) { out.push('- ' + a.name); });
+      if (snap.additionalRequirements) lines(snap.additionalRequirements.items, 0);
+    }
+    if (snap.projectInfo) {
+      var p = snap.projectInfo;
+      out.push('【專案資訊】');
+      out.push('- 指定上線日期：' + (p.hasTargetLaunchDate === true ? (p.targetLaunchDate || '有') : p.hasTargetLaunchDate === false ? '沒有' : '未回答'));
+      out.push('- 後續維護服務：' + (p.interestedInMaintenance === true ? '希望了解' : p.interestedInMaintenance === false ? '不需要' : '未回答'));
+    }
     if ((snap.evaluateRequirements || []).length) {
       out.push('【需人工確認】');
       snap.evaluateRequirements.forEach(function (e) { out.push('- ' + e.categoryLabel + '｜' + e.label); });
@@ -898,6 +987,7 @@
     RESPONSIBILITY_LABELS: RESPONSIBILITY_LABELS,
     THIRD_PARTY_SERVICES: THIRD_PARTY_SERVICES,
     CATEGORIES: CATEGORIES,
+    EXTRA: EXTRA,
     stateKeyOf: stateKeyOf,
     otherKeyOf: otherKeyOf,
     checkRequires: checkRequires,

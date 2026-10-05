@@ -320,6 +320,8 @@ body {
 .evaluate-notice strong { font-weight: 600; }
 
 /* ── Requirement（ecom 需求確認）────────────────────────────── */
+.pub-sec { margin-bottom: 24px; }
+.pub-sec .feature-group { margin-bottom: 6px; }
 .feature-item.locked .feature-row { cursor: not-allowed; }
 .feature-item.locked .feature-check { opacity: .55; }
 .badge-derived { background: var(--accent-light); color: var(--accent); }
@@ -701,11 +703,35 @@ body {
     <!-- Step 4: 開發條件 -->
     <div data-step="4">
       <div class="step-eyebrow">Step 4 · 5</div>
-      <div class="step-title">開發條件</div>
-      <div class="step-sub">這些選項會影響最終費用與時程。</div>
+      <div class="step-title" id="s4title">開發條件</div>
+      <div class="step-sub" id="s4sub">這些選項會影響最終費用與時程。</div>
 
       <div class="conditions-grid" style="margin-bottom:28px">
-        <div class="cond-group">
+        <!-- 公開需求書（Requirement v2）專用：指定上線日期／後續維護意願／固定修改說明。
+             舊的「交件時間／修改次數／專案複雜度／維護方案」（.legacy-cond）完整保留，僅在需求書模式下隱藏。 -->
+        <div class="cond-group req-cond" style="display:none">
+          <div class="cond-label">是否有指定上線日期？</div>
+          <div class="cond-opts" id="cond-targetDate">
+            <div class="cond-opt" data-val="no" onclick="selectProjectInfo('hasTargetDate','no')">沒有</div>
+            <div class="cond-opt" data-val="yes" onclick="selectProjectInfo('hasTargetDate','yes')">有</div>
+          </div>
+          <div id="targetDateWrap" style="display:none;margin-top:8px">
+            <input class="field-input" id="f-targetDate" type="date" oninput="state.projectInfo.targetDate=this.value">
+            <div style="font-size:11px;color:var(--ink-30);margin-top:6px;line-height:1.5">實際開發時程與是否涉及急件安排，將於需求確認後評估。</div>
+          </div>
+        </div>
+        <div class="cond-group req-cond" style="display:none">
+          <div class="cond-label">網站完成後是否希望了解後續維護服務？<span style="font-weight:400;color:var(--ink-30)">（不計入本次開發估價）</span></div>
+          <div class="cond-opts" id="cond-maintInterest">
+            <div class="cond-opt" data-val="no" onclick="selectProjectInfo('maintInterest','no')">不需要</div>
+            <div class="cond-opt" data-val="yes" onclick="selectProjectInfo('maintInterest','yes')">希望了解</div>
+          </div>
+        </div>
+        <div class="cond-group req-cond" style="display:none">
+          <div class="cond-label">修改說明</div>
+          <div style="font-size:12.5px;color:var(--ink-60);line-height:1.6">本方案包含 2 次原確認 Scope 內的小幅修改；超出範圍或次數後，將依實際需求另行報價。</div>
+        </div>
+        <div class="cond-group legacy-cond">
           <div class="cond-label">交件時間</div>
           <div class="cond-opts" id="cond-timeline">
             <div class="cond-opt selected" onclick="selectCond('timeline',this,0)">一般時程<span class="cond-modifier">標準</span></div>
@@ -713,7 +739,7 @@ body {
           </div>
           <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">急件費獨立計算，會在估價結果中列為單獨一項「急件調整」，不會隱藏在總價裡。</div>
         </div>
-        <div class="cond-group">
+        <div class="cond-group legacy-cond">
           <div class="cond-label">修改次數</div>
           <div class="cond-opts" id="cond-revision">
             <div class="cond-opt selected" onclick="selectRevisionOpt(this,'standard','2 次內含')">2 次<span class="cond-modifier">內含</span></div>
@@ -732,7 +758,7 @@ body {
             Bug 定義：原本需求規格內、已完成之功能發生錯誤。僅含此類 Bug 免費修正。以下不屬於 Bug，需另外報價：新增功能、變更原本需求、新增頁面、第三方 API 改版、客戶自行操作造成之資料問題。
           </div>
         </div>
-        <div class="cond-group">
+        <div class="cond-group legacy-cond">
           <div class="cond-label">專案複雜度</div>
           <div class="cond-opts" id="cond-complexity">
             <div class="cond-opt selected" onclick="selectCond('complexity',this,0)">標準<span class="cond-modifier">無</span></div>
@@ -741,7 +767,7 @@ body {
           </div>
           <div style="font-size:11px;color:var(--ink-30);margin-top:8px;line-height:1.5">複雜度調整費僅依「基礎方案價格」計算（不會再乘上已選加購功能的價值），並分別設有 NT$15,000／NT$30,000 上限，會在估價結果中獨立列出。</div>
         </div>
-        <div class="cond-group">
+        <div class="cond-group legacy-cond">
           <div class="cond-label">維護方案<span style="font-weight:400;color:var(--ink-30)">（選配，不列入開發總價）</span></div>
           <div class="cond-opts" id="cond-maint">
             <div class="cond-opt selected" onclick="selectMaint(this,'none','不需要')">不需要<span class="cond-modifier">NT$0</span></div>
@@ -789,7 +815,7 @@ body {
             <option value="20 萬以上">NT$20 萬以上</option>
           </select>
         </div>
-        <div class="field">
+        <div class="field" id="fg-launch">
           <label class="field-label">預計上線時間</label>
           <input class="field-input" id="f-launch" placeholder="3 個月內、2026 Q3…">
         </div>
@@ -1069,6 +1095,8 @@ const state = {
   reqOpen: new Set(),          // 目前展開的需求區塊（純 UI 狀態）
   reqEval: null,               // NicocoRequirements.evaluate() 的結果
   reqDerived: new Set(),       // 由需求內容帶入的既有 pricing key（'group:id'）
+  // Requirement v2：Step 4 專案資訊（不影響價格；急件／複雜度改由管理者於正式報價階段判斷）
+  projectInfo: { hasTargetDate: null, targetDate: '', maintInterest: null },
 };
 
 function genQid() {
@@ -1091,7 +1119,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ══════════════════════════════════════════════════
 const STEP_LABELS = ['專案類型','功能需求','進階功能','條件 & 聯絡','估價摘要'];
 // ecom：Step 2 為電商需求確認（Requirement），Step 3 為其他功能／加購
-const STEP_LABELS_ECOM = ['專案類型','網站需求確認','其他功能／加購','條件 & 聯絡','需求與估價摘要'];
+const STEP_LABELS_ECOM = ['專案類型','網站需求確認','其他需求與附加服務','專案資訊 & 聯絡','需求與估價摘要'];
 
 function renderProgress() {
   const bar = document.getElementById('progressBar');
@@ -1206,6 +1234,7 @@ function selectType(el, type) {
   // Requirement 狀態：切換類型時一律重置（只有 ecom 會使用）
   state.req = { answers: {} };
   state.reqOpen = new Set();
+  state.projectInfo = { hasTargetDate: null, targetDate: '', maintInterest: null };
   recomputeReq();
   applyStepTexts();
 
@@ -1223,11 +1252,62 @@ function applyStepTexts() {
   set('s2sub', ecom
     ? '你的方案已包含以下六大系統。請點開各區塊，確認是否還有額外或特殊需求；沒有的話可以直接下一步。'
     : '已為你帶入建議項目，可依需求調整。點 <strong>?</strong> 查看說明。');
-  set('s3title', ecom ? '其他功能／加購' : '進階功能');
+  set('s3title', ecom ? '其他需求與附加服務' : '進階功能');
   set('s3sub', ecom
-    ? '方案已包含的項目無法取消；由需求內容帶入的項目請回上一步調整。其餘可依需要加選。點 <strong>?</strong> 查看說明。'
+    ? '上一步已確認主要網站功能。這裡只列出其他可能需要的內容、行銷、設計與顧問服務，沒有需要可以直接下一步。點 <strong>?</strong> 查看說明。'
     : '選擇需要的進階功能。這些項目會影響預估費用。');
-  set('s5eyebrow', ecom ? '需求與估價摘要' : '估價摘要');
+  set('s4title', ecom ? '專案資訊與聯絡方式' : '開發條件');
+  set('s4sub', ecom ? '最後確認幾項專案資訊，並留下聯絡方式。' : '這些選項會影響最終費用與時程。');
+  set('s5eyebrow', ecom ? '需求與初步估價摘要' : '估價摘要');
+  // Step 4：需求書模式隱藏「急件／修改次數／複雜度／維護方案」的客戶選擇（底層 state.conds 維持預設值，
+  // 即不加急件費、不加複雜度調整）；改顯示指定上線日期／維護意願／固定修改說明。
+  document.querySelectorAll('.legacy-cond').forEach(el => { el.style.display = ecom ? 'none' : ''; });
+  document.querySelectorAll('.req-cond').forEach(el => { el.style.display = ecom ? '' : 'none'; });
+  const fgLaunch = document.getElementById('fg-launch');
+  if (fgLaunch) fgLaunch.style.display = ecom ? 'none' : '';   // 由「指定上線日期」取代
+}
+
+// Step 4 專案資訊（需求書模式）：只記錄回答，不影響價格
+function selectProjectInfo(field, val) {
+  state.projectInfo[field] = val;
+  const groupId = field === 'hasTargetDate' ? 'cond-targetDate' : 'cond-maintInterest';
+  document.querySelectorAll(`#${groupId} .cond-opt`).forEach(o => o.classList.toggle('selected', o.dataset.val === val));
+  if (field === 'hasTargetDate') {
+    document.getElementById('targetDateWrap').style.display = val === 'yes' ? 'block' : 'none';
+  }
+}
+// 給 Snapshot／摘要用的專案資訊
+function buildProjectInfo() {
+  const pi = state.projectInfo;
+  const yn = v => v === 'yes' ? true : v === 'no' ? false : null;
+  return {
+    hasTargetLaunchDate: yn(pi.hasTargetDate),
+    targetLaunchDate: pi.hasTargetDate === 'yes' ? (pi.targetDate || '') : '',
+    interestedInMaintenance: yn(pi.maintInterest),
+    warrantyLabel: state.conds.warrantyLabel || '',
+    budget: (state.contact && state.contact.budget) || document.getElementById('f-budget').value || '',
+    revisionPolicy: REQ_REVISION_TEXT,
+  };
+}
+const REQ_REVISION_TEXT = '本方案包含 2 次原確認 Scope 內的小幅修改；超出範圍或次數後，將依實際需求另行報價。';
+function maintInterestLabel() {
+  const v = state.projectInfo.maintInterest;
+  return v === 'yes' ? '希望了解後續維護服務' : v === 'no' ? '不需要' : '未回答';
+}
+
+// ── 公開需求書 Step 3「其他需求與附加服務」可見項目 ──
+// 只是「哪些既有 FEATURES 顯示給客戶」的清單；FEATURES／價格／Scope 對應完全不動。
+// 未列在這裡的項目只是不顯示：Step 2 已涵蓋的核心功能由需求內容帶入；
+// 純技術項目（Firebase 進階、進階正式環境、主機代管等）改由管理者於正式報價階段判斷。
+const PUBLIC_STEP3_SECTIONS = [
+  { label: '網站內容／功能', items: [['pages','about'],['pages','faq'],['pages','blog'],['cms','content-mgmt'],['pages','multilang'],['ecom','coupon'],['integrations','maps'],['integrations','line-notify']] },
+  { label: '行銷／追蹤',     items: [['integrations','gtm'],['integrations','fb-pixel'],['integrations','newsletter'],['pages','seo-adv'],['services','seo-consult']] },
+  { label: '設計／內容服務', items: [['services','ui-design'],['services','logo'],['services','copywriting'],['services','photography']] },
+  { label: '交付／顧問',     items: [['services','training'],['services','manual']] },
+  { label: '特殊系統（需評估，不計入自動估價）', items: [['evaluate','erp'],['evaluate','crm'],['evaluate','pos'],['evaluate','ai'],['evaluate','b2b'],['evaluate','booking'],['evaluate','payment-adv'],['evaluate','multilang-full']] },
+];
+function isPublicStep3Item(group, id) {
+  return PUBLIC_STEP3_SECTIONS.some(sec => sec.items.some(([g, i]) => g === group && i === id));
 }
 
 // ══════════════════════════════════════════════════
@@ -1265,13 +1345,25 @@ function renderFeatures() {
 function renderAdvanced() {
   const container = document.getElementById('advancedContainer');
   if (isReqType()) {
-    // ecom：Step 3 顯示全部功能群組（原 Step 2 + 原 Step 3 的內容），計價方式完全不變
+    // 需求書模式：Step 3 只顯示 Step 2 未涵蓋、且客戶能自行決定的項目（PUBLIC_STEP3_SECTIONS）。
+    // 仍然沿用既有 renderSection／toggleFeature／calcPrice，計價方式完全不變。
     let html = '';
-    (TYPE_SECTIONS.ecom || []).forEach(sec => {
-      const items = FEATURES[sec.key];
-      if (!items || !items.length) return;
-      html += renderSection(sec.label, sec.key, items);
+    PUBLIC_STEP3_SECTIONS.forEach(sec => {
+      html += `<div class="pub-sec"><div class="feature-group-title">${sec.label}</div>`;
+      // 依 FEATURES 群組分段呼叫既有 renderSection（label 留空＝不重複印標題）
+      let run = null;
+      const flush = () => { if (run) html += renderSection('', run.group, run.items); run = null; };
+      sec.items.forEach(([g, id]) => {
+        const item = (FEATURES[g] || []).find(i => i.id === id);
+        if (!item) return;
+        if (!run || run.group !== g) { flush(); run = { group: g, items: [] }; }
+        run.items.push(item);
+      });
+      flush();
+      html += `</div>`;
     });
+    // 外部系統串接：改以需求題詢問（evaluate，不自動計價、不直接成為 Scope）
+    html += `<div class="pub-sec"><div class="feature-group-title">外部系統／服務</div>${reqRenderNodes(NicocoRequirements.EXTRA.items)}</div>`;
     container.innerHTML = html;
   } else if (state.type === 'ecom') {
     // 後備：需求定義檔載入失敗時，維持改版前的 ecom Step 3
@@ -1315,7 +1407,7 @@ function renderSection(label, group, items) {
           <div class="feature-check"></div>
           <div class="feature-name-wrap">
             <span class="feature-name">${item.name}</span>
-            <span class="badge badge-${item.badge}">${badgeLabel(item.badge)}</span>${lockBadge}
+            ${(isReqType() && item.badge === 'must' && !included) ? '' : `<span class="badge badge-${item.badge}">${badgeLabel(item.badge)}</span>`}${lockBadge}
           </div>
           <span class="feature-price ${priceClass}">${priceStr}</span>
           <div class="info-btn" onclick="toggleDesc('${group}-${item.id}',event)">?</div>
@@ -1410,7 +1502,16 @@ function recomputeReq() {
 }
 
 function buildRequirementSnapshot() {
-  return NicocoRequirements.buildSnapshot(state.req.answers, reqCtx());
+  const snap = NicocoRequirements.buildSnapshot(state.req.answers, reqCtx());
+  // Step 3 客戶自行加選的既有功能／服務（名稱與 key 一併保存；價格仍只存在 pricingBreakdown）
+  snap.additionalServices = [];
+  Object.keys(FEATURES).forEach(g => FEATURES[g].forEach(item => {
+    if (!(state.selected[g] && state.selected[g].has(item.id))) return;
+    if (isIncluded(g, item.id) || item.free) return;
+    snap.additionalServices.push({ group: g, id: item.id, name: item.name, evaluate: !!item.evaluate });
+  }));
+  snap.projectInfo = buildProjectInfo();
+  return snap;
 }
 
 function reqChanged() {
@@ -1520,7 +1621,7 @@ function reqRenderNodes(nodes) {
     } else if (node.type === 'text') {
       html += `<div class="req-q">
         <div class="req-q-label">${escapeHTML(node.label)}</div>
-        <textarea class="req-text" rows="2" placeholder="${escapeHTML(node.placeholder || '')}" oninput="reqText('${sk}', this.value)">${escapeHTML(a[sk] || '')}</textarea>
+        <textarea class="req-text" rows="${node.rows || 2}" placeholder="${escapeHTML(node.placeholder || '')}" oninput="reqText('${sk}', this.value)">${escapeHTML(a[sk] || '')}</textarea>
       </div>`;
     }
   });
@@ -1921,6 +2022,9 @@ function escapeHTML(value) {
 // ══════════════════════════════════════════════════
 function goToSummary() {
   if (!validate()) return;
+  if (isReqType() && state.projectInfo.hasTargetDate === 'yes' && !state.projectInfo.targetDate) {
+    showToast('請填寫希望上線日期，或改選「沒有」'); return;
+  }
   state.contact = {
     name:    document.getElementById('f-name').value.trim(),
     company: document.getElementById('f-company').value.trim(),
@@ -1931,6 +2035,10 @@ function goToSummary() {
     launch:  document.getElementById('f-launch').value.trim(),
     notes:   document.getElementById('f-notes').value.trim(),
   };
+  // 需求書模式：既有的 launchDate 欄位改存客戶指定的上線日期（沒有指定則留空），後台顯示位置不變
+  if (isReqType()) {
+    state.contact.launch = state.projectInfo.hasTargetDate === 'yes' ? state.projectInfo.targetDate : '';
+  }
   renderSummary();
   goTo(5);
 }
@@ -2099,6 +2207,16 @@ function renderSummary() {
         </div>
       </div>
 
+      ${isReqType() ? `
+      <div class="final-section">
+        <div class="final-section-title">後續維護服務</div>
+        <div style="font-size:13px;color:var(--ink)">${maintInterestLabel()}</div>
+        <div style="font-size:11px;color:var(--ink-30);margin-top:4px">僅記錄是否希望了解，不計入本次開發估價。</div>
+      </div>
+      <div class="final-section">
+        <div class="final-section-title">修改說明</div>
+        <div style="font-size:13px;color:var(--ink-60);line-height:1.6">${REQ_REVISION_TEXT}</div>
+      </div>` : `
       <div class="final-section">
         <div class="final-section-title">10. 選配維護費</div>
         ${state.conds.maintKey && state.conds.maintKey !== 'none'
@@ -2113,7 +2231,7 @@ function renderSummary() {
         <div class="final-section-title">修改次數</div>
         <div style="font-size:13px;color:var(--ink)">${state.conds.revisionLabel}</div>
         <div style="font-size:11px;color:var(--ink-30);margin-top:4px">超出 2 次內含修改後，以 NT$800–1,500/hr 按時計費，不列入本次開發總價。</div>
-      </div>
+      </div>`}
 
       ${contactRows ? `
       <div class="final-section">
@@ -2315,7 +2433,7 @@ async function submitQuote() {
       warranty_fee:  (result && !result.evaluate) ? `NT$${result.warrantyFee.toLocaleString()}` : '—',
       warranty_label: state.conds.warrantyLabel,
       revision_policy: state.conds.revisionLabel,
-      maintenance:   state.conds.maintLabel,
+      maintenance:   isReqType() ? maintInterestLabel() : state.conds.maintLabel,
       manual_review: (result && !result.evaluate && result.requiresManualReview) ? '是' : '否',
       // 需求摘要純文字（EmailJS template 未使用此變數時會自動忽略）
       requirements_summary: reqSnapshot ? NicocoRequirements.snapshotToText(reqSnapshot) : '—',
@@ -2484,6 +2602,15 @@ function downloadHTML() {
 
   ${c.notes?`<div class="sec"><div class="sec-title">補充說明</div><div style="color:#60636e;line-height:1.6">${escapeHTML(c.notes)}</div></div>`:''}
 
+  ${isReqType() ? `
+  <div class="sec">
+    <div class="sec-title">修改說明</div>
+    <div style="font-size:12px;color:#60636e">${REQ_REVISION_TEXT}</div>
+  </div>
+  <div class="sec">
+    <div class="sec-title">後續維護服務</div>
+    <div style="font-size:12px;color:#60636e">${maintInterestLabel()}（僅記錄意願，不計入本次開發估價）</div>
+  </div>` : `
   <div class="sec">
     <div class="sec-title">修改次數</div>
     <div style="font-size:12px;color:#60636e">${state.conds.revisionLabel}。超出 2 次內含修改後，以 NT$800–1,500/hr 按時計費，不列入本次開發總價。</div>
@@ -2496,7 +2623,7 @@ function downloadHTML() {
         ? `${state.conds.maintLabel}（${{hourly:'NT$800–1,500/hr', basic:'NT$2,000–5,000/月', advanced:'NT$5,000–10,000+/月'}[state.conds.maintKey]}），不列入本次開發總價，為選配持續性服務。`
         : '未選擇維護方案。'}
     </div>
-  </div>
+  </div>`}
 
   <div class="sec">
     <div class="sec-title">第三方服務費（客戶自行負擔）</div>
