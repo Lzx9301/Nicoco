@@ -20,7 +20,7 @@
   'use strict';
 
   var SCHEMA_VERSION = 1;
-  var DEFINITION_VERSION = 'ecom-v1.1.0';
+  var DEFINITION_VERSION = 'ecom-v1.2.0';
   var PROJECT_TYPE_KEY = 'ecom';
 
   // ── 責任類型 ──────────────────────────────────────────────────────────
@@ -525,6 +525,66 @@
   var EXTRA = {
     key: 'extra', label: '其他需求與附加服務',
     items: [
+      // ── 同一需求的不同程度：用單選題詢問，再對應回既有 FEATURES（不新增價格）──
+      {
+        key: 'extra.articles', label: '網站是否需要文章／最新消息功能？', type: 'single',
+        options: [
+          { value: 'no', label: '不需要', pricing: NONE },
+          {
+            value: 'static', label: '需要，內容主要由網站建置時建立', summaryLabel: '文章／最新消息（建置時建立內容）',
+            hint: '網站需要展示文章、最新消息、品牌故事等內容，但主要內容會在網站建置時建立；之後若需要新增或修改，可再請我們協助。',
+            pricing: FEAT('pages', 'blog'),
+          },
+          {
+            value: 'managed', label: '需要，而且希望之後可以自己管理', summaryLabel: '文章／最新消息（可自行後台管理）',
+            hint: '網站除了文章／最新消息頁面外，也需要後台管理功能，之後可以自行新增、修改、上下架文章，不需要每次請開發者修改網站。',
+            // 既有「文章 / 內容 CMS」的 Scope 樣板已含文章列表、文章詳細頁與後台，因此只對應這一個項目，不再疊加「部落格」
+            pricing: FEAT('cms', 'content-mgmt'),
+          },
+        ],
+      },
+      {
+        key: 'extra.multilang', label: '網站是否需要多語言？', type: 'single',
+        options: [
+          { value: 'no', label: '不需要', pricing: NONE },
+          {
+            value: 'static', label: '需要，主要是固定頁面提供其他語言版本', summaryLabel: '多語言（固定頁面）',
+            hint: '例如品牌介紹、聯絡資訊、服務說明等固定頁面需要中／英文或其他語言版本。',
+            pricing: FEAT('pages', 'multilang'),
+          },
+          {
+            value: 'full', label: '需要，而且商品、文章等後台內容也要能分別管理不同語言', summaryLabel: '多語言（含商品、文章等後台內容）',
+            hint: '除了固定頁面外，之後新增的商品、文章、分類等內容，也需要在後台分別管理不同語言版本。',
+            // 既有「完整多語系 CMS」為需評估項目（無固定價格），維持原本行為
+            pricing: FEAT('evaluate', 'multilang-full'),
+          },
+        ],
+      },
+      {
+        key: 'extra.seo', label: '是否需要額外的 SEO 搜尋優化協助？', type: 'single',
+        hint: 'SEO 服務著重於網站設定、內容與搜尋優化建議；搜尋排名同時受到競爭程度、內容品質、搜尋演算法等因素影響，因此不保證特定關鍵字排名、搜尋流量或營收成果。',
+        options: [
+          { value: 'no', label: '不需要額外服務', pricing: NONE, hint: '基礎 SEO 設定已包含於基礎建置。' },
+          {
+            value: 'advanced', label: '需要網站端的進階 SEO 設定', summaryLabel: 'SEO（網站端進階設定）',
+            hint: '加強網站提供給 Google 等搜尋引擎的頁面資訊與結構設定。',
+            pricing: FEAT('pages', 'seo-adv'),
+          },
+          {
+            value: 'consult', label: '需要進一步的 SEO 分析與優化建議', summaryLabel: 'SEO（進階設定＋分析與優化建議）',
+            hint: '除了網站設定外，也希望協助分析關鍵字、競爭網站、頁面內容等，並提供後續優化建議。',
+            // 「除了網站設定外，也…」→ 同時對應既有兩個獨立項目，各自以原價計一次
+            pricing: [FEAT('pages', 'seo-adv'), FEAT('services', 'seo-consult')],
+          },
+        ],
+      },
+      {
+        key: 'extra.other', label: '還有其他想實現的功能嗎？', type: 'text', rows: 5,
+        hint: '不知道功能名稱也沒關係，直接描述你希望網站「可以做什麼」即可，我們會再協助確認與評估。',
+        placeholder: '例如：\n希望業務可以看到每個客戶以前買過什麼\n希望網站庫存跟實體店同步\n希望客人可以自己選老師和時間預約',
+        // 有內容時列為需人工確認；不計價、不產生 pricing key、不成為 Scope
+        evaluateWhenFilled: { label: '其他想實現的功能', reason: '客戶自由描述的需求，需人工確認與評估' },
+      },
       {
         key: 'extra.externalIntegration', label: '是否需要串接其他外部系統或服務？', type: 'single',
         hint: '例如既有的進銷存、會計、訂位、會員或行銷工具。實際串接方式與費用會在需求確認後評估。',
@@ -590,6 +650,10 @@
     var catOut = [];
 
     function addEffects(pricing, thirdParty, key, label, cat) {
+      if (Array.isArray(pricing)) {
+        pricing.forEach(function (p) { addEffects(p, null, key, label, cat); });
+        pricing = null;
+      }
       if (pricing && pricing.mode === 'feature') {
         var k = pricing.group + ':' + pricing.id;
         if (!derivedMap[k]) derivedMap[k] = { group: pricing.group, id: pricing.id, from: [] };
@@ -616,6 +680,7 @@
 
     function pricingOut(p) {
       if (!p) return null;
+      if (Array.isArray(p)) return { mode: 'features', features: p.map(function (x) { return { group: x.group, id: x.id }; }) };
       var o = { mode: p.mode };
       if (p.mode === 'feature') { o.group = p.group; o.id = p.id; }
       if (p.mode === 'evaluate') { o.reason = p.reason || ''; if (p.relatedFeature) o.relatedFeature = p.relatedFeature; }
@@ -688,6 +753,12 @@
         } else if (node.type === 'text') {
           var txt = String(answers[sk] || '').trim();
           item.text = txt;
+          if (txt && node.evaluateWhenFilled) {
+            evaluateItems.push({
+              key: node.key, label: node.evaluateWhenFilled.label, categoryKey: cat.key, categoryLabel: cat.label,
+              reason: node.evaluateWhenFilled.reason || '', relatedFeature: null,
+            });
+          }
           if (txt) {
             freeTexts.push({ key: node.key, label: node.label, text: txt, categoryKey: cat.key });
             selectedCountByCat[cat.key] = (selectedCountByCat[cat.key] || 0) + 1;
@@ -732,7 +803,9 @@
       return {
         group: d.group, id: d.id,
         featureName: info.name || '',
+        publicName: info.publicName || '',
         includedInPlan: !!info.included,
+        evaluate: !!info.evaluate,
         from: d.from,
       };
     });
@@ -759,7 +832,7 @@
       responsibilityLegend: RESPONSIBILITY_LABELS,
       dependencies: ev.dependencies,
       freeTexts: ev.freeTexts,
-      requiresManualReview: ev.evaluateItems.length > 0,
+      requiresManualReview: ev.evaluateItems.length > 0 || derivedPricingKeys.some(function (k) { return k.evaluate; }),
     };
     // 去除 undefined（Firestore 不接受 undefined）
     return JSON.parse(JSON.stringify(snap));
@@ -780,9 +853,16 @@
     var style = 'font-size:11px;padding:1px 7px;border-radius:10px;margin-left:6px;white-space:nowrap;';
     if (p.mode === 'base') return '<span style="' + style + 'background:#f0fdf4;color:#16a34a">方案內含</span>';
     if (p.mode === 'evaluate') return '<span style="' + style + 'background:#fffbeb;color:#d97706">需人工確認</span>';
+    if (p.mode === 'features') {
+      return (p.features || []).map(function (f) { return pricingTag({ mode: 'feature', group: f.group, id: f.id }, snap, admin); }).join('');
+    }
     if (p.mode === 'feature') {
+      var d0 = (snap.derivedPricingKeys || []).filter(function (x) { return x.group === p.group && x.id === p.id; })[0];
+      if (d0 && d0.evaluate) {
+        return '<span style="' + style + 'background:#fffbeb;color:#d97706">需評估' + (admin ? '：' + esc(d0.featureName) + '（' + esc(p.group + '/' + p.id) + '）' : '') + '</span>';
+      }
       var d = (snap.derivedPricingKeys || []).filter(function (x) { return x.group === p.group && x.id === p.id; })[0];
-      var name = d && d.featureName ? d.featureName : '';
+      var name = d ? ((!admin && d.publicName) || d.featureName || '') : '';
       var inc = d && d.includedInPlan;
       var text = inc ? '方案內含' : ('加購項目' + (name ? '：' + esc(name) : ''));
       if (admin) text += '（' + esc(p.group + '/' + p.id) + '）';
@@ -852,7 +932,8 @@
       html += '<div style="font-size:13px;color:#0f1117;line-height:1.6">';
       if (addSvc.length) {
         html += addSvc.map(function (a) {
-          return '<div style="margin:3px 0">✓ ' + esc(a.name) +
+          return '<div style="margin:3px 0">✓ ' + esc(a.publicName || a.name) +
+                 (admin && a.publicName ? '<span style="font-size:11px;color:#9ca3af;margin-left:6px">' + esc(a.name) + '</span>' : '') +
                  (a.evaluate ? '<span style="font-size:11px;padding:1px 7px;border-radius:10px;margin-left:6px;background:#fffbeb;color:#d97706">需評估</span>' : '') +
                  (admin ? '<span style="font-size:11px;color:#9ca3af;margin-left:6px">' + esc(a.group + '/' + a.id) + '</span>' : '') + '</div>';
         }).join('');
@@ -964,7 +1045,7 @@
     });
     if ((snap.additionalServices || []).length || snap.additionalRequirements) {
       out.push('【其他需求與附加服務】');
-      (snap.additionalServices || []).forEach(function (a) { out.push('- ' + a.name); });
+      (snap.additionalServices || []).forEach(function (a) { out.push('- ' + a.name); });   // 管理者信件用原名
       if (snap.additionalRequirements) lines(snap.additionalRequirements.items, 0);
     }
     if (snap.projectInfo) {

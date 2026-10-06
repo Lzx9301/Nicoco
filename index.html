@@ -376,6 +376,12 @@ body {
 .req-opt .req-box { margin-top: 1px; }
 .req-opt.radio .req-box { border-radius: 50%; }
 .req-opt.selected .req-box { background: var(--ink); border-color: var(--ink); }
+@media (max-width: 800px) {
+  .req-check, .req-opt { flex-wrap: wrap; }
+  .req-tag { margin-left: 26px; white-space: normal; }
+  .req-cat-head { flex-wrap: wrap; }
+  .req-children { margin-left: 4px; padding-left: 10px; }
+}
 .req-text {
   width: 100%; font: inherit; font-size: 13px; color: var(--ink); padding: 8px 10px; margin-top: 5px;
   border: 1.5px solid var(--ink-10); border-radius: 8px; background: var(--white); resize: vertical;
@@ -1299,15 +1305,60 @@ function maintInterestLabel() {
 // 只是「哪些既有 FEATURES 顯示給客戶」的清單；FEATURES／價格／Scope 對應完全不動。
 // 未列在這裡的項目只是不顯示：Step 2 已涵蓋的核心功能由需求內容帶入；
 // 純技術項目（Firebase 進階、進階正式環境、主機代管等）改由管理者於正式報價階段判斷。
+// 每個項目：['group','id'] ＝ 顯示既有 FEATURES 卡片；{ req:'extra.xxx' } ＝ 顯示需求定義中的需求題。
 const PUBLIC_STEP3_SECTIONS = [
-  { label: '網站內容／功能', items: [['pages','about'],['pages','faq'],['pages','blog'],['cms','content-mgmt'],['pages','multilang'],['ecom','coupon'],['integrations','maps'],['integrations','line-notify']] },
-  { label: '行銷／追蹤',     items: [['integrations','gtm'],['integrations','fb-pixel'],['integrations','newsletter'],['pages','seo-adv'],['services','seo-consult']] },
+  { label: '網站內容／功能', items: [['pages','about'],['pages','faq'],{ req:'extra.articles' },{ req:'extra.multilang' },['ecom','coupon'],['integrations','maps'],['integrations','line-notify']] },
+  { label: '網站曝光與客戶聯繫', items: [['integrations','newsletter'],{ req:'extra.seo' }] },
   { label: '設計／內容服務', items: [['services','ui-design'],['services','logo'],['services','copywriting'],['services','photography']] },
-  { label: '交付／顧問',     items: [['services','training'],['services','manual']] },
-  { label: '特殊系統（需評估，不計入自動估價）', items: [['evaluate','erp'],['evaluate','crm'],['evaluate','pos'],['evaluate','ai'],['evaluate','b2b'],['evaluate','booking'],['evaluate','payment-adv'],['evaluate','multilang-full']] },
+  { label: '交付／教學',     items: [['services','training'],['services','manual']] },
+  { label: '特殊需求（需另行評估，不計入自動估價）', items: [['evaluate','erp'],['evaluate','crm'],['evaluate','pos'],['evaluate','b2b'],['evaluate','booking'],['evaluate','ai'],['evaluate','payment-adv']] },
+  { label: '外部系統／服務', items: [{ req:'extra.externalIntegration' }] },
+  { label: '其他', items: [{ req:'extra.other' }] },
 ];
+
+// ── 公開需求書的白話名稱與說明（只影響新客戶看到的文字）──
+// FEATURES 的 id／name／price／desc 完全不動；Firestore 的 selectedItems 等仍寫入 FEATURES 原名
+// （原名是後台 Scope 對應的 key）。
+const PUBLIC_FEATURE_COPY = {
+  // 由需求題帶入的項目（不顯示為卡片；側欄／摘要用白話名稱）
+  'pages/blog':         { name: '文章／最新消息（建置時建立內容）' },
+  'cms/content-mgmt':   { name: '文章／最新消息（可自行後台管理）' },
+  'pages/multilang':    { name: '多語言（固定頁面）' },
+  'evaluate/multilang-full': { name: '多語言（含商品、文章等後台內容）' },
+  'pages/seo-adv':      { name: '網站端進階 SEO 設定' },
+  'services/seo-consult': { name: 'SEO 分析與優化建議' },
+  'pages/about':        { name: '品牌／公司介紹頁面', desc: '介紹品牌故事、公司、團隊或服務理念。' },
+  'pages/faq':          { name: '常見問題頁面', desc: '整理客戶常問的問題，例如付款、配送、退換貨或服務方式。' },
+  'ecom/coupon':        { name: '優惠券／折扣活動', desc: '希望可以建立折扣碼、滿額折扣、限時優惠等活動。' },
+  'integrations/maps':  { name: '網站顯示店家／公司位置地圖', desc: '在網站頁面中顯示 Google 地圖與店家／公司位置。' },
+  'integrations/line-notify': { name: '有新訂單時通知店家 LINE', desc: '網站收到新訂單時，希望通知指定的 LINE 管理端。實際通知方式依 LINE 平台當時提供的服務確認。' },
+  'integrations/newsletter':  { name: '電子報／訂閱名單', desc: '讓訪客留下 Email 訂閱網站消息，並可用於寄送新品、活動或公告。實際寄送方式與第三方服務費依使用的平台及寄送量而定。' },
+  'services/ui-design': { name: '高度客製的網站視覺／操作設計', desc: '一般網站介面與 RWD 設計已包含於基礎建置；如果希望另外製作完整設計稿、特殊互動或高度品牌化的視覺，可選擇此項。' },
+  'services/logo':      { name: 'LOGO／品牌識別設計', desc: '如果目前沒有 LOGO，或希望重新設計品牌識別。' },
+  'services/copywriting': { name: '網站文字／文案協助', desc: '協助撰寫品牌介紹、頁面文字或其他網站文案。' },
+  'services/photography': { name: '商品／品牌照片拍攝', desc: '需要另外拍攝商品照片或品牌形象照片。' },
+  'services/training':  { name: '後台操作教學', desc: '網站完成後，教你如何使用本專案提供的後台功能，例如管理商品、訂單、文章等。' },
+  'services/manual':    { name: '後台操作手冊', desc: '提供本專案後台功能的書面操作說明，方便日後查閱。' },
+  'evaluate/erp':       { name: '與公司現有的庫存／訂單／營運系統連動（ERP）', desc: '如果公司目前已有庫存、採購、訂單、財務或其他內部管理系統，希望網站資料能與它同步或交換資料，請選擇此項。' },
+  'evaluate/crm':       { name: '管理或串接客戶資料與互動紀錄（CRM）', desc: '如果希望集中管理客戶資料、購買紀錄、聯絡紀錄或後續追蹤，或需要與公司現有的客戶管理系統串接，請選擇此項。' },
+  'evaluate/pos':       { name: '與實體門市的結帳／庫存系統連動（POS）', desc: '如果有實體門市，希望網站與門市的商品、庫存、訂單或結帳系統互相連動，請選擇此項。' },
+  'evaluate/b2b':       { name: '企業／批發客戶專屬功能（B2B）', desc: '如果企業客戶、經銷商或批發客戶需要不同價格、最低訂購量、詢價／報價或特殊下單流程，請選擇此項。' },
+  'evaluate/booking':   { name: '讓客戶在線上預約日期、時間或服務', desc: '如果希望客戶可以在網站選擇服務、日期、時段、人員或其他資源並建立預約，請選擇此項。' },
+  'evaluate/ai':        { name: '網站需要 AI 功能', desc: '例如 AI 客服、智慧推薦、內容生成或其他 AI 應用。實際功能、技術方式及第三方服務費需依需求另外評估。' },
+  'evaluate/payment-adv': { name: '需要特殊付款方式', desc: '如果除了目前需求書中的一般付款方式外，還需要分期、訂閱制、特殊付款流程或其他金流方式，請選擇此項，實際串接方式另行評估。' },
+};
+function pubCopy(group, id) { return isReqType() ? PUBLIC_FEATURE_COPY[group + '/' + id] : null; }
+// 以 FEATURES 原名查出公開名稱（側欄／摘要／下載需求書顯示用）；非需求書模式或沒有對應時原樣回傳
+function pubName(name) {
+  if (!isReqType()) return name;
+  for (const g of Object.keys(FEATURES)) {
+    const item = FEATURES[g].find(i => i.name === name);
+    if (item) { const c = PUBLIC_FEATURE_COPY[g + '/' + item.id]; return c ? c.name : name; }
+  }
+  return name;
+}
 function isPublicStep3Item(group, id) {
-  return PUBLIC_STEP3_SECTIONS.some(sec => sec.items.some(([g, i]) => g === group && i === id));
+  return PUBLIC_STEP3_SECTIONS.some(sec => sec.items.some(it => Array.isArray(it) && it[0] === group && it[1] === id));
 }
 
 // ══════════════════════════════════════════════════
@@ -1353,7 +1404,14 @@ function renderAdvanced() {
       // 依 FEATURES 群組分段呼叫既有 renderSection（label 留空＝不重複印標題）
       let run = null;
       const flush = () => { if (run) html += renderSection('', run.group, run.items); run = null; };
-      sec.items.forEach(([g, id]) => {
+      sec.items.forEach(it => {
+        if (!Array.isArray(it)) {            // 需求題
+          flush();
+          const node = NicocoRequirements.EXTRA.items.find(n => n.key === it.req);
+          if (node) html += reqRenderNodes([node]);
+          return;
+        }
+        const [g, id] = it;
         const item = (FEATURES[g] || []).find(i => i.id === id);
         if (!item) return;
         if (!run || run.group !== g) { flush(); run = { group: g, items: [] }; }
@@ -1362,8 +1420,6 @@ function renderAdvanced() {
       flush();
       html += `</div>`;
     });
-    // 外部系統串接：改以需求題詢問（evaluate，不自動計價、不直接成為 Scope）
-    html += `<div class="pub-sec"><div class="feature-group-title">外部系統／服務</div>${reqRenderNodes(NicocoRequirements.EXTRA.items)}</div>`;
     container.innerHTML = html;
   } else if (state.type === 'ecom') {
     // 後備：需求定義檔載入失敗時，維持改版前的 ecom Step 3
@@ -1406,13 +1462,13 @@ function renderSection(label, group, items) {
         <div class="feature-row" onclick="toggleFeature('${group}','${item.id}',event)">
           <div class="feature-check"></div>
           <div class="feature-name-wrap">
-            <span class="feature-name">${item.name}</span>
+            <span class="feature-name">${(pubCopy(group, item.id) || item).name}</span>
             ${(isReqType() && item.badge === 'must' && !included) ? '' : `<span class="badge badge-${item.badge}">${badgeLabel(item.badge)}</span>`}${lockBadge}
           </div>
           <span class="feature-price ${priceClass}">${priceStr}</span>
           <div class="info-btn" onclick="toggleDesc('${group}-${item.id}',event)">?</div>
         </div>
-        <div class="feature-desc" id="desc-${group}-${item.id}">${clientDesc(item.desc)}</div>
+        <div class="feature-desc" id="desc-${group}-${item.id}">${pubCopy(group, item.id) ? pubCopy(group, item.id).desc : clientDesc(item.desc)}</div>
       </div>`;
   });
   html += `</div></div>`;
@@ -1489,7 +1545,8 @@ function reqCtx() {
     // Snapshot 用：保存當時的功能名稱與是否方案內含
     featureInfo: (group, id) => {
       const item = (FEATURES[group] || []).find(i => i.id === id);
-      return { name: item ? item.name : '', included: isIncluded(group, id) };
+      return { name: item ? item.name : '', included: isIncluded(group, id), evaluate: !!(item && item.evaluate),
+               publicName: (PUBLIC_FEATURE_COPY[group + '/' + id] || {}).name || '' };
     },
   };
 }
@@ -1508,8 +1565,10 @@ function buildRequirementSnapshot() {
   Object.keys(FEATURES).forEach(g => FEATURES[g].forEach(item => {
     if (!(state.selected[g] && state.selected[g].has(item.id))) return;
     if (isIncluded(g, item.id) || item.free) return;
-    snap.additionalServices.push({ group: g, id: item.id, name: item.name, evaluate: !!item.evaluate });
+    const copy = PUBLIC_FEATURE_COPY[g + '/' + item.id];
+    snap.additionalServices.push({ group: g, id: item.id, name: item.name, publicName: copy ? copy.name : '', evaluate: !!item.evaluate });
   }));
+  if (snap.additionalServices.some(a => a.evaluate)) snap.requiresManualReview = true;
   snap.projectInfo = buildProjectInfo();
   return snap;
 }
@@ -1541,18 +1600,25 @@ function reqMulti(sk, val) {
   reqChanged();
 }
 // 文字輸入：只更新 state，不重繪（避免輸入時 focus 跳掉）
-function reqText(sk, val) { state.req.answers[sk] = val; }
+function reqText(sk, val) { state.req.answers[sk] = val; recomputeReq(); updateSidebar(); }
 function reqBlocked(msg) { showToast(msg); }
 
 // 需求節點右側的計價提示（金額一律讀既有 FEATURES，不在需求定義內保存價格）
 function reqPricingTag(pricing) {
   if (!pricing) return '';
+  if (Array.isArray(pricing)) {
+    // 一個選項對應多個既有項目：顯示合計區間（各項目仍由 calcPrice 各計一次）
+    const items = pricing.map(p => (FEATURES[p.group] || []).find(i => i.id === p.id)).filter(Boolean);
+    const lo = items.reduce((n, i) => n + i.price, 0), hi = items.reduce((n, i) => n + itemHigh(i), 0);
+    return `<span class="req-tag">加購 ${(lo/1000).toFixed(0)}k–${(hi/1000).toFixed(0)}k</span>`;
+  }
   if (pricing.mode === 'base') return '<span class="req-tag base">方案內含</span>';
   if (pricing.mode === 'evaluate') return '<span class="req-tag eval">需人工確認</span>';
   if (pricing.mode === 'feature') {
     if (isIncluded(pricing.group, pricing.id)) return '<span class="req-tag base">方案內含</span>';
     const item = (FEATURES[pricing.group] || []).find(i => i.id === pricing.id);
     if (!item) return '';
+    if (item.evaluate) return '<span class="req-tag eval">需評估</span>';
     return `<span class="req-tag">加購 ${(item.price/1000).toFixed(0)}k–${(itemHigh(item)/1000).toFixed(0)}k</span>`;
   }
   return '';
@@ -1621,6 +1687,7 @@ function reqRenderNodes(nodes) {
     } else if (node.type === 'text') {
       html += `<div class="req-q">
         <div class="req-q-label">${escapeHTML(node.label)}</div>
+        ${node.hint ? `<div class="req-hint" style="margin-bottom:6px">${escapeHTML(node.hint)}</div>` : ''}
         <textarea class="req-text" rows="${node.rows || 2}" placeholder="${escapeHTML(node.placeholder || '')}" oninput="reqText('${sk}', this.value)">${escapeHTML(a[sk] || '')}</textarea>
       </div>`;
     }
@@ -1740,7 +1807,7 @@ function calcPrice() {
 
   // 需評估項目
   (FEATURES.evaluate || []).forEach(item => {
-    if (state.selected.evaluate && state.selected.evaluate.has(item.id))
+    if (isSelected('evaluate', item.id))
       evalItems.push(item.name);
   });
 
@@ -1885,14 +1952,14 @@ function updateSidebar() {
       </div>`;
       html += sectionTitle(`已選功能（${result.addons.length} 項）`);
       html += result.addons.map(a =>
-        `<div class="addon-item"><span class="addon-name">+ ${a.name}</span><span class="addon-price">${(a.min/1000).toFixed(0)}k</span></div>`
+        `<div class="addon-item"><span class="addon-name">+ ${pubName(a.name)}</span><span class="addon-price">${(a.min/1000).toFixed(0)}k</span></div>`
       ).join('');
     }
     if (result.evalItems.length) {
       if (html) html += '<div style="height:10px"></div>';
       html += sectionTitle(`需評估（${result.evalItems.length} 項）`, 'var(--amber)');
       html += result.evalItems.map(n =>
-        `<div class="addon-item"><span class="addon-name">◆ ${n}</span><span class="addon-eval">評估中</span></div>`
+        `<div class="addon-item"><span class="addon-name">◆ ${pubName(n)}</span><span class="addon-eval">評估中</span></div>`
       ).join('');
     }
     addonList.innerHTML = html;
@@ -1908,14 +1975,14 @@ function updateSidebar() {
   // 段一：已包含項目（灰色）
   const incHtml = result.includedItems.length
     ? result.includedItems.map(a =>
-        `<div class="addon-item"><span class="addon-name" style="color:var(--ink-30)">✓ ${a.name}</span><span style="font-size:10px;color:var(--green);font-weight:500">已含</span></div>`
+        `<div class="addon-item"><span class="addon-name" style="color:var(--ink-30)">✓ ${pubName(a.name)}</span><span style="font-size:10px;color:var(--green);font-weight:500">已含</span></div>`
       ).join('')
     : '';
 
   // 段二：加選功能（正常）
   const addHtml = result.addons.length
     ? result.addons.map(a =>
-        `<div class="addon-item"><span class="addon-name">+ ${a.name}</span><span class="addon-price">${(a.min/1000).toFixed(0)}k</span></div>`
+        `<div class="addon-item"><span class="addon-name">+ ${pubName(a.name)}</span><span class="addon-price">${(a.min/1000).toFixed(0)}k</span></div>`
       ).join('')
     : '';
 
@@ -1935,14 +2002,14 @@ function updateSidebar() {
   // 段四：需評估
   const evalHtml = result.evalItems.length
     ? result.evalItems.map(n =>
-        `<div class="addon-item"><span class="addon-name">◆ ${n}</span><span class="addon-eval">評估中</span></div>`
+        `<div class="addon-item"><span class="addon-name">◆ ${pubName(n)}</span><span class="addon-eval">評估中</span></div>`
       ).join('')
     : '';
 
   // 段五：需求書中需人工確認的需求（不計入預估價格）
   const reqEvalHtml = (result.reqEvalItems && result.reqEvalItems.length)
     ? result.reqEvalItems.map(n =>
-        `<div class="addon-item"><span class="addon-name">◆ ${n}</span><span class="addon-eval">待確認</span></div>`
+        `<div class="addon-item"><span class="addon-name">◆ ${pubName(n)}</span><span class="addon-eval">待確認</span></div>`
       ).join('')
     : '';
 
@@ -2058,16 +2125,16 @@ function renderSummary() {
   Object.keys(FEATURES).forEach(group => {
     FEATURES[group].forEach(item => {
       if (!isSelected(group, item.id)) return;
-      if (item.evaluate) { evalNames.push(item.name); return; }
+      if (item.evaluate) { evalNames.push(pubName(item.name)); return; }
       if (item.free || item.price === 0) return;
 
       const isCustomType = result && result.evaluate;
-      if (!isCustomType && isIncluded(group, item.id)) { includedNames.push(item.name); return; }
+      if (!isCustomType && isIncluded(group, item.id)) { includedNames.push(pubName(item.name)); return; }
 
       const hi = itemHigh(item);
-      if (item.id === 'ui-design')  { uiDesignItem  = { name: item.name, min: item.price, max: hi }; return; }
-      if (item.id === 'launch-adv') { launchAdvItem = { name: item.name, min: item.price, max: hi }; return; }
-      addonItems.push({ name: item.name, min: item.price, max: hi });
+      if (item.id === 'ui-design')  { uiDesignItem  = { name: pubName(item.name), min: item.price, max: hi }; return; }
+      if (item.id === 'launch-adv') { launchAdvItem = { name: pubName(item.name), min: item.price, max: hi }; return; }
+      addonItems.push({ name: pubName(item.name), min: item.price, max: hi });
     });
   });
 
@@ -2564,7 +2631,7 @@ function downloadHTML() {
   ${includedItems.length?`
   <div class="sec">
     <div class="sec-title">方案已包含（不另計費）</div>
-    <div class="tags">${includedItems.map(i=>`<span class="tag" style="background:#f0fdf4;color:#16a34a">✓ ${i.name}</span>`).join('')}</div>
+    <div class="tags">${includedItems.map(i=>`<span class="tag" style="background:#f0fdf4;color:#16a34a">✓ ${pubName(i.name)}</span>`).join('')}</div>
   </div>`:''}
 
   ${allItems.length?`
@@ -2572,7 +2639,7 @@ function downloadHTML() {
     <div class="sec-title">加選功能明細（${allItems.length} 項）</div>
     <table>
       <tr><td style="color:#9ca3af">基礎建置費</td><td>${cfg&&cfg.priceMin?`NT$${cfg.priceMin.toLocaleString()} – NT$${cfg.priceMax.toLocaleString()}`:'依評估'}</td></tr>
-      ${allItems.map(i=>`<tr><td>${i.name}</td><td>NT$${i.price.toLocaleString()} – NT$${itemHigh(i).toLocaleString()}</td></tr>`).join('')}
+      ${allItems.map(i=>`<tr><td>${pubName(i.name)}</td><td>NT$${i.price.toLocaleString()} – NT$${itemHigh(i).toLocaleString()}</td></tr>`).join('')}
     </table>
   </div>`:''}
 
@@ -2597,7 +2664,7 @@ function downloadHTML() {
   ${evalItems.length?`
   <div class="sec">
     <div class="sec-title">需評估項目（${evalItems.length} 項）</div>
-    <div class="tags">${evalItems.map(i=>`<span class="tag eval">◆ ${i.name}</span>`).join('')}</div>
+    <div class="tags">${evalItems.map(i=>`<span class="tag eval">◆ ${pubName(i.name)}</span>`).join('')}</div>
   </div>`:''}
 
   ${c.notes?`<div class="sec"><div class="sec-title">補充說明</div><div style="color:#60636e;line-height:1.6">${escapeHTML(c.notes)}</div></div>`:''}
