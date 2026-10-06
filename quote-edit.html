@@ -9,6 +9,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<!-- Security v1：正式報價共用工具（token、公開投影、客戶回覆對帳） -->
+<script src="quotation-shared.js"></script>
 <script>
 const FB_CONFIG = {
   apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
@@ -353,6 +355,10 @@ async function loadQuote() {
     }
     currentData = docSnap.data();
 
+    // Security v1：客戶的接受／拒絕只寫在 publicQuotations，這裡先對帳同步回內部案件，
+    // 確保「客戶已接受」的報價在進入編輯畫面前就會被鎖定。
+    await NicocoQuotation.reconcile(db, currentId, currentData);
+
     // 已有 quotationItems 就沿用，否則自動帶入預設項目
     items = (currentData.quotationItems && currentData.quotationItems.length > 0)
       ? currentData.quotationItems.map(i => ({ ...i }))
@@ -378,7 +384,8 @@ function buildDefaultItems(q) {
   out.push({
     id: genItemId(),
     name: '基礎建置費',
-    description: `${q.projectType || ''}　含 RWD・基礎 SEO・SSL・部署・DNS`,
+    // 這段說明會出現在客戶的正式報價單上：需求書案件使用中性名稱，不顯示底層方案類型
+    description: `${NicocoQuotation.projectDisplayName(q)}　含 RWD・基礎 SEO・SSL・部署・DNS`,
     qty: 1,
     unitPrice: basePrice,
     subtotal: basePrice,
@@ -562,6 +569,7 @@ function renderPage() {
 
   renderItemsTable();
   recalcTotals();
+  applyAcceptedLock();
 
   // 監聽欄位變動，標記 dirty
   ['f-discount','f-tax','f-quotationStatus','f-validUntil','f-paymentTerms','f-paymentTermsCustom','f-quotationNote']
@@ -569,6 +577,27 @@ function renderPage() {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', markDirty);
     });
+}
+
+// ── Security v1：已接受的正式報價不可原地覆寫（Firestore Rules 同步強制）──
+function isQuotationAccepted() {
+  return !!(currentData && currentData.quotationStatus === 'accepted');
+}
+function applyAcceptedLock() {
+  if (!isQuotationAccepted()) return;
+  const wrap = document.getElementById('wrap');
+  wrap.querySelectorAll('.card input, .card textarea, .card select, .qi-add-btn, .qi-delete-btn')
+    .forEach(el => { el.disabled = true; });
+  const saveBtn = document.getElementById('saveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.style.opacity = '.4'; saveBtn.style.cursor = 'not-allowed'; }
+  if (!document.getElementById('acceptedLockNotice')) {
+    const n = document.createElement('div');
+    n.id = 'acceptedLockNotice';
+    n.style.cssText = 'background:var(--green-light);border:1px solid #bbf7d0;color:#166534;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.6;margin-bottom:16px';
+    n.textContent = '此報價已由客戶接受。如需修改需求或金額，請建立新的報價版本／Change Request。';
+    const firstCard = wrap.querySelector('.card');
+    if (firstCard) wrap.insertBefore(n, firstCard);
+  }
 }
 
 function onPaymentTermsChange() {
@@ -678,15 +707,18 @@ function generateClientToken() {
 //  COPY QUOTATION LINK
 // ══════════════════════════════════════════════════
 function copyQuotationLink() {
-  const token = currentData && currentData.clientToken;
-  if (!token) {
-    showToast('⚠ 請先儲存正式報價，才能複製客戶連結');
+  // Security v1：連結只帶 clientToken（publicQuotations 的文件 ID）。舊版 token 一律視為失效。
+  if (!NicocoQuotation.hasSecureLink(currentData)) {
+    showToast(currentData && currentData.clientToken
+      ? '⚠ 舊的客戶連結已失效，請重新儲存一次正式報價以產生新的安全連結'
+      : '⚠ 請先儲存正式報價，才能複製客戶連結');
     return;
   }
-  const base = window.location.href.replace(/\/[^/]*(\?.*)?$/, '/');
-  const url  = `${base}quotation.html?id=${encodeURIComponent(currentId)}&token=${encodeURIComponent(token)}`;
+  const url = NicocoQuotation.publicUrl(currentData.clientToken);
+  const hint = currentData.quotationStatus === 'draft'
+    ? '（目前為草稿：客戶可預覽但無法回覆，狀態改為「已送出」並儲存後才能接受／拒絕）' : '';
   navigator.clipboard.writeText(url).then(() => {
-    showToast('✓ 客戶連結已複製到剪貼簿');
+    showToast('✓ 客戶連結已複製到剪貼簿' + hint);
   }).catch(() => {
     prompt('請手動複製此連結：', url);
   });
@@ -699,6 +731,10 @@ function genActivityId() { return 'act_' + Date.now() + '_' + Math.random().toSt
 
 async function saveQuotation() {
   if (!currentId) return;
+  if (isQuotationAccepted()) {
+    showToast('此報價已由客戶接受，無法直接修改。如需調整請建立新的報價版本／Change Request。');
+    return;
+  }
   const btn = document.getElementById('saveBtn');
   const statusEl = document.getElementById('saveStatus');
 
@@ -726,22 +762,40 @@ async function saveQuotation() {
     subtotal: (Number(i.qty) || 0) * (Number(i.unitPrice) || 0),
   }));
 
-  // ── Token：若尚未產生則新增，否則沿用現有的 ──────────────────
-  const existingToken = currentData && currentData.clientToken;
-  const clientToken   = existingToken || generateClientToken();
+  // ── Token（Security v1）──
+  // 已有 Security v1 公開報價的案件：沿用同一個 token，客戶手上的連結不會失效。
+  // 沒有 token，或只有舊版 token（曾可被任意讀取）：產生新的 128-bit token。
+  const hasSecure   = NicocoQuotation.hasSecureLink(currentData);
+  const clientToken = hasSecure ? currentData.clientToken : NicocoQuotation.generateClientToken();
+  const version     = (Number(currentData && currentData.publicQuotationVersion) || 0) + 1;
 
-  const payload = {
+  const newStatus = document.getElementById('f-quotationStatus').value;
+  const quotation = {
     quotationItems:     cleanItems,
     quotationSubtotal:  subtotal,
     quotationDiscount:  discount,
     quotationTax:       tax,
     quotationTotal:     total,
-    quotationStatus:    document.getElementById('f-quotationStatus').value,
+    quotationStatus:    newStatus,
     paymentTerms:       paymentTerms,
     validUntil:         validUntilRaw ? firebase.firestore.Timestamp.fromDate(new Date(validUntilRaw)) : null,
     quotationNote:      document.getElementById('f-quotationNote').value,
-    quotationUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  // Admin 直接把狀態存成「已接受」＝代客戶標記接受：會建立不可變的接受紀錄並鎖定報價
+  if (newStatus === 'accepted'
+      && !confirm('確定要將此報價標記為「已接受」嗎？\n系統會建立一份不可修改的接受紀錄，之後此報價內容與金額將無法再編輯。')) {
+    btn.disabled = false;
+    statusEl.textContent = '';
+    return;
+  }
+
+  const ts = firebase.firestore.FieldValue.serverTimestamp();
+  const payload = {
+    ...quotation,
+    quotationUpdatedAt: ts,
     clientToken:        clientToken,
+    publicQuotationVersion: version,
   };
 
   // 同時在 activityLogs 新增一筆紀錄
@@ -754,13 +808,36 @@ async function saveQuotation() {
   };
 
   try {
-    await db.collection('quotes').doc(currentId).update({
+    // 工作室顯示資料：投影到公開報價（settings/studio 只有 Admin 可讀，報價頁不再直接讀取）
+    let studio = {};
+    try {
+      const studioSnap = await db.collection('settings').doc('studio').get();
+      studio = studioSnap.exists ? studioSnap.data() : {};
+    } catch (e) { console.error('讀取 settings/studio 失敗：', e); }
+
+    const pub = NicocoQuotation.buildPublicProjection(currentId, currentData, quotation, studio, version, ts);
+
+    // 單一 batch：內部案件 + 公開投影（+ Admin 代標接受時的 acceptance 快照）一起成功或一起失敗
+    const quoteRef = db.collection('quotes').doc(currentId);
+    const batch = db.batch();
+    batch.update(quoteRef, {
       ...payload,
       activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog),
     });
+    batch.set(db.collection('publicQuotations').doc(clientToken), pub);
+    if (newStatus === 'accepted') {
+      batch.set(quoteRef.collection('acceptances').doc(clientToken),
+                NicocoQuotation.buildAcceptance(clientToken, pub, 'admin', ts));
+    }
+    await batch.commit();
 
-    // 同步本地 currentData（讓 copyQuotationLink 能立即取到 token）
-    if (currentData) currentData.clientToken = clientToken;
+    // 同步本地 currentData（讓 copyQuotationLink 與鎖定判斷立即生效）
+    if (currentData) {
+      currentData.clientToken = clientToken;
+      currentData.publicQuotationVersion = version;
+      currentData.quotationStatus = newStatus;
+    }
+    applyAcceptedLock();
 
     dirty = false;
     statusEl.textContent = '✓ 已儲存';
@@ -780,7 +857,7 @@ async function saveQuotation() {
     statusEl.className = 'save-status error';
     showToast(`⚠ 儲存失敗：${err.message || err}`);
   } finally {
-    btn.disabled = false;
+    btn.disabled = isQuotationAccepted();   // 已接受的報價維持鎖定
   }
 }
 

@@ -20,7 +20,7 @@
   'use strict';
 
   var SCHEMA_VERSION = 1;
-  var DEFINITION_VERSION = 'ecom-v1.2.0';
+  var DEFINITION_VERSION = 'ecom-v1.3.0';
   var PROJECT_TYPE_KEY = 'ecom';
 
   // ── 責任類型 ──────────────────────────────────────────────────────────
@@ -40,17 +40,17 @@
     payment_gateway: {
       label: '第三方金流（例如綠界 ECPay／藍新 NewebPay）',
       responsibilityType: 'client_account',
-      note: '金流商家帳號由客戶申請與持有；交易手續費由客戶負擔。網站負責技術串接。',
+      note: '金流商家帳號由客戶申請與持有；交易手續費、平台費與帳號申請費由客戶負擔，不包含於網站開發費。網站負責技術串接。',
     },
     logistics_provider: {
       label: '第三方物流／超商取貨服務',
       responsibilityType: 'client_account',
-      note: '物流商家資格由客戶申請與持有；網站負責技術串接。',
+      note: '物流商家資格由客戶申請與持有；物流平台費用由客戶負擔，不包含於網站開發費。網站負責技術串接。',
     },
     einvoice_provider: {
       label: '電子發票平台',
       responsibilityType: 'client_account',
-      note: '電子發票平台帳號與稅籍設定由客戶申請與持有；網站負責技術串接。',
+      note: '電子發票平台帳號與稅籍設定由客戶申請與持有；平台費用由客戶負擔，不包含於網站開發費。網站負責技術串接。',
     },
     firebase: {
       label: 'Firebase（資料庫／會員驗證／儲存）',
@@ -65,12 +65,12 @@
     line_login: {
       label: 'LINE Login（LINE Developers）',
       responsibilityType: 'client_account',
-      note: '原則上由客戶持有 LINE Developers 相關帳號／Channel；實際所需條件依 LINE 平台當時要求確認。',
+      note: '原則上由客戶持有 LINE Developers 相關帳號／Channel；實際所需條件依 LINE 平台當時要求確認；相關平台費用不包含於網站開發費。',
     },
     apple_login: {
       label: 'Sign in with Apple（Apple Developer）',
       responsibilityType: 'client_account',
-      note: '原則上由客戶持有 Apple Developer 帳號；實際所需條件依 Apple 平台當時要求確認。',
+      note: '原則上由客戶持有 Apple Developer 帳號；實際所需條件依 Apple 平台當時要求確認；Apple Developer Program 等費用不包含於網站開發費。',
     },
   };
 
@@ -117,14 +117,29 @@
               ],
             },
             {
-              key: 'product.inventory.advanced', label: '需要進階庫存（安全庫存警示、多倉庫存、補貨提醒）',
+              key: 'product.inventory.advanced', label: '需要進階庫存管理（安全庫存設定、低庫存提醒）',
               type: 'check', pricing: FEAT('ecom', 'inventory-adv'),
+            },
+            {
+              key: 'product.inventory.complex', label: '需要多倉庫、自動補貨或與其他系統同步庫存',
+              type: 'check', pricing: EVAL('多倉庫／自動補貨／跨系統庫存同步不屬於基本進階庫存，需人工評估'),
+              children: [
+                {
+                  key: 'product.inventory.complex.types', label: '需要哪些？（可複選）', type: 'multi',
+                  options: [
+                    { value: 'multi_warehouse', label: '多倉庫／跨倉庫庫存分配' },
+                    { value: 'auto_restock', label: '自動補貨流程' },
+                    { value: 'system_sync', label: '與 ERP／POS 或其他系統同步庫存' },
+                    { value: 'other', label: '其他', other: true },
+                  ],
+                },
+              ],
             },
           ],
         },
         {
           key: 'product.variants', label: '商品規格／款式', type: 'check',
-          hint: '例如顏色、尺寸、容量等可供顧客選擇的規格。',
+          hint: '例如顏色、尺寸、容量等可供顧客選擇的規格。三維以上規格、大量組合或特殊定價邏輯需另行評估。',
           // 依既有 FEATURES.variants 的定義：
           //   「多維度規格組合（例如顏色 × 尺寸），且各組合需獨立 SKU、價格或庫存管理」才屬加購。
           // 基礎方案已含「簡易單層規格選項」。定義無法明確涵蓋的情況一律 evaluate／只記錄，不擴大收費範圍。
@@ -239,6 +254,7 @@
               children: [
                 {
                   key: 'checkout.einvoice', label: '需要串接電子發票平台（自動開立發票）', type: 'check',
+                  hint: '單一電子發票服務商的標準串接。多公司／多統編、特殊折讓或作廢流程另行評估；平台費用由客戶負擔。',
                   pricing: FEAT('integrations', 'invoice'), thirdParty: ['einvoice_provider'],
                 },
               ],
@@ -251,6 +267,7 @@
           options: [
             {
               value: 'credit_card', label: '信用卡', pricing: FEAT('integrations', 'payment-3rd'),
+              hint: '單一金流服務商的標準一次性付款流程。訂閱／定期扣款、分潤、多金流商、特殊分期等另行評估；交易手續費與金流帳號費用由客戶負擔。',
               thirdParty: ['payment_gateway'],
             },
             {
@@ -277,7 +294,8 @@
           key: 'checkout.shipping', label: '配送方式（可複選）', type: 'multi',
           options: [
             { value: 'home', label: '宅配', pricing: BASE },
-            { value: 'cvs', label: '超商取貨', pricing: NONE },
+            { value: 'cvs', label: '超商取貨', pricing: NONE,
+              hint: '選擇超商取貨不代表已包含超商物流 API、電子地圖選店或自動物流串接；如需自動串接物流服務，需另外選擇物流串接。' },
             { value: 'pickup', label: '門市／現場取貨', pricing: NONE },
             { value: 'digital', label: '數位商品／不需配送', pricing: EVAL('數位商品交付方式不在基礎電商模組定義內') },
             { value: 'other', label: '其他', other: true },
@@ -288,7 +306,8 @@
           options: [
             { value: 'self', label: '店家自行處理出貨', pricing: BASE },
             {
-              value: 'third_party', label: '希望串接第三方物流（建立託運資料／超商取貨串接）',
+              value: 'third_party', label: '希望串接第三方物流（物流串接）',
+              hint: '單一標準物流服務／平台的基本串接。多家物流商、溫層、複雜運費規則、自動分流等另行評估；物流平台費用由客戶負擔。',
               pricing: FEAT('integrations', 'logistics'), thirdParty: ['logistics_provider'],
             },
           ],
@@ -322,14 +341,15 @@
         },
         {
           key: 'member.level', label: '會員等級', type: 'check', pricing: FEAT('member', 'member-adv'),
+          hint: '基本會員分級：後台人工設定等級、基本等級資料與基本等級權益。自動升降級與複雜規則另行評估。',
           children: [
             {
               key: 'member.level.rule', label: '等級如何決定？（可複選）', type: 'multi',
               options: [
                 { value: 'manual', label: '後台人工設定' },
-                { value: 'spend', label: '累積消費金額自動升級' },
-                { value: 'order_count', label: '訂單次數' },
-                { value: 'other', label: '其他規則', other: true },
+                { value: 'spend', label: '累積消費金額自動升／降級', pricing: EVAL('依消費金額自動升降級不屬於基本會員分級，需人工評估') },
+                { value: 'order_count', label: '訂單次數自動升／降級', pricing: EVAL('依訂單次數自動升降級不屬於基本會員分級，需人工評估') },
+                { value: 'other', label: '其他規則', other: true, pricing: EVAL('複雜會員等級規則需人工評估') },
               ],
             },
             {
@@ -347,7 +367,10 @@
           ],
         },
         {
-          key: 'member.points', label: '會員點數', type: 'check', pricing: FEAT('member', 'member-adv'),
+          // 點數制度不再對應 member-adv：只記錄需求並標記需人工評估
+          key: 'member.points', label: '會員點數', type: 'check',
+          pricing: EVAL('點數制度（取得、折抵、兌換、到期、倍率、歷程等）需人工評估'),
+          hint: '點數制度的規則差異很大，會在需求確認後另行評估，不計入自動估價。',
           children: [
             {
               key: 'member.points.earn', label: '點數取得方式（可複選）', type: 'multi',
@@ -375,20 +398,23 @@
             },
             {
               key: 'member.points.special', label: '有特殊點數規則（例如加倍、分級倍率、指定商品）', type: 'check',
-              pricing: EVAL('特殊會員點數規則需人工確認'),
+              pricing: NONE,   // 會員點數本身已列為需人工評估，這裡只記錄細節
             },
           ],
         },
         {
           key: 'member.oauthGoogle', label: 'Google 登入', type: 'check',
+          hint: '與網站會員建立基本登入關係。複雜帳號合併、多身份綁定不屬於基本範圍；第三方平台帳號或相關費用不包含於網站開發費。',
           pricing: FEAT('member', 'oauth-google'), thirdParty: ['firebase'],
         },
         {
           key: 'member.oauthLine', label: 'LINE 登入', type: 'check',
+          hint: '與網站會員建立基本登入關係。複雜帳號合併、多身份綁定不屬於基本範圍；第三方平台帳號或相關費用不包含於網站開發費。',
           pricing: FEAT('member', 'oauth-line'), thirdParty: ['line_login'],
         },
         {
           key: 'member.oauthApple', label: 'Apple 登入', type: 'check',
+          hint: '與網站會員建立基本登入關係。複雜帳號合併、多身份綁定不屬於基本範圍；第三方平台帳號或相關費用不包含於網站開發費。',
           pricing: FEAT('member', 'oauth-apple'), thirdParty: ['apple_login'],
         },
         {
@@ -443,7 +469,7 @@
         {
           // 「是否需要這套功能」決定 pricing；「這套功能裡要哪些行為」只描述 Scope，不另計價。
           key: 'order.emailAuto', label: '是否需要 Email 自動通知？', type: 'single',
-          hint: 'Email 自動通知不含於基礎建置。',
+          hint: 'Email 自動通知不含於基礎建置。基本範圍為本專案確認的通知事件、基本 Email 樣板與單一寄信服務串接；行銷自動化、複雜排程等另行評估，寄信服務費用由客戶負擔。',
           options: [
             { value: 'no', label: '不需要', pricing: NONE },
             {
@@ -549,7 +575,7 @@
           { value: 'no', label: '不需要', pricing: NONE },
           {
             value: 'static', label: '需要，主要是固定頁面提供其他語言版本', summaryLabel: '多語言（固定頁面）',
-            hint: '例如品牌介紹、聯絡資訊、服務說明等固定頁面需要中／英文或其他語言版本。',
+            hint: '例如品牌介紹、聯絡資訊、服務說明等固定頁面需要中／英文或其他語言版本。不包含翻譯與校稿，翻譯文字原則上由客戶提供。',
             pricing: FEAT('pages', 'multilang'),
           },
           {
@@ -593,7 +619,7 @@
           {
             value: 'yes', label: '需要', summaryLabel: '外部系統／服務串接',
             // 不直接對應既有「第三方 API 串接」計價項目：正式 pricing mapping 留待人工確認
-            pricing: { mode: 'evaluate', reason: '外部系統串接需人工確認串接方式與範圍', relatedFeature: { group: 'integrations', id: 'api-3rd' } },
+            pricing: { mode: 'evaluate', reason: '外部系統串接需人工確認串接方式與範圍', relatedFeature: { group: 'evaluate', id: 'api-3rd' } },
             children: [
               { key: 'extra.externalIntegration.serviceName', label: '服務／系統名稱', type: 'text', rows: 1, placeholder: '例如：某某進銷存系統' },
               { key: 'extra.externalIntegration.purpose', label: '希望串接的用途', type: 'text', rows: 2, placeholder: '例如：訂單成立後自動同步庫存' },

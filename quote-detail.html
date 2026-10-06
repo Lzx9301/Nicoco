@@ -9,6 +9,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<!-- Security v1：正式報價共用工具（token、公開投影、客戶回覆對帳） -->
+<script src="quotation-shared.js"></script>
 <!-- Requirement Definition（ecom v1）：此頁只使用 renderSnapshotHtml() 唯讀顯示客戶原始需求 -->
 <script src="requirements-ecom-v1.js"></script>
 <script>
@@ -535,7 +537,7 @@ const TASK_TEMPLATES = {
   ],
   member_advanced: [
     { key:'member_advanced_01', name:'會員等級／權限設計', weight:5, phase:1, milestone:1, category:'design' },
-    { key:'member_advanced_02', name:'點數或分級邏輯', weight:6, phase:2, milestone:2, category:'backend' },
+    { key:'member_advanced_02', name:'會員等級資料與基本等級權益', weight:6, phase:2, milestone:2, category:'backend' },
     { key:'member_advanced_03', name:'後台設定介面', weight:4, phase:2, milestone:3, category:'backend' },
     { key:'member_advanced_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
@@ -575,13 +577,13 @@ const TASK_TEMPLATES = {
   newsletter: [
     { key:'newsletter_01', name:'訂閱名單管理', weight:4, phase:2, milestone:2, category:'backend' },
     { key:'newsletter_02', name:'電子報樣板', weight:4, phase:2, milestone:2, category:'design' },
-    { key:'newsletter_03', name:'發送排程設定', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'newsletter_03', name:'基本電子報發送功能', weight:4, phase:2, milestone:3, category:'backend' },
     { key:'newsletter_04', name:'測試', weight:2, phase:3, milestone:3, category:'testing' },
   ],
   logistics: [
     { key:'logistics_01', name:'物流商資格／串接準備', weight:4, phase:2, milestone:2, category:'integration' },
     { key:'logistics_02', name:'API 串接', weight:6, phase:2, milestone:2, category:'integration' },
-    { key:'logistics_03', name:'出貨標籤產生', weight:4, phase:2, milestone:3, category:'backend' },
+    { key:'logistics_03', name:'基本託運資料建立', weight:4, phase:2, milestone:3, category:'backend' },
     { key:'logistics_04', name:'測試', weight:3, phase:3, milestone:3, category:'testing' },
   ],
   invoice: [
@@ -620,7 +622,7 @@ const TASK_TEMPLATES = {
   launch_adv: [
     { key:'launch_adv_01', name:'正式網域／DNS 設定', weight:3, phase:3, milestone:3, category:'devops' },
     { key:'launch_adv_02', name:'環境變數設定', weight:3, phase:3, milestone:3, category:'devops' },
-    { key:'launch_adv_03', name:'金流正式環境切換', weight:3, phase:3, milestone:3, category:'devops' },
+    { key:'launch_adv_03', name:'第三方服務正式環境設定確認', weight:3, phase:3, milestone:3, category:'devops' },
     { key:'launch_adv_04', name:'Email DNS（SPF/DKIM/DMARC）', weight:3, phase:3, milestone:3, category:'devops' },
     { key:'launch_adv_05', name:'正式管理員帳號建立', weight:2, phase:3, milestone:3, category:'devops' },
     { key:'launch_adv_06', name:'Production Smoke Test', weight:4, phase:3, milestone:3, category:'testing' },
@@ -812,6 +814,8 @@ async function loadDetail() {
       return;
     }
     currentData = docSnap.data();
+    // Security v1：客戶的接受／拒絕只寫在 publicQuotations，載入時對帳同步回內部案件
+    await NicocoQuotation.reconcile(db, currentId, currentData);
     renderDetail();
     renderProjectSection();
     renderAgreementSection();
@@ -1952,6 +1956,11 @@ const LEGACY_NAME_ALIASES = {
   '測試環境串接': 'payment_sandbox',
   '正式環境測試': 'payment_production_test',
   'Production 測試': 'launch_adv_06',
+  // Pricing v2 的 Scope 校正（只改樣板任務名稱；已生成的 Task 不會被改寫）
+  '點數或分級邏輯': 'member_advanced_02',
+  '發送排程設定': 'newsletter_03',
+  '出貨標籤產生': 'logistics_03',
+  '金流正式環境切換': 'launch_adv_03',
 };
 
 function resolveLegacyTemplateTaskKey(task, template) {
@@ -4242,13 +4251,14 @@ window.addEventListener('beforeunload', (e) => {
 //  COPY QUOTATION LINK
 // ══════════════════════════════════════════════════
 function copyQuotationLink() {
-  const token = currentData && currentData.clientToken;
-  if (!token) {
-    showToast('⚠ 此案件尚未產生客戶連結，請先在「正式報價」頁面儲存一次報價');
+  // Security v1：連結只帶 clientToken（publicQuotations 的文件 ID）。舊版 token 一律視為失效。
+  if (!NicocoQuotation.hasSecureLink(currentData)) {
+    showToast(currentData && currentData.clientToken
+      ? '⚠ 舊的客戶連結已失效，請到「正式報價」頁面重新儲存一次以產生新的安全連結'
+      : '⚠ 此案件尚未產生客戶連結，請先在「正式報價」頁面儲存一次報價');
     return;
   }
-  const base = window.location.href.replace(/\/[^/]*(\?.*)?$/, '/');
-  const url  = `${base}quotation.html?id=${encodeURIComponent(currentId)}&token=${encodeURIComponent(token)}`;
+  const url = NicocoQuotation.publicUrl(currentData.clientToken);
   navigator.clipboard.writeText(url).then(() => {
     showToast('✓ 客戶連結已複製到剪貼簿');
   }).catch(() => {

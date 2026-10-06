@@ -974,32 +974,32 @@ const FEATURES = {
     { id:'contact', name:'聯絡我們',     price:2500,  badge:'must', desc:'聯絡表單、地圖、電話 Email，基本必備。' },
     { id:'faq',     name:'FAQ',          price:2500,  badge:'rec',  desc:'整理常見問題，減少客服負擔，也有助 SEO。' },
     { id:'blog',    name:'部落格',       price:6000,  badge:'rec',  desc:'長期內容經營，支援標籤分類，有助自然搜尋流量。' },
-    { id:'multilang',name:'多語系（基礎）', price:8000, priceHigh:20000, badge:'opt',  desc:'靜態文字多語切換（zh/en），依頁面數量調整。適合語系固定、內容不複雜的形象網站。若需要 CMS 多語、商品多語或 SEO 多語 slug，請勾選「需評估」區塊的「完整多語系 CMS」。' },
+    { id:'multilang',name:'多語系（基礎）', price:8000, priceHigh:20000, badge:'opt',  desc:'固定頁面的多語言切換與不同語言內容顯示（例如 zh/en），含基本版面支援，依頁面數量調整。不包含專業翻譯、校稿，以及商品／文章等 CMS 內容的多語管理；翻譯文字原則上由客戶提供。若需要 CMS 多語、商品多語或 SEO 多語 slug，請勾選「需評估」區塊的「完整多語系 CMS」。' },
     { id:'seo-adv', name:'SEO 進階設定', price:5000,  badge:'rec',  desc:'Schema 結構化資料、進階 OG、Sitemap 完整配置（基礎版已含於建置費）。' },
   ],
   // ── 電商功能 ──
   ecom: [
-    { id:'ecom-base',  name:'基礎電商模組',   price:45000, priceHigh:69750, badge:'must', isModule:true,
+    { id:'ecom-base',  name:'基礎電商模組',   price:60000, priceHigh:90000, badge:'must', isModule:true,
       desc:'商品管理、商品列表、商品詳細頁、基本商品分類、購物車、基本 Checkout 流程、Email／密碼會員登入、基本會員資料、基本訂單建立與查詢、商品管理後台、訂單管理後台、基本部署。<br><strong>適用範圍：單一語系、基本商品規格（顏色/尺寸各一層）、商品數量 50 項以內。</strong>超出此範圍請於補充說明中說明，將另行評估。<br><strong>不包含：</strong>第三方正式金流串接、文章／內容 CMS、Dashboard、會員管理後台、Email 自動通知、物流串接、電子發票、優惠券、進階庫存、進階商品多規格、客製 UI／UX，以上皆為額外加購項目。<br>選擇「小型電商網站」時，此模組已含於方案基礎費，不另計費；僅在其他網站類型額外加入完整電商功能時，才以此價格計算。' },
     { id:'coupon',     name:'優惠券 / 折扣碼',   price:5000, priceHigh:10000, badge:'opt',
       desc:'折扣碼、滿額折、限時優惠等促銷機制。' },
-    { id:'variants',   name:'進階商品多規格',       price:5000, priceHigh:12000, badge:'rec',
-      desc:'基礎方案僅含簡易單層規格選項；此項目適用於多維度規格組合（例如顏色 × 尺寸），且各組合需獨立 SKU、價格或庫存管理。' },
+    { id:'variants',   name:'進階商品多規格',       price:8000, priceHigh:18000, badge:'rec',
+      desc:'基礎方案僅含簡易單層規格選項；此項目適用於多維度規格組合（例如顏色 × 尺寸），且各組合需獨立 SKU、價格或庫存管理。基本範圍：規格組合、前台規格選擇、後台基本管理與基本測試。三維以上規格、大量組合或特殊定價邏輯不屬於基本範圍，需另行評估。' },
     { id:'inventory-adv', name:'進階庫存管理', price:8000, priceHigh:20000, badge:'opt',
-      desc:'安全庫存警示、多倉庫存、自動補貨提醒等進階庫存邏輯（基本進出貨已含於基礎電商模組）。' },
-    { id:'reviews',    name:'商品評價',          price:4500,  badge:'opt',
-      desc:'購買後留評分與文字評價，提升轉換率。' },
+      desc:'基本進階庫存：安全庫存設定、低庫存提醒與基本庫存管理強化（基本進出貨已含於基礎電商模組）。多倉庫、跨倉庫存分配、自動補貨流程、複雜庫存同步、ERP／POS 庫存同步不屬於此項目，需另行評估。' },
+    { id:'reviews',    name:'商品評價',          price:6000, priceHigh:10000, badge:'opt',
+      desc:'購買後留星等評分與文字評價，並於前台商品頁顯示。圖片評論、審核／檢舉機制、商家回覆等不屬於基本範圍，需另行評估。' },
   ],
   // ── 會員 ──
   member: [
     { id:'register',  name:'會員註冊 / 登入',  price:8000,  badge:'must', desc:'Email 帳號註冊與登入，含信箱驗證。' },
-    { id:'oauth-google', name:'Google 登入',  price:3000, priceHigh:6000, badge:'opt',  desc:'使用 Google 帳號快速登入，降低註冊門檻。' },
-    { id:'oauth-line',   name:'LINE 登入',    price:3000, priceHigh:6000, badge:'opt',  desc:'使用 LINE 帳號快速登入，適合台灣使用者習慣。' },
-    { id:'oauth-apple',  name:'Apple 登入',   price:3000, priceHigh:6000, badge:'opt',  desc:'使用 Apple ID 登入，App Store 審核情境或蘋果用戶較適用。' },
+    { id:'oauth-google', name:'Google 登入',  price:4000, priceHigh:8000, badge:'opt',  desc:'使用 Google 帳號快速登入，降低註冊門檻。基本範圍：單一第三方登入、與網站既有會員建立基本登入關係、必要的 callback／token 流程與基本測試。複雜帳號合併、多身份綁定、跨平台資料同步不屬於基本範圍。' },
+    { id:'oauth-line',   name:'LINE 登入',    price:5000, priceHigh:10000, badge:'opt',  desc:'使用 LINE 帳號快速登入，適合台灣使用者習慣。基本範圍：單一第三方登入、與網站既有會員建立基本登入關係、必要的 callback／token 流程與基本測試。複雜帳號合併、多身份綁定、跨平台資料同步不屬於基本範圍。第三方平台帳號或相關費用不包含於網站開發費中。' },
+    { id:'oauth-apple',  name:'Apple 登入',   price:6000, priceHigh:12000, badge:'opt',  desc:'使用 Apple ID 登入。基本範圍：單一第三方登入、與網站既有會員建立基本登入關係、必要的 callback／token 流程與基本測試。複雜帳號合併、多身份綁定、跨平台資料同步不屬於基本範圍。Apple Developer Program 等第三方帳號費用不包含於網站開發費中。' },
     { id:'profile',   name:'基本個人資料管理',      price:3500,  badge:'rec',  desc:'修改姓名、電話、Email、基本地址等會員基本資料。小型電商方案已包含；若需要多地址簿、公司資料、會員偏好等進階欄位，需另行評估。' },
     { id:'wishlist',  name:'收藏 / 願望清單',   price:3000,  badge:'opt',  desc:'讓使用者收藏喜歡的商品，提升回訪率。' },
     { id:'orders',    name:'訂單查詢',           price:4000,  badge:'rec',  desc:'查看歷史訂單狀態，必要的購物體驗。' },
-    { id:'member-adv', name:'進階會員權限 / 等級', price:8000, priceHigh:15000, badge:'opt', desc:'銅銀金分級、點數累積折抵等進階會員權益機制，取代單純的基本會員資料。' },
+    { id:'member-adv', name:'進階會員權限 / 等級', price:8000, priceHigh:15000, badge:'opt', desc:'基本會員分級：後台人工設定會員等級、基本會員等級資料與基本等級權益。依消費金額或訂單次數自動升降級、複雜等級規則，以及點數制度（取得、折抵、兌換、到期、倍率、歷程等）不屬於此項目，需另行評估。' },
   ],
   // ── 後台 CMS ──
   cms: [
@@ -1016,30 +1016,28 @@ const FEATURES = {
     { id:'ga',           name:'Google Analytics 4',   price:0,    badge:'must', free:true, desc:'流量來源、使用者行為、轉換追蹤，已含於基礎建置費中。' },
     { id:'gsc',          name:'Google Search Console', price:0,    badge:'must', free:true, desc:'Google 搜尋排名監控與爬蟲狀態，已含於基礎建置費中。' },
     { id:'firebase-base',name:'Firebase 基礎架構',    price:0,    badge:'must', free:true, desc:'Firestore 資料庫、Authentication 會員驗證、Cloud Storage 基礎用量，已含於基礎建置費中（限標準用量，Firebase 付費用量費用由客戶自行負擔，詳見「第三方服務費」說明）。' },
-    { id:'payment-3rd',  name:'第三方金流串接',       price:8000, priceHigh:15000, badge:'opt', desc:'串接綠界 ECPay / 藍新 NewebPay 等正式金流服務，讓網站可以真正收款。<strong>小型電商方案僅包含基本 Checkout 流程（下單、結帳頁面與訂單建立），不包含第三方正式金流串接</strong>，因此不論選擇何種網站類型，只要需要收款都需要此加購項目。金流服務本身的交易手續費由客戶自行支付，不包含於本開發估價（見「第三方服務費」說明）。' },
+    { id:'payment-3rd',  name:'第三方金流串接',       price:12000, priceHigh:25000, badge:'opt', desc:'單一金流服務商（例如綠界 ECPay／藍新 NewebPay）的標準一次性付款流程：測試與正式環境基本串接、付款請求、付款結果處理與必要驗證、基本成功／失敗流程、基本正式環境測試。<strong>小型電商方案僅包含基本 Checkout 流程（下單、結帳頁面與訂單建立），不包含第三方正式金流串接</strong>，因此不論選擇何種網站類型，只要需要線上收款都需要此加購項目。訂閱／定期扣款、分潤、多金流商、退款自動化、特殊分期或複雜付款流程不屬於基本範圍，需另行評估。金流交易手續費、平台費與帳號申請費由客戶自行負擔，不包含於本開發估價。' },
     { id:'gtm',          name:'Google Tag Manager',    price:2500, badge:'rec',  desc:'追蹤碼統一管理，不需改程式碼即可部署 Pixel 等。' },
     { id:'fb-pixel',     name:'Facebook Pixel',         price:2500, badge:'rec',  desc:'追蹤廣告轉換、建立再行銷受眾，Facebook/Instagram 廣告必備。' },
     { id:'line-notify',  name:'LINE 訂單通知',          price:5000, priceHigh:8000, badge:'opt',  desc:'網站產生新訂單後，透過 LINE 官方提供的 Messaging API，將基本訂單通知發送給指定管理者或群組。基本範圍：Messaging API 基本串接、新訂單成立時的基本通知、指定一個主要通知對象或群組、基本設定與串接測試。多群組分流、依訂單狀態發送不同通知、複雜訊息模板、顧客端通知、LINE Bot 等進階需求另行評估及報價。LINE 官方帳號方案、訊息費及其他第三方平台費用不包含於網站開發費中。' },
-    { id:'email-auto',   name:'Email 自動通知',         price:3000, priceHigh:8000, badge:'opt', desc:'訂單成立、會員註冊、表單送出等事件自動發送通知信（寄信服務本身費用由客戶自行負擔）。' },
-    { id:'newsletter',   name:'電子報系統',              price:5000, priceHigh:12000, badge:'opt', desc:'訂閱名單管理與電子報發送排程（第三方寄信服務費用另計，由客戶自行負擔）。' },
-    { id:'logistics',    name:'物流串接',                price:8000, priceHigh:20000, badge:'opt', desc:'超商取貨（711/全家）、黑貓等物流串接，含出貨標籤列印。需商家資格申請與 API 測試，若涉及多家物流或複雜規則，將另行評估。' },
-    { id:'invoice',      name:'電子發票串接',            price:8000, priceHigh:15000, badge:'opt', desc:'整合綠界或歐付寶電子發票，符合台灣稅務法規。需配合稅籍設定與 API 測試。' },
-    { id:'api-3rd',      name:'第三方 API 串接',         price:5000, priceHigh:20000, badge:'opt', desc:'串接指定第三方服務 API，依串接複雜度落在 NT$5,000～20,000+ 區間。複雜度更高的串接（如 ERP、CRM、POS）請見下方「需評估」項目。' },
-    { id:'maps',         name:'Google Maps 嵌入',       price:2500, badge:'opt',  desc:'互動地圖顯示公司位置，或支援結帳地址自動填入。' },
+    { id:'email-auto',   name:'Email 自動通知',         price:5000, priceHigh:10000, badge:'opt', desc:'依本專案確認的有限通知事件（例如下單確認、店家新訂單、訂單狀態更新、出貨通知）自動寄送 Email，含基本 Email 樣板與單一寄信服務基本串接。大量 lifecycle email、複雜排程、行銷自動化與進階分群不屬於基本範圍，需另行評估。寄信服務本身費用由客戶自行負擔。' },
+    { id:'newsletter',   name:'電子報系統',              price:5000, priceHigh:12000, badge:'opt', desc:'基本包含：訂閱、退訂、基本名單、單一 Email 服務基本串接與基本電子報發送功能。複雜分眾（segmentation）、行銷自動化、行為觸發流程、A/B 測試與 CRM 級行銷流程不屬於基本範圍。第三方寄信費／平台費由客戶自行負擔。' },
+    { id:'logistics',    name:'物流串接',                price:12000, priceHigh:30000, badge:'opt', desc:'單一標準物流服務／平台的基本串接（需商家資格申請與 API 測試）。多家物流商、溫層、多倉、複雜運費規則、特殊配送、自動物流分流與複雜追蹤不屬於基本範圍，需另行評估。物流平台費用由客戶自行負擔。' },
+    { id:'invoice',      name:'電子發票串接',            price:10000, priceHigh:20000, badge:'opt', desc:'單一電子發票服務商的標準串接（需配合稅籍設定與 API 測試）。複雜發票流程、多平台、多公司／多統編、特殊折讓／作廢流程不屬於基本範圍，需另行評估。第三方平台費用由客戶自行負擔。' },
+    { id:'maps',         name:'Google Maps 嵌入',       price:2500, badge:'opt',  desc:'Google Maps 基本嵌入，於網站頁面顯示指定的店家／公司位置。地址自動完成（Places Autocomplete）、地址 API、複雜地圖搜尋與多店據點系統不屬於此項目，需另行評估。' },
     { id:'recaptcha',    name:'reCAPTCHA',              price:1500, badge:'rec',  desc:'防止機器人垃圾表單送出，保護聯絡頁與登入頁。' },
-    { id:'firebase-adv', name:'Firebase 進階功能',     price:8000, priceHigh:25000, badge:'opt',  desc:'Cloud Functions 自動化流程、FCM 推播通知、進階 Storage 規則或多環境設定，依複雜度落在 NT$8,000～25,000+ 區間。超出基礎架構範圍時適用。' },
+    { id:'firebase-adv', name:'Firebase 進階功能',     price:8000, priceHigh:25000, badge:'opt',  desc:'Cloud Functions 自動化流程、FCM 推播通知、進階 Storage 規則或多環境設定，依複雜度落在 NT$8,000～25,000+ 區間。超出基礎架構範圍時適用。大量 Cloud Functions、複雜背景工作、大型資料同步、高流量架構與特殊安全規則需另行評估。Firebase 使用量與付費方案等第三方費用由客戶自行負擔。' },
   ],
   // ── 設計 / 服務 ──
   services: [
-    { id:'ui-design',    name:'客製 UI／UX 設計', price:15000, priceHigh:40000, badge:'rec', desc:'一般基本網站 UI 已含於基礎方案，不另收費。此項目適用於需要完整客製視覺、Figma 設計稿、Design System、特殊互動或高度客製品牌視覺的專案。' },
+    { id:'ui-design',    name:'客製 UI／UX 設計', price:15000, priceHigh:40000, badge:'rec', desc:'一般網站介面與 RWD 設計已包含於基礎建置，不另收費。此加購適用於完整設計稿、高度品牌化視覺、特殊互動或較深入的 UX 規劃。' },
     { id:'logo',         name:'LOGO 設計',       price:15000, badge:'opt', desc:'品牌識別設計，含黑白稿與應用規範。' },
-    { id:'copywriting',  name:'文案撰寫',         price:8000,  badge:'opt', desc:'品牌故事、頁面文字、行銷標語。' },
+    { id:'copywriting',  name:'文案撰寫',         price:8000,  badge:'opt', desc:'協助撰寫品牌介紹、頁面文字或其他網站文案；頁面數／篇數、內容類型與大致範圍需於正式報價時確認，並非全站文字無限制撰寫。大量商品描述、SEO 長文與專業產業內容需另行評估。' },
     { id:'seo-consult',  name:'SEO 顧問',         price:12000, badge:'rec', desc:'關鍵字研究、競品分析、頁面優化建議。' },
-    { id:'training',     name:'教育訓練',          price:6000,  badge:'rec', desc:'後台操作教學，可錄製影片教材。' },
-    { id:'manual',       name:'操作手冊',          price:5000,  badge:'opt', desc:'PDF 格式後台使用說明書。' },
-    { id:'launch-adv',   name:'進階正式環境設定', price:3000, priceHigh:8000, badge:'opt', desc:'基本部署與基本 DNS 指向已含於方案內。此項目適用於：多環境 Production 部署、Production Environment Variables、金流正式環境切換、Email DNS（SPF/DKIM/DMARC）、複雜 DNS 調整、正式管理員帳號建立、Production Checklist 與正式環境測試等進階上線需求。' },
-    { id:'hosting',      name:'主機代管建議',      price:5000,  badge:'rec', desc:'AWS/GCP/Vercel 方案選擇與初始設定建議（主機本身費用由客戶自行負擔）。' },
-    { id:'photography',  name:'產品拍攝',           price:18000, badge:'opt', desc:'專業攝影棚拍攝商品或形象照。' },
+    { id:'training',     name:'教育訓練',          price:6000,  badge:'rec', desc:'一次基本後台操作教學，原則約 60–90 分鐘。額外場次、現場教學或不同人員重複培訓另行報價。' },
+    { id:'manual',       name:'操作手冊',          price:5000,  badge:'opt', desc:'本專案客製後台主要功能的基本圖文操作說明。不包含完整公司 SOP、無限制頁數或第三方平台的完整教學文件。' },
+    { id:'launch-adv',   name:'進階正式環境設定', price:6000, priceHigh:15000, badge:'opt', desc:'基本部署與基本 DNS 指向已含於方案內。此項目適用於整體正式環境整理：多環境 Production 部署、Production Environment Variables、正式環境設定、Email DNS（SPF/DKIM/DMARC）、較複雜的 DNS 調整、正式管理員帳號建立、Production Checklist 與正式環境測試。金流正式環境切換屬於「第三方金流串接」範圍，不在此重複計費。' },
+    { id:'hosting',      name:'主機代管建議',      price:5000,  badge:'rec', desc:'主機／雲端環境規劃與初始設定：依需求協助選擇適合的 hosting／cloud 方案，並提供基本初始設定建議（主機本身費用由客戶自行負擔）。不代表長期代管、24/7 維運、大型 AWS／GCP 架構、複雜 IAM／網路設定、完整 DevOps pipeline 或長期監控，以上需另行評估。' },
   ],
   // ── 需評估（不自動計費，複雜度差異過大無法列固定區間） ──
   evaluate: [
@@ -1051,6 +1049,8 @@ const FEATURES = {
     { id:'b2b',          name:'B2B 平台 / 詢報價',  badge:'eval', evaluate:true, desc:'客戶分級報價、批量訂單、業務管理流程。' },
     { id:'booking',      name:'預約 / 排程系統',    badge:'eval', evaluate:true, desc:'多資源預約、行事曆整合、通知提醒。參考行情 NT$12,000～30,000，實際依預約邏輯複雜程度評估。' },
     { id:'payment-adv',  name:'進階金流',            badge:'eval', evaluate:true, desc:'分期付款、境外收款、訂閱制定期扣款。' },
+    { id:'api-3rd',      name:'第三方 API 串接',     badge:'eval', evaluate:true, desc:'串接指定的第三方服務 API。不同 API 的工作量差異過大，不列固定價格，需依實際串接內容評估。' },
+    { id:'photography',  name:'產品拍攝',             badge:'eval', evaluate:true, desc:'商品或品牌形象照片拍攝。費用受商品數量、拍攝地點、棚拍／外拍、模特兒、道具、成品張數、修圖與交通等因素影響，不列固定價格，需另行評估。' },
     { id:'multilang-full',name:'完整多語系 CMS',    badge:'eval', evaluate:true, desc:'CMS 內容、商品資料、SEO slug 全部多語系，複雜度因系統規模差異顯著，需評估。' },
   ],
 };
@@ -1115,10 +1115,17 @@ const state = {
   projectInfo: { hasTargetDate: null, targetDate: '', maintInterest: null },
 };
 
+// Quote ID：Q-日期-6 碼隨機字元（32 種字元 → 約 30 bits／天），使用 crypto.getRandomValues()。
+// Quote ID 只是識別碼，不是存取憑證；公開報價的存取能力只來自 clientToken。
 function genQid() {
+  // 字元表放在函式內：state 初始化時就會呼叫 genQid()，不能依賴後面才宣告的 const
+  const QID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 32 個字元，去掉易混淆的 I、O、0、1
   const d = new Date();
   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  return `Q-${ds}-${String(Math.floor(Math.random()*900)+100)}`;
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  const suffix = Array.from(bytes, b => QID_ALPHABET[b & 31]).join('');   // 256 是 32 的倍數，取低 5 bits 無偏差
+  return `Q-${ds}-${suffix}`;
 }
 
 // ══════════════════════════════════════════════════
@@ -1324,7 +1331,7 @@ function maintInterestLabel() {
 const PUBLIC_STEP3_SECTIONS = [
   { label: '網站內容／功能', items: [['pages','about'],['pages','faq'],{ req:'extra.articles' },{ req:'extra.multilang' },['ecom','coupon'],['integrations','maps'],['integrations','line-notify']] },
   { label: '網站曝光與客戶聯繫', items: [['integrations','newsletter'],{ req:'extra.seo' }] },
-  { label: '設計／內容服務', items: [['services','ui-design'],['services','logo'],['services','copywriting'],['services','photography']] },
+  { label: '設計／內容服務', items: [['services','ui-design'],['services','logo'],['services','copywriting'],['evaluate','photography']] },
   { label: '交付／教學',     items: [['services','training'],['services','manual']] },
   { label: '特殊需求（需另行評估，不計入自動估價）', items: [['evaluate','erp'],['evaluate','crm'],['evaluate','pos'],['evaluate','b2b'],['evaluate','booking'],['evaluate','ai'],['evaluate','payment-adv']] },
   { label: '外部系統／服務', items: [{ req:'extra.externalIntegration' }] },
@@ -1335,6 +1342,8 @@ const PUBLIC_STEP3_SECTIONS = [
 // FEATURES 的 id／name／price／desc 完全不動；Firestore 的 selectedItems 等仍寫入 FEATURES 原名
 // （原名是後台 Scope 對應的 key）。
 const PUBLIC_FEATURE_COPY = {
+  'services/hosting':   { name: '主機／雲端環境規劃與初始設定' },
+  'evaluate/api-3rd':   { name: '串接其他外部系統或服務' },
   // 由需求題帶入的項目（不顯示為卡片；側欄／摘要用白話名稱）
   'pages/blog':         { name: '文章／最新消息（建置時建立內容）' },
   'cms/content-mgmt':   { name: '文章／最新消息（可自行後台管理）' },
@@ -1345,15 +1354,15 @@ const PUBLIC_FEATURE_COPY = {
   'pages/about':        { name: '品牌／公司介紹頁面', desc: '介紹品牌故事、公司、團隊或服務理念。' },
   'pages/faq':          { name: '常見問題頁面', desc: '整理客戶常問的問題，例如付款、配送、退換貨或服務方式。' },
   'ecom/coupon':        { name: '優惠券／折扣活動', desc: '希望可以建立折扣碼、滿額折扣、限時優惠等活動。' },
-  'integrations/maps':  { name: '網站顯示店家／公司位置地圖', desc: '在網站頁面中顯示 Google 地圖與店家／公司位置。' },
+  'integrations/maps': { name: '網站顯示店家／公司位置地圖', desc: '在網站頁面中顯示 Google 地圖與店家／公司位置。不包含地址自動完成、地圖搜尋或多店據點系統。' },
   'integrations/line-notify': { name: '有新訂單時通知店家 LINE', desc: '網站產生新訂單後，透過 LINE 官方提供的 Messaging API，將基本訂單通知發送給指定管理者或群組，方便即時確認訂單。<br><span style="color:var(--ink-30)">LINE 官方帳號方案、訊息費及其他第三方平台費用不包含於網站開發費中；實際使用方式仍須依 LINE 平台當時提供的服務與帳號條件確認。多群組分流、依訂單狀態發送不同通知、顧客端通知、LINE Bot 等進階需求另行評估及報價。</span>' },
-  'integrations/newsletter':  { name: '電子報／訂閱名單', desc: '讓訪客留下 Email 訂閱網站消息，並可用於寄送新品、活動或公告。實際寄送方式與第三方服務費依使用的平台及寄送量而定。' },
-  'services/ui-design': { name: '高度客製的網站視覺／操作設計', desc: '一般網站介面與 RWD 設計已包含於基礎建置；如果希望另外製作完整設計稿、特殊互動或高度品牌化的視覺，可選擇此項。' },
+  'integrations/newsletter': { name: '電子報／訂閱名單', desc: '讓訪客留下 Email 訂閱網站消息，並可用於寄送新品、活動或公告。基本包含訂閱、退訂、基本名單與基本發送功能；複雜分眾、行銷自動化、A/B 測試等另行評估。實際寄送方式與第三方服務費依使用的平台及寄送量而定，由客戶負擔。' },
+  'services/ui-design': { name: '高度客製的網站視覺／操作設計', desc: '一般網站介面與 RWD 設計已包含於基礎建置；如果希望另外製作完整設計稿、高度品牌化的視覺、特殊互動或較深入的操作體驗規劃，可選擇此項。' },
   'services/logo':      { name: 'LOGO／品牌識別設計', desc: '如果目前沒有 LOGO，或希望重新設計品牌識別。' },
-  'services/copywriting': { name: '網站文字／文案協助', desc: '協助撰寫品牌介紹、頁面文字或其他網站文案。' },
-  'services/photography': { name: '商品／品牌照片拍攝', desc: '需要另外拍攝商品照片或品牌形象照片。' },
-  'services/training':  { name: '後台操作教學', desc: '網站完成後，教你如何使用本專案提供的後台功能，例如管理商品、訂單、文章等。' },
-  'services/manual':    { name: '後台操作手冊', desc: '提供本專案後台功能的書面操作說明，方便日後查閱。' },
+  'services/copywriting': { name: '網站文字／文案協助', desc: '協助撰寫品牌介紹、頁面文字或其他網站文案。頁面數、內容類型與範圍會在正式報價時確認；大量商品描述、SEO 長文或專業產業內容另行評估。' },
+  'evaluate/photography': { name: '商品／品牌照片拍攝', desc: '需要另外拍攝商品照片或品牌形象照片。費用會依商品數量、拍攝地點與方式、成品張數、修圖等條件另行評估，不列入自動估價。' },
+  'services/training': { name: '後台操作教學', desc: '網站完成後，提供一次基本後台操作教學（原則約 60–90 分鐘），教你如何使用本專案提供的後台功能，例如管理商品、訂單、文章等。額外場次、現場教學或不同人員重複培訓另行報價。' },
+  'services/manual': { name: '後台操作手冊', desc: '提供本專案客製後台主要功能的基本圖文操作說明，方便日後查閱。不包含完整公司 SOP 或第三方平台的完整教學文件。' },
   'evaluate/erp':       { name: '與公司現有的庫存／訂單／營運系統連動（ERP）', desc: '如果公司目前已有庫存、採購、訂單、財務或其他內部管理系統，希望網站資料能與它同步或交換資料，請選擇此項。' },
   'evaluate/crm':       { name: '管理或串接客戶資料與互動紀錄（CRM）', desc: '如果希望集中管理客戶資料、購買紀錄、聯絡紀錄或後續追蹤，或需要與公司現有的客戶管理系統串接，請選擇此項。' },
   'evaluate/pos':       { name: '與實體門市的結帳／庫存系統連動（POS）', desc: '如果有實體門市，希望網站與門市的商品、庫存、訂單或結帳系統互相連動，請選擇此項。' },
@@ -2419,12 +2428,12 @@ async function submitQuote() {
   const reqSnapshot = isReqType() ? buildRequirementSnapshot() : null;
 
   try {
-    // ① 使用 state.quoteId（暫不查詢流水號）
-    const quoteId = state.quoteId;
+    // ① Quote ID：沿用 state.quoteId；若寫入被拒（最可能是 ID 已存在），換一個新的 ID 重試
+    let quoteId = state.quoteId;
 
     // ② 寫入 Firestore
     if (window._saveQuoteToFirestore) {
-      await window._saveQuoteToFirestore(quoteId, {
+      const quoteData = {
         name:            c.name,
         company:         c.company   || '',
         email:           c.email,
@@ -2485,7 +2494,24 @@ async function submitQuote() {
         },
         // 客戶原始需求 Snapshot（僅 ecom）；與 includedItems / selectedItems / evaluationItems 並存
         requirementSnapshot: reqSnapshot,
-      });
+      };
+      // 對已存在的文件寫入會被 Firestore Rules 拒絕（不會覆蓋既有案件）。
+      // 遇到 permission-denied 時重新產生 Quote ID 再試，最多 3 次，避免單次撞號讓使用者卡住。
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await window._saveQuoteToFirestore(quoteId, quoteData);
+          break;
+        } catch (e) {
+          if (!(e && e.code === 'permission-denied') || attempt >= MAX_ATTEMPTS) throw e;
+          quoteId = genQid();
+        }
+      }
+      if (quoteId !== state.quoteId) {
+        state.quoteId = quoteId;
+        const chip = document.getElementById('quoteIdChip');
+        if (chip) chip.textContent = quoteId;
+      }
     }
 
     // ③ EmailJS：管理者通知 + 客戶確認
@@ -2533,7 +2559,9 @@ async function submitQuote() {
 
   } catch (err) {
     const msg = String(err && err.message || err);
-    const detail = err && err.text ? err.text : msg;
+    const detail = (err && err.code === 'permission-denied')
+      ? '系統暫時無法接收，請稍後再試一次；若持續發生請直接與我聯繫'
+      : (err && err.text ? err.text : msg);
     showToast(`⚠ 送出失敗：${detail}`);
     btn.disabled = false;
     btn.textContent = '送出需求 →';

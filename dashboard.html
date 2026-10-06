@@ -8,6 +8,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<!-- Security v1：正式報價共用工具（token、公開投影、客戶回覆對帳） -->
+<script src="quotation-shared.js"></script>
 <script>
 const FB_CONFIG = {
   apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
@@ -392,6 +394,9 @@ async function loadDashboard() {
   try {
     const snap = await db.collection('quotes').orderBy('createdAt', 'desc').get();
     const all  = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Security v1：把客戶在公開報價上的接受／拒絕同步回內部案件（只檢查可能有新回覆的案件）
+    await NicocoQuotation.reconcileAll(db, all);
 
     // 方案 A：對每筆案件平行讀取 paymentMilestones subcollection，暫存在 _paymentMilestones（純前端用途，不寫回 Firestore）。
     // 單一案件查詢失敗不應讓整個 Dashboard 白屏，fallback 成空陣列，讓其他案件正常顯示。

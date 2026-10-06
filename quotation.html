@@ -445,9 +445,6 @@ function isExpired(ts) {
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d < new Date();
 }
-function genActivityId() {
-  return 'act_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-}
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -476,41 +473,46 @@ const STUDIO_DEFAULTS = {
   address:         '',
 };
 
+// ── Security v1：只讀取 publicQuotations/{clientToken}（客戶公開投影）──
+// 不再用 Quote ID 讀取內部案件 quotes/{quoteId}，也不再「先下載整份再用 JS 比對 token」。
+// 文件 ID 本身就是 128-bit token：token 不正確時根本取不到任何資料。
+const INVALID_LINK_MSG = '連結無效或已失效。請向業務人員索取最新的報價連結。';
+
 async function loadQuotation() {
   const params = new URLSearchParams(window.location.search);
-  currentId    = params.get('id');
-  currentToken = params.get('token');
+  // 新連結格式：quotation.html?t=<token>。舊格式（?id=…&token=…）的 token 已全面失效，查不到資料會顯示無效連結。
+  currentToken = params.get('t') || params.get('token');
 
-  if (!currentId || !currentToken) {
-    showError('連結無效或已失效。請向業務人員索取最新的報價連結。');
+  if (!currentToken || !/^[a-f0-9]{32}$/.test(currentToken)) {
+    showError(INVALID_LINK_MSG);
     return;
   }
 
   try {
-    // 並行讀取 quotes/{id} 和 settings/studio
-    const [quoteSnap, studioSnap] = await Promise.all([
-      db.collection('quotes').doc(currentId).get(),
-      db.collection('settings').doc('studio').get(),
-    ]);
-
-    if (!quoteSnap.exists) {
-      showError('連結無效或已失效。請向業務人員索取最新的報價連結。');
+    const snap = await db.collection('publicQuotations').doc(currentToken).get();
+    if (!snap.exists) {
+      showError(INVALID_LINK_MSG);
       return;
     }
-    currentData   = quoteSnap.data();
-    currentStudio = { ...STUDIO_DEFAULTS, ...(studioSnap.exists ? studioSnap.data() : {}) };
+    const pub = snap.data();
 
-    // ── Token 驗證 ──────────────────────────────────
-    if (!currentData.clientToken || currentData.clientToken !== currentToken) {
-      showError('連結無效或已失效。請向業務人員索取最新的報價連結。');
-      return;
-    }
-
-    // Must have quotationItems to be a valid quotation
-    if (!currentData.quotationItems || currentData.quotationItems.length === 0) {
+    if (!pub.quotationItems || pub.quotationItems.length === 0) {
       showError('此案件尚未建立正式報價項目，請等待業務人員準備完成後再查看。');
       return;
     }
+
+    // 轉成既有 renderQuotation() 使用的欄位名稱（畫面程式不需要知道資料來源改了）
+    currentId   = pub.quoteId;
+    currentData = {
+      ...pub,
+      name: pub.clientName,
+      company: pub.clientCompany,
+      projectType: pub.projectDisplayName,
+      quotationUpdatedAt: pub.issuedAt,
+    };
+    // 工作室顯示資料來自投影（settings/studio 已改為 Admin-only）；空值沿用預設
+    currentStudio = { ...STUDIO_DEFAULTS };
+    Object.keys(pub.studio || {}).forEach(k => { if (pub.studio[k]) currentStudio[k] = pub.studio[k]; });
 
     // 套用 Header（logoText + studioName）
     const markEl = document.getElementById('headerLogoMark');
@@ -527,7 +529,8 @@ async function loadQuotation() {
     if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.style.opacity = '1'; }
   } catch (err) {
     console.error(err);
-    showError(`讀取失敗：${err.message || String(err)}`);
+    // 權限錯誤與查無資料對客戶一律顯示相同訊息
+    showError(err && err.code === 'permission-denied' ? INVALID_LINK_MSG : `讀取失敗：${err.message || String(err)}`);
   }
 }
 
@@ -656,7 +659,10 @@ function renderQuotation(q) {
       <div class="action-section">
         ${isLocked
           ? renderLockedAction(status)
-          : renderActionButtons(expired)}
+          : status !== 'sent'
+            ? `<div class="action-title">報價準備中</div>
+               <div class="action-sub">此報價尚未正式送出，目前僅供預覽。正式送出後即可在此頁面確認。</div>`
+            : renderActionButtons(expired)}
       </div>
 
       ${renderContactSection()}
@@ -766,14 +772,35 @@ function renderLockedAction(status) {
 // ══════════════════════════════════════════════════
 //  ACTIONS
 // ══════════════════════════════════════════════════
-async function handleAction(newStatus) {
-  if (!currentId) return;
+// Security v1：客戶只寫入兩個位置，而且都由 Firestore Rules 驗證
+//   publicQuotations/{token}             只能把「已送出」改成 accepted／rejected（只動 quotationStatus、respondedAt）
+//   quotes/{quoteId}/acceptances/{token} 接受時建立不可變快照；Rules 逐欄比對內容必須等於伺服器上的正式報價
+// 兩者用同一個 batch 送出：Rules 要求「接受」與「快照」必須同時成立，缺一不可。
+// 客戶不再寫入內部案件 quotes/{quoteId}；內部狀態由後台載入時對帳同步。
+function buildAcceptanceSnapshot(pub, timestamp) {
+  return {
+    quoteId: pub.quoteId,
+    clientToken: currentToken,
+    publicQuotationVersion: pub.version,
+    source: 'client',
+    quotationItems: pub.quotationItems,
+    quotationSubtotal: pub.quotationSubtotal,
+    quotationDiscount: pub.quotationDiscount,
+    quotationTax: pub.quotationTax,
+    quotationTotal: pub.quotationTotal,
+    paymentTerms: pub.paymentTerms,
+    validUntil: pub.validUntil || null,
+    quotationNote: pub.quotationNote || '',
+    projectDisplayName: pub.projectDisplayName,
+    clientName: pub.clientName,
+    clientCompany: pub.clientCompany,
+    acceptedAt: timestamp,
+  };
+}
 
-  // ── 再次驗證 token（防止 DOM 操作繞過）──────────────
-  if (!currentToken || !currentData || currentData.clientToken !== currentToken) {
-    showToast('⚠ 連結無效，無法執行此操作');
-    return;
-  }
+async function handleAction(newStatus) {
+  if (!currentToken || !currentData) return;
+  if (newStatus !== 'accepted' && newStatus !== 'rejected') return;
 
   const acceptBtn = document.getElementById('btnAccept');
   const rejectBtn = document.getElementById('btnReject');
@@ -786,36 +813,31 @@ async function handleAction(newStatus) {
 
   const isAccepted  = newStatus === 'accepted';
   const actionLabel = isAccepted ? '接受' : '拒絕';
-  const totalAmt    = Number(currentData.quotationTotal || 0);
-
-  // ── 自動同步案件狀態 ──────────────────────────────────
-  // 接受：status → developing，paymentStatus → unpaid，progress → 0
-  // 拒絕：status → cancelled
-  const statusPayload = isAccepted
-    ? { status: 'developing', paymentStatus: 'unpaid', progress: 0 }
-    : { status: 'cancelled' };
-
-  const newLog = {
-    id:        genActivityId(),
-    type:      isAccepted ? 'payment' : 'note',
-    content:   isAccepted
-                 ? `客戶已接受報價，總金額 NT$${totalAmt.toLocaleString()}，案件狀態已自動改為開發中`
-                 : '客戶已拒絕報價，案件狀態已自動改為取消',
-    createdAt: firebase.firestore.Timestamp.now(),
-    createdBy: 'client',
-  };
+  const pubRef = db.collection('publicQuotations').doc(currentToken);
+  const ts = firebase.firestore.FieldValue.serverTimestamp();
 
   try {
-    await db.collection('quotes').doc(currentId).update({
-      quotationStatus:    newStatus,
-      quotationUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      activityLogs:       firebase.firestore.FieldValue.arrayUnion(newLog),
-      ...statusPayload,
-    });
+    // 送出前重新讀取最新的公開報價：快照內容必須與伺服器上「現在」的報價完全一致
+    const fresh = await pubRef.get();
+    if (!fresh.exists) throw Object.assign(new Error(INVALID_LINK_MSG), { userMessage: INVALID_LINK_MSG });
+    const pub = fresh.data();
+    if (pub.quotationStatus !== 'sent') {
+      throw Object.assign(new Error('status-changed'), { userMessage: '此報價的狀態已變更，請重新整理頁面確認最新內容。' });
+    }
+    if (pub.version !== currentData.version) {
+      throw Object.assign(new Error('version-changed'), { userMessage: '報價內容已更新，請重新整理頁面確認最新內容後再回覆。' });
+    }
+
+    const batch = db.batch();
+    batch.update(pubRef, { quotationStatus: newStatus, respondedAt: ts });
+    if (isAccepted) {
+      batch.set(db.collection('quotes').doc(pub.quoteId).collection('acceptances').doc(currentToken),
+                buildAcceptanceSnapshot(pub, ts));
+    }
+    await batch.commit();
 
     // 同步本地 currentData
     currentData.quotationStatus = newStatus;
-    Object.assign(currentData, statusPayload);
 
     // Swap buttons to locked state
     const actionSection = document.querySelector('.action-section');
@@ -835,7 +857,9 @@ async function handleAction(newStatus) {
     if (acceptBtn) acceptBtn.disabled = false;
     if (rejectBtn) rejectBtn.disabled = false;
     if (banner)    { banner.className = 'result-banner'; banner.style.display = 'none'; }
-    showToast(`⚠ 操作失敗：${err.message || err}`);
+    const msg = err.userMessage
+      || (err.code === 'permission-denied' ? '此報價目前無法回覆（可能已過期、已回覆或內容已更新），請重新整理頁面。' : (err.message || err));
+    showToast(`⚠ 操作失敗：${msg}`);
   }
 }
 
