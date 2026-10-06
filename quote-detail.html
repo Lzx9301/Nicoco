@@ -600,6 +600,16 @@ const TASK_TEMPLATES = {
     { key:'simple_integration_01', name:'串接設定', weight:2, phase:2, milestone:2, category:'integration' },
     { key:'simple_integration_02', name:'驗證運作正常', weight:1, phase:3, milestone:3, category:'testing' },
   ],
+  // LINE 新訂單通知（基本範圍）：LINE Messaging API 基本串接。
+  // 不含：多群組／多部門分流、依訂單狀態發送不同通知、複雜訊息模板或互動按鈕、在 LINE 內操作訂單、
+  // LINE 會員綁定、LINE Login、顧客端通知、LINE Bot／客服流程等，需另行評估及報價。
+  line_order_notify: [
+    { key:'line_order_notify_01', name:'LINE Messaging API 基本串接', weight:3, phase:2, milestone:2, category:'integration' },
+    { key:'line_order_notify_02', name:'新訂單成立時發送基本訂單通知', weight:3, phase:2, milestone:2, category:'integration' },
+    { key:'line_order_notify_03', name:'指定主要通知對象或群組', weight:1, phase:2, milestone:2, category:'integration' },
+    { key:'line_order_notify_04', name:'基本設定', weight:1, phase:2, milestone:3, category:'integration' },
+    { key:'line_order_notify_05', name:'串接測試', weight:2, phase:3, milestone:3, category:'testing' },
+  ],
   ui_design: [
     { key:'ui_design_01', name:'設計風格討論', weight:3, phase:1, milestone:1, category:'design' },
     { key:'ui_design_02', name:'Design System／元件庫', weight:6, phase:1, milestone:1, category:'design' },
@@ -673,7 +683,7 @@ const SCOPE_TASK_TEMPLATE_MAP = {
   '第三方金流串接':        { conceptKey:'payment_gateway', tpl:'payment_gateway' },
   'Google Tag Manager':    { conceptKey:'gtm',             tpl:'simple_integration' },
   'Facebook Pixel':        { conceptKey:'fb_pixel',        tpl:'simple_integration' },
-  'LINE 訂單通知':         { conceptKey:'line_notify',     tpl:'simple_integration' },
+  'LINE 訂單通知':         { conceptKey:'line_notify',     tpl:'line_order_notify' },
   'Email 自動通知':        { conceptKey:'email_notify',    tpl:'email_notify' },
   '電子報系統':            { conceptKey:'newsletter',      tpl:'newsletter' },
   '物流串接':              { conceptKey:'logistics',       tpl:'logistics' },

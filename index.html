@@ -191,6 +191,16 @@ body {
 .prog-step.active .prog-label { color: var(--accent); font-weight: 500; }
 .prog-step.done .prog-label { color: var(--ink-60); }
 .prog-step.done { cursor: pointer; }
+/* 手機寬度：五個步驟名稱放不下，改成只顯示圓點，目前步驟以一行文字顯示在進度列下方 */
+@media (max-width: 600px) {
+  .prog-label { display: none; }
+  .progress-bar { margin-bottom: 56px; }
+  .progress-bar::after {
+    content: attr(data-current); position: absolute; top: 38px; left: 0; right: 0;
+    text-align: center; font-size: 12.5px; font-weight: 500; color: var(--accent);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+}
 
 /* ── Step Container ──────────────────────────────────────────── */
 [data-step] { display: none; }
@@ -1009,7 +1019,7 @@ const FEATURES = {
     { id:'payment-3rd',  name:'第三方金流串接',       price:8000, priceHigh:15000, badge:'opt', desc:'串接綠界 ECPay / 藍新 NewebPay 等正式金流服務，讓網站可以真正收款。<strong>小型電商方案僅包含基本 Checkout 流程（下單、結帳頁面與訂單建立），不包含第三方正式金流串接</strong>，因此不論選擇何種網站類型，只要需要收款都需要此加購項目。金流服務本身的交易手續費由客戶自行支付，不包含於本開發估價（見「第三方服務費」說明）。' },
     { id:'gtm',          name:'Google Tag Manager',    price:2500, badge:'rec',  desc:'追蹤碼統一管理，不需改程式碼即可部署 Pixel 等。' },
     { id:'fb-pixel',     name:'Facebook Pixel',         price:2500, badge:'rec',  desc:'追蹤廣告轉換、建立再行銷受眾，Facebook/Instagram 廣告必備。' },
-    { id:'line-notify',  name:'LINE 訂單通知',          price:3500, badge:'opt',  desc:'訂單成立時自動推播到指定 LINE 群組或官方帳號。' },
+    { id:'line-notify',  name:'LINE 訂單通知',          price:5000, priceHigh:8000, badge:'opt',  desc:'網站產生新訂單後，透過 LINE 官方提供的 Messaging API，將基本訂單通知發送給指定管理者或群組。基本範圍：Messaging API 基本串接、新訂單成立時的基本通知、指定一個主要通知對象或群組、基本設定與串接測試。多群組分流、依訂單狀態發送不同通知、複雜訊息模板、顧客端通知、LINE Bot 等進階需求另行評估及報價。LINE 官方帳號方案、訊息費及其他第三方平台費用不包含於網站開發費中。' },
     { id:'email-auto',   name:'Email 自動通知',         price:3000, priceHigh:8000, badge:'opt', desc:'訂單成立、會員註冊、表單送出等事件自動發送通知信（寄信服務本身費用由客戶自行負擔）。' },
     { id:'newsletter',   name:'電子報系統',              price:5000, priceHigh:12000, badge:'opt', desc:'訂閱名單管理與電子報發送排程（第三方寄信服務費用另計，由客戶自行負擔）。' },
     { id:'logistics',    name:'物流串接',                price:8000, priceHigh:20000, badge:'opt', desc:'超商取貨（711/全家）、黑貓等物流串接，含出貨標籤列印。需商家資格申請與 API 測試，若涉及多家物流或複雜規則，將另行評估。' },
@@ -1147,6 +1157,11 @@ function renderProgress() {
       <div class="prog-label">${(stepNum === 1 && singleEntryActive()) ? '開始' : (isReqType() ? STEP_LABELS_ECOM : STEP_LABELS)[stepNum - 1]}</div>`;
     if (isDone) s.onclick = () => goTo(stepNum);
     bar.appendChild(s);
+    // 手機版進度列用：「步驟 X / N・目前步驟名稱」
+    if (isActive) {
+      const label = (stepNum === 1 && singleEntryActive()) ? '開始' : (isReqType() ? STEP_LABELS_ECOM : STEP_LABELS)[stepNum - 1];
+      bar.dataset.current = `步驟 ${idx + 1} / ${visibleSteps.length}・${label}`;
+    }
   });
 }
 
@@ -1331,7 +1346,7 @@ const PUBLIC_FEATURE_COPY = {
   'pages/faq':          { name: '常見問題頁面', desc: '整理客戶常問的問題，例如付款、配送、退換貨或服務方式。' },
   'ecom/coupon':        { name: '優惠券／折扣活動', desc: '希望可以建立折扣碼、滿額折扣、限時優惠等活動。' },
   'integrations/maps':  { name: '網站顯示店家／公司位置地圖', desc: '在網站頁面中顯示 Google 地圖與店家／公司位置。' },
-  'integrations/line-notify': { name: '有新訂單時通知店家 LINE', desc: '網站收到新訂單時，希望通知指定的 LINE 管理端。實際通知方式依 LINE 平台當時提供的服務確認。' },
+  'integrations/line-notify': { name: '有新訂單時通知店家 LINE', desc: '網站產生新訂單後，透過 LINE 官方提供的 Messaging API，將基本訂單通知發送給指定管理者或群組，方便即時確認訂單。<br><span style="color:var(--ink-30)">LINE 官方帳號方案、訊息費及其他第三方平台費用不包含於網站開發費中；實際使用方式仍須依 LINE 平台當時提供的服務與帳號條件確認。多群組分流、依訂單狀態發送不同通知、顧客端通知、LINE Bot 等進階需求另行評估及報價。</span>' },
   'integrations/newsletter':  { name: '電子報／訂閱名單', desc: '讓訪客留下 Email 訂閱網站消息，並可用於寄送新品、活動或公告。實際寄送方式與第三方服務費依使用的平台及寄送量而定。' },
   'services/ui-design': { name: '高度客製的網站視覺／操作設計', desc: '一般網站介面與 RWD 設計已包含於基礎建置；如果希望另外製作完整設計稿、特殊互動或高度品牌化的視覺，可選擇此項。' },
   'services/logo':      { name: 'LOGO／品牌識別設計', desc: '如果目前沒有 LOGO，或希望重新設計品牌識別。' },
