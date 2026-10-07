@@ -33,7 +33,8 @@ service cloud.firestore {
       // 公開表單 create：只允許 index.html saveQuoteToFirestore() 實際寫入的頂層欄位。
       // 公開表單新增頂層欄位時，這份白名單必須同步更新。
       // 不在白名單內＝一律拒絕：clientToken、quotation*、officialPrice、project、
-      // confirmedRequirements、acceptedQuotationSnapshot、publicQuotationVersion、notes、activityLogs…
+      // requirementReviewDraft、confirmedRequirements、previousConfirmedRequirements、
+      // acceptedQuotationSnapshot、publicQuotationVersion、notes、activityLogs…
       function validPublicQuoteCreate() {
         let d = request.resource.data;
         return d.keys().hasOnly([
@@ -75,6 +76,38 @@ service cloud.firestore {
           && unchanged('publicQuotationVersion');
       }
 
+      // ── Requirement Review v1 ──
+      // requirementReviewDraft：Admin 工作稿。可建立、修改、刪除；
+      // 存在時 status 必須是 draft，revision 必須是「目前有效的確認版本 + 1」（還沒確認過就是 1）。
+      function reviewDraftOk() {
+        let after = request.resource.data;
+        return !('requirementReviewDraft' in after)
+          || unchanged('requirementReviewDraft')
+          || (after.requirementReviewDraft.status == 'draft'
+              && after.requirementReviewDraft.revision
+                 == after.get('confirmedRequirements', {'revision': 0}).revision + 1);
+      }
+
+      // confirmedRequirements：一般 update 不能改。唯一允許的改變是「確認」這個動作：
+      //   - 寫入前必須有同一個 revision 的工作稿，寫入後工作稿必須消失
+      //   - revision 只能是前一版 + 1（首次確認為 1）
+      //   - 上一個確認版本必須原樣搬到 previousConfirmedRequirements
+      // 因此不可能在單一寫入裡「把已確認的需求改回草稿並同時修改內容」；
+      // 重新開啟＝保留 confirmedRequirements 不動，另外建立 requirementReviewDraft。
+      function confirmedRequirementsOk() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return (unchanged('confirmedRequirements') && unchanged('previousConfirmedRequirements'))
+          || (after.confirmedRequirements.status == 'confirmed'
+              && after.confirmedRequirements.revision
+                 == before.get('confirmedRequirements', {'revision': 0}).revision + 1
+              && after.confirmedRequirements.confirmedAt == request.time
+              && 'requirementReviewDraft' in before
+              && before.requirementReviewDraft.revision == after.confirmedRequirements.revision
+              && !('requirementReviewDraft' in after)
+              && after.get('previousConfirmedRequirements', null) == before.get('confirmedRequirements', null));
+      }
+
       allow read: if isAdmin();
 
       allow create: if validPublicQuoteCreate();
@@ -87,9 +120,10 @@ service cloud.firestore {
         // 要把報價標成 accepted，同一次寫入完成後必須已存在對應的 acceptance 快照
         && (request.resource.data.get('quotationStatus', '') != 'accepted'
             || resource.data.get('quotationStatus', '') == 'accepted'
-            || existsAfter(/databases/$(database)/documents/quotes/$(quoteId)/acceptances/$(request.resource.data.clientToken)));
-        // confirmedRequirements（Requirement Review v1 預留）：目前只有 Admin 能寫，
-        // 公開 create 被白名單擋下；draft／confirmed 的轉換限制留待該階段加入。
+            || existsAfter(/databases/$(database)/documents/quotes/$(quoteId)/acceptances/$(request.resource.data.clientToken)))
+        // Requirement Review v1：工作稿與確認版本的轉換限制
+        && reviewDraftOk()
+        && confirmedRequirementsOk();
 
       allow delete: if false;
 

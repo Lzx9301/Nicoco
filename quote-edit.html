@@ -11,6 +11,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <!-- Security v1：正式報價共用工具（token、公開投影、客戶回覆對帳） -->
 <script src="quotation-shared.js"></script>
+<!-- Requirement Review v1：依 confirmedRequirements 初始化正式報價明細（只用已存下的估價區間，不重新計價） -->
+<script src="requirement-review.js"></script>
 <script>
 const FB_CONFIG = {
   apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
@@ -326,6 +328,9 @@ let currentId = null;
 let currentData = null;
 let items = [];      // quotationItems 工作副本
 let dirty = false;
+// Requirement Review v1：目前這份明細是依哪一個需求確認版本產生的（null＝不是由確認需求產生）
+let itemsFromRevision = null;
+let regeneratedThisSession = false;
 
 // ══════════════════════════════════════════════════
 //  GET ?id= FROM URL
@@ -359,10 +364,17 @@ async function loadQuote() {
     // 確保「客戶已接受」的報價在進入編輯畫面前就會被鎖定。
     await NicocoQuotation.reconcile(db, currentId, currentData);
 
-    // 已有 quotationItems 就沿用，否則自動帶入預設項目
-    items = (currentData.quotationItems && currentData.quotationItems.length > 0)
-      ? currentData.quotationItems.map(i => ({ ...i }))
-      : buildDefaultItems(currentData);
+    // 已有 quotationItems 就沿用（需求確認／重新確認都不會自動覆寫既有報價）。
+    // 沒有的話：有已確認的正式需求 → 依確認需求產生明細；否則沿用舊的預設帶入方式。
+    itemsFromRevision = currentData.quotationRequirementRevision || null;
+    if (currentData.quotationItems && currentData.quotationItems.length > 0) {
+      items = currentData.quotationItems.map(i => ({ ...i }));
+    } else if (currentData.confirmedRequirements) {
+      items = buildItemsFromConfirmed();
+      itemsFromRevision = currentData.confirmedRequirements.revision;
+    } else {
+      items = buildDefaultItems(currentData);
+    }
 
     renderPage();
   } catch (err) {
@@ -375,6 +387,52 @@ async function loadQuote() {
 //  預設帶入：基礎建置費 + 加選功能（單價待手動輸入）
 // ══════════════════════════════════════════════════
 function genItemId() { return 'qi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
+
+// ── Requirement Review v1：confirmedRequirements → 正式報價明細（初始化參考，Admin 可自由修改）──
+function buildItemsFromConfirmed() {
+  return NicocoReview.quotationItemsFromConfirmed(currentData.confirmedRequirements, {
+    projectName: NicocoQuotation.projectDisplayName(currentData),
+    warrantyLabel: currentData.warrantyLabel || '',
+  });
+}
+function pendingPricingCount() { return NicocoReview.countPendingPricing(items); }
+
+// 已有報價明細時，只有 Admin 主動按下並二次確認才會用確認需求重建；已接受的報價不可重建
+function regenerateFromConfirmed() {
+  if (!currentData.confirmedRequirements) return;
+  if (isQuotationAccepted()) { showToast('正式報價已由客戶接受，無法重新產生'); return; }
+  if (!confirm('此操作將取代目前尚未接受的報價明細，是否繼續？')) return;
+  items = buildItemsFromConfirmed();
+  itemsFromRevision = currentData.confirmedRequirements.revision;
+  regeneratedThisSession = true;
+  renderItemsTable();
+  recalcTotals();
+  renderRequirementBanner();
+  markDirty();
+  showToast('✓ 已依確認需求重新產生報價草稿，確認金額後請按「儲存正式報價」');
+}
+
+function renderRequirementBanner() {
+  const el = document.getElementById('requirementBanner');
+  if (!el) return;
+  const c = currentData && currentData.confirmedRequirements;
+  if (!c) { el.innerHTML = ''; return; }
+  const s = c.summary || {};
+  const pending = pendingPricingCount();
+  const hasSaved = (currentData.quotationItems || []).length > 0;
+  const stale = itemsFromRevision && itemsFromRevision !== c.revision;
+  const wantRegen = new URLSearchParams(window.location.search).get('regen') === '1';
+  el.innerHTML = `
+    <div style="background:var(--accent-light);border:1px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.7;margin-bottom:16px">
+      <strong>${itemsFromRevision ? `本正式報價依據 Requirement Review Revision ${escapeHtml(itemsFromRevision)}` : `此案件的需求已確認（Revision ${escapeHtml(c.revision)}），目前的報價明細不是由確認需求產生`}</strong>
+      <div style="font-size:12px">確認需求 ${Number(s.includedCount) || 0} 項・排除 ${Number(s.excludedCount) || 0} 項・待人工估價 ${Number(s.manualPricingCount) || 0} 項</div>
+      ${stale ? `<div style="font-size:12px;color:#92400e">目前有效的需求確認版本是 Revision ${escapeHtml(c.revision)}，與這份報價依據的版本不同。</div>` : ''}
+      ${pending ? `<div style="font-size:12px;color:#92400e;font-weight:600">尚有 ${pending} 項正式需求未完成定價（標示「待填價格」）。全部填寫後才能將報價設為「已送出」。</div>` : ''}
+      ${hasSaved && !isQuotationAccepted() ? `
+        <div style="margin-top:6px;font-size:12px">本案件已有正式報價明細。需求確認不會自動覆寫現有報價。</div>
+        <button type="button" onclick="regenerateFromConfirmed()" style="font:inherit;font-size:12.5px;margin-top:6px;padding:6px 14px;border-radius:8px;cursor:pointer;border:1.5px solid ${wantRegen ? '#1e40af' : '#bfdbfe'};background:#fff;color:#1e40af">依確認需求重新產生報價草稿</button>` : ''}
+    </div>`;
+}
 
 function buildDefaultItems(q) {
   const out = [];
@@ -463,6 +521,9 @@ function renderPage() {
       <a class="back-btn" href="quote-detail.html?id=${encodeURIComponent(currentId)}">← 返回案件詳情</a>
       <a class="back-btn" href="dashboard.html">🏠 返回工作台</a>
     </div>
+
+    <!-- Requirement Review v1：這份報價依據的需求確認版本 -->
+    <div id="requirementBanner"></div>
 
     <!-- 客戶基本資料（唯讀） -->
     <div class="card">
@@ -569,6 +630,7 @@ function renderPage() {
 
   renderItemsTable();
   recalcTotals();
+  renderRequirementBanner();
   applyAcceptedLock();
 
   // 監聽欄位變動，標記 dirty
@@ -617,8 +679,10 @@ function renderItemsTable() {
       <td><input class="qi-input" value="${escapeHtml(item.name)}" oninput="updateItem('${item.id}','name',this.value)"></td>
       <td><textarea class="qi-textarea" rows="1" oninput="updateItem('${item.id}','description',this.value)">${escapeHtml(item.description||'')}</textarea></td>
       <td><input class="qi-input num" type="number" min="0" step="1" value="${item.qty}" oninput="updateItem('${item.id}','qty',this.value)"></td>
-      <td><input class="qi-input num" type="number" min="0" step="100" value="${item.unitPrice}" oninput="updateItem('${item.id}','unitPrice',this.value)"></td>
-      <td class="qi-subtotal">${fmtMoney(item.subtotal)}</td>
+      <td><input class="qi-input num" type="number" min="0" step="100" value="${item.pricingPending ? '' : item.unitPrice}"
+                 ${item.pricingPending ? 'placeholder="待填價格" style="border-color:var(--amber);background:var(--amber-light)"' : ''}
+                 oninput="updateItem('${item.id}','unitPrice',this.value)"></td>
+      <td class="qi-subtotal">${item.pricingPending ? '<span style="color:var(--amber);font-weight:600">待填價格</span>' : fmtMoney(item.subtotal)}</td>
       <td><button class="qi-delete-btn" onclick="deleteItem('${item.id}')" title="刪除項目">✕</button></td>
     </tr>`).join('');
 }
@@ -628,8 +692,25 @@ function updateItem(id, field, value) {
   if (!item) return;
 
   if (field === 'qty' || field === 'unitPrice') {
-    item[field] = Number(value) || 0;
-    item.subtotal = item.qty * item.unitPrice;
+    // 待填價格的項目：填入數字才算完成定價；清空則回到待填狀態（不會用 0 假裝已定價）
+    if (field === 'unitPrice' && 'pricingPending' in item) {
+      const wasPending = item.pricingPending;
+      item.pricingPending = String(value).trim() === '';
+      item.unitPrice = item.pricingPending ? null : (Number(value) || 0);
+      if (wasPending !== item.pricingPending) {
+        const inp = document.querySelector(`tr[data-id="${id}"] input[step="100"]`);
+        if (inp) { inp.style.borderColor = item.pricingPending ? 'var(--amber)' : ''; inp.style.background = item.pricingPending ? 'var(--amber-light)' : ''; }
+        renderRequirementBanner();
+      }
+    } else {
+      item[field] = Number(value) || 0;
+    }
+    item.subtotal = (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
+    if (item.pricingPending) {
+      const cell = document.querySelector(`tr[data-id="${id}"] .qi-subtotal`);
+      if (cell) cell.innerHTML = '<span style="color:var(--amber);font-weight:600">待填價格</span>';
+      recalcTotals(); markDirty(); return;
+    }
     // 只更新該列小計顯示，不整表重繪（避免輸入時 focus 跳掉）
     const row = document.querySelector(`tr[data-id="${id}"] .qi-subtotal`);
     if (row) row.textContent = fmtMoney(item.subtotal);
@@ -753,14 +834,20 @@ async function saveQuotation() {
   const paymentTerms = (paymentTermsSel === '自訂' && paymentTermsCustom) ? paymentTermsCustom : paymentTermsSel;
 
   // 清理 items：subtotal 一律重算一次，避免任何不同步
-  const cleanItems = items.map(i => ({
-    id: i.id,
-    name: i.name,
-    description: i.description || '',
-    qty: Number(i.qty) || 0,
-    unitPrice: Number(i.unitPrice) || 0,
-    subtotal: (Number(i.qty) || 0) * (Number(i.unitPrice) || 0),
-  }));
+  const cleanItems = items.map(i => {
+    const out = {
+      id: i.id,
+      name: i.name,
+      description: i.description || '',
+      qty: Number(i.qty) || 0,
+      unitPrice: i.pricingPending ? null : (Number(i.unitPrice) || 0),
+      subtotal: i.pricingPending ? 0 : (Number(i.qty) || 0) * (Number(i.unitPrice) || 0),
+    };
+    // Requirement Review v1 的選填欄位：舊報價明細不會有，也不需要補
+    if (i.pricingPending) out.pricingPending = true;
+    if (i.reqKey) out.reqKey = i.reqKey;
+    return out;
+  });
 
   // ── Token（Security v1）──
   // 已有 Security v1 公開報價的案件：沿用同一個 token，客戶手上的連結不會失效。
@@ -770,6 +857,16 @@ async function saveQuotation() {
   const version     = (Number(currentData && currentData.publicQuotationVersion) || 0) + 1;
 
   const newStatus = document.getElementById('f-quotationStatus').value;
+
+  // 還有待填價格的項目時，不能送出或標記接受：客戶不應該收到含 NT$0 的待評估功能
+  const pendingCount = cleanItems.filter(i => i.pricingPending).length;
+  if (pendingCount > 0 && (newStatus === 'sent' || newStatus === 'accepted')) {
+    showToast(`⚠ 尚有 ${pendingCount} 項正式需求未完成定價，請填寫價格後再將報價設為「${QSTATUS_LABELS[newStatus]}」`);
+    btn.disabled = false;
+    statusEl.textContent = '';
+    return;
+  }
+
   const quotation = {
     quotationItems:     cleanItems,
     quotationSubtotal:  subtotal,
@@ -797,6 +894,7 @@ async function saveQuotation() {
     clientToken:        clientToken,
     publicQuotationVersion: version,
   };
+  if (itemsFromRevision) payload.quotationRequirementRevision = itemsFromRevision;
 
   // 同時在 activityLogs 新增一筆紀錄
   const newLog = {
@@ -820,9 +918,17 @@ async function saveQuotation() {
     // 單一 batch：內部案件 + 公開投影（+ Admin 代標接受時的 acceptance 快照）一起成功或一起失敗
     const quoteRef = db.collection('quotes').doc(currentId);
     const batch = db.batch();
+    const logs = [newLog];
+    if (regeneratedThisSession) {
+      logs.push({
+        id: genActivityId(), type: 'quote',
+        content: `已依確認需求（Revision ${itemsFromRevision}）重新產生正式報價明細`,
+        createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
+      });
+    }
     batch.update(quoteRef, {
       ...payload,
-      activityLogs: firebase.firestore.FieldValue.arrayUnion(newLog),
+      activityLogs: firebase.firestore.FieldValue.arrayUnion(...logs),
     });
     batch.set(db.collection('publicQuotations').doc(clientToken), pub);
     if (newStatus === 'accepted') {
@@ -836,7 +942,11 @@ async function saveQuotation() {
       currentData.clientToken = clientToken;
       currentData.publicQuotationVersion = version;
       currentData.quotationStatus = newStatus;
+      currentData.quotationItems = cleanItems;
+      if (itemsFromRevision) currentData.quotationRequirementRevision = itemsFromRevision;
     }
+    regeneratedThisSession = false;
+    renderRequirementBanner();
     applyAcceptedLock();
 
     dirty = false;

@@ -618,8 +618,8 @@ function renderQuotation(q) {
                 <td><div class="item-name">${escapeHtml(item.name || '—')}</div></td>
                 <td><div class="item-desc">${escapeHtml(item.description || '')}</div></td>
                 <td class="item-num">${Number(item.qty || 0).toLocaleString()}</td>
-                <td class="item-num">${fmtMoney(item.unitPrice)}</td>
-                <td class="item-subtotal">${fmtMoney(item.subtotal)}</td>
+                <td class="item-num">${item.pricingPending ? '待報價' : fmtMoney(item.unitPrice)}</td>
+                <td class="item-subtotal">${item.pricingPending ? '待報價' : fmtMoney(item.subtotal)}</td>
               </tr>`).join('')}
           </tbody>
         </table>
