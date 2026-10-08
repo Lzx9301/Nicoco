@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>工作台 Dashboard</title>
+<title>總覽｜Website CRM</title>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -327,6 +327,7 @@ body {
   .stats-grid, .kpi-grid, .today-grid { grid-template-columns: 1fr 1fr; }
 }
 </style>
+<link rel="stylesheet" href="admin-ui.css">
 </head>
 <body>
 
@@ -336,10 +337,11 @@ body {
       <div class="header-logo-mark">W</div>
       Website CRM
     </div>
-    <nav style="display:flex;gap:16px">
-      <a class="nav-link active" href="dashboard.html">Dashboard</a>
-      <a class="nav-link" href="quote-admin.html">案件</a>
-      <a class="nav-link" href="settings.html">設定</a>
+    <nav class="admin-nav" aria-label="後台主選單">
+      <a class="nav-link active" href="dashboard.html">總覽</a>
+      <a class="nav-link" href="quote-admin.html" title="需求、報價、合約、專案與收款都在各案件內操作">案件管理</a>
+      <a class="nav-link" href="dashboard.html#sec-payments" title="總覽頁的付款追蹤區塊">收款追蹤</a>
+      <a class="nav-link" href="settings.html">系統設定</a>
     </nav>
   </div>
   <div class="header-right">
@@ -809,7 +811,7 @@ function render(all) {
     <!-- Page header -->
     <div class="page-header">
       <div>
-        <div class="page-title">工作台</div>
+        <div class="page-title">總覽</div>
         <div class="page-sub">更新於 ${now.toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' })} ・ <span style="cursor:pointer;color:var(--accent)" onclick="location.reload()">重新整理</span></div>
       </div>
       <div class="quick-actions">
@@ -828,7 +830,7 @@ function render(all) {
           <span class="kpi-dot" style="background:var(--green)"></span>本月營收
         </div>
         <div class="kpi-value money">${s.kpiRevenue > 0 ? fmtMoney(s.kpiRevenue) : '—'}</div>
-        <div class="kpi-sub">${s.kpiWon} 筆成交 ・ quotationUpdatedAt</div>
+        <div class="kpi-sub">${s.kpiWon} 筆成交 ・ 依報價更新日期計算</div>
         <div style="font-size:10px;color:var(--ink-30);margin-top:2px">付款里程碑案件依實際收款日計算；舊案件沿用成交日。</div>
       </div>
 
@@ -854,7 +856,7 @@ function render(all) {
           <span class="kpi-dot" style="background:var(--amber)"></span>待收款金額
         </div>
         <div class="kpi-value money">${s.pendingPayment > 0 ? fmtMoney(s.pendingPayment) : '—'}</div>
-        <div class="kpi-sub">${s.pendingPaymentCount} 筆 ・ accepted 未付清</div>
+        <div class="kpi-sub">${s.pendingPaymentCount} 筆 ・ 已接受報價尚未付清</div>
         ${s.pendingPayment > 0 ? `<span class="kpi-badge kpi-badge-amber">待入帳</span>` : ''}
       </div>
 
@@ -866,22 +868,22 @@ function render(all) {
       <a class="today-card accent" href="quote-admin.html">
         <div class="today-label">待聯絡</div>
         <div class="today-value">${s.needContact}</div>
-        <div class="today-hint">new + contacted</div>
+        <div class="today-hint">新案件＋已聯絡</div>
       </a>
       <a class="today-card amber" href="quote-admin.html">
         <div class="today-label">等待客戶確認</div>
         <div class="today-value">${s.waitingConfirm}</div>
-        <div class="today-hint">quotationStatus = sent</div>
+        <div class="today-hint">正式報價已送出</div>
       </a>
       <a class="today-card red" href="quote-admin.html">
         <div class="today-label">開發中</div>
         <div class="today-value">${s.inDev}</div>
-        <div class="today-hint">status = developing</div>
+        <div class="today-hint">案件狀態：開發中</div>
       </a>
       <a class="today-card green" href="quote-admin.html">
         <div class="today-label">等待付款</div>
         <div class="today-value">${s.waitingPayment}</div>
-        <div class="today-hint">accepted &amp; 未付清</div>
+        <div class="today-hint">已接受報價・尚未付清</div>
       </a>
     </div>
 
@@ -957,7 +959,7 @@ function render(all) {
     </div>
 
     <!-- ③.5 付款追蹤（僅來自有 Payment Milestone 的案件）-->
-    <div class="section-title">付款追蹤</div>
+    <div class="section-title" id="sec-payments">付款追蹤（分期付款）</div>
     <div class="two-col" style="gap:16px">
 
       <div class="card">
@@ -1002,17 +1004,17 @@ function render(all) {
       <div class="stat-card stat-accent">
         <div class="stat-label">新案件</div>
         <div class="stat-value">${s.newCount}</div>
-        <div class="stat-sub">status = new</div>
+        <div class="stat-sub">案件狀態：新案件</div>
       </div>
       <div class="stat-card stat-amber">
         <div class="stat-label">開發中</div>
         <div class="stat-value">${s.developing}</div>
-        <div class="stat-sub">status = developing</div>
+        <div class="stat-sub">案件狀態：開發中</div>
       </div>
       <div class="stat-card stat-green">
         <div class="stat-label">已完成</div>
         <div class="stat-value">${s.done}</div>
-        <div class="stat-sub">status = done</div>
+        <div class="stat-sub">案件狀態：完成</div>
       </div>
     </div>
 

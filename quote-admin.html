@@ -277,6 +277,7 @@ body {
   .detail-grid { grid-template-columns: 1fr; }
 }
 </style>
+<link rel="stylesheet" href="admin-ui.css">
 </head>
 <body>
 
@@ -286,10 +287,11 @@ body {
       <div class="header-logo-mark">W</div>
       Website CRM
     </a>
-    <nav style="display:flex;gap:16px">
-      <a class="nav-link" href="dashboard.html">Dashboard</a>
-      <a class="nav-link active" href="quote-admin.html">案件</a>
-      <a class="nav-link" href="settings.html">設定</a>
+    <nav class="admin-nav" aria-label="後台主選單">
+      <a class="nav-link" href="dashboard.html">總覽</a>
+      <a class="nav-link active" href="quote-admin.html" title="需求、報價、合約、專案與收款都在各案件內操作">案件管理</a>
+      <a class="nav-link" href="dashboard.html#sec-payments" title="總覽頁的付款追蹤區塊">收款追蹤</a>
+      <a class="nav-link" href="settings.html">系統設定</a>
     </nav>
   </div>
   <div class="header-right">

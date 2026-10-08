@@ -1039,7 +1039,7 @@
                  (d.requires || []).filter(function (r) { return !r.satisfied; }).map(function (r) { return esc(r.label); }).join('、') + '</div>';
         }).join('');
       }
-      html += '<div style="font-size:11px;color:#b8bac4;margin-top:8px">schema v' + esc(snap.schemaVersion) + '・definition ' + esc(snap.definitionVersion) +
+      html += '<div style="font-size:11px;color:#b8bac4;margin-top:8px">資料格式 v' + esc(snap.schemaVersion) + '・需求書版本 ' + esc(snap.definitionVersion) +
               '・客戶端送出時間 ' + esc(snap.submittedAtClient || '—') + '</div>';
       html += '</div>';
     }

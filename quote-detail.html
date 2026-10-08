@@ -16,6 +16,8 @@
 <!-- Requirement Review v1：價格資料（與公開估價同一份）＋審核邏輯 -->
 <script src="pricing-data.js"></script>
 <script src="requirement-review.js"></script>
+<!-- 後台流程與介面整理 v1：流程進度與下一步建議（純判斷，不寫資料） -->
+<script src="admin-workflow.js"></script>
 <script>
 const FB_CONFIG = {
   apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
@@ -347,6 +349,7 @@ body {
   .quote-header { flex-direction: column; }
 }
 </style>
+<link rel="stylesheet" href="admin-ui.css">
 </head>
 <body>
 
@@ -356,10 +359,11 @@ body {
       <div class="header-logo-mark">W</div>
       Website CRM
     </a>
-    <nav style="display:flex;gap:16px">
-      <a class="nav-link" href="dashboard.html">Dashboard</a>
-      <a class="nav-link active" href="quote-admin.html">案件</a>
-      <a class="nav-link" href="settings.html">設定</a>
+    <nav class="admin-nav" aria-label="後台主選單">
+      <a class="nav-link" href="dashboard.html">總覽</a>
+      <a class="nav-link active" href="quote-admin.html" title="需求、報價、合約、專案與收款都在各案件內操作">案件管理</a>
+      <a class="nav-link" href="dashboard.html#sec-payments" title="總覽頁的付款追蹤區塊">收款追蹤</a>
+      <a class="nav-link" href="settings.html">系統設定</a>
     </nav>
     <button class="signout-btn" onclick="signOut()">登出</button>
   </div>
@@ -416,10 +420,10 @@ const TASK_STATUS_LABELS = { not_started:'未開始', in_progress:'進行中', r
 const TASK_STATUS_ORDER  = ['not_started','in_progress','review','waiting_client','blocked','completed'];
 const TASK_STATUS_COLOR  = { not_started:'var(--ink-30)', in_progress:'var(--accent)', review:'#0891b2', waiting_client:'var(--amber)', blocked:'var(--red)', completed:'var(--green)' };
 
-const SCOPE_SOURCE_LABELS = { initial_scope:'原始 Scope', change_request:'CR', internal:'Internal' };
+const SCOPE_SOURCE_LABELS = { initial_scope:'原始範圍', change_request:'需求變更', internal:'內部項目' };
 
 const PHASES = [1,2,3];
-const PHASE_LABELS = { 1:'Phase 1・基礎架構與設計', 2:'Phase 2・核心功能開發', 3:'Phase 3・整合、驗收與上線' };
+const PHASE_LABELS = { 1:'階段 1・基礎架構與設計', 2:'階段 2・核心功能開發', 3:'階段 3・整合、驗收與上線' };
 
 const MILESTONES = [1,2,3];
 const MILESTONE_LABELS = { 1:'M1・專案啟動', 2:'M2・中期開發里程碑', 3:'M3・最終驗收／尾款／交付' };
@@ -862,14 +866,19 @@ function renderRequirementSnapshotCard(q) {
     body = `
       <div style="font-size:12px;color:var(--ink-60);line-height:1.6;margin-bottom:12px">
         原始紀錄，不會因後續審核而修改。客戶送出時的原始需求（唯讀，送出時間 ${escapeHtml(submitted)}）。此內容不會被後續管理操作修改；討論後確認的正式需求將另外記錄。
-        ${snap.requiresManualReview ? '<br><span style="color:var(--amber);font-weight:600">⚠ 包含需人工確認的需求，尚未列入正式 Scope。</span>' : ''}
+        ${snap.requiresManualReview ? '<br><span style="color:var(--amber);font-weight:600">⚠ 包含需人工確認的需求，尚未列入正式工作範圍。</span>' : ''}
       </div>
       ${window.NicocoRequirements.renderSnapshotHtml(snap, { mode: 'admin' })}`;
   }
+  // 長篇內容：需求已確認後預設收合（仍可隨時展開查看）；尚未確認時預設展開，方便審核對照
+  const hint = !snap ? '（舊案件）'
+    : (q.confirmedRequirements ? '（需求已確認，展開查看原始紀錄）' : '（唯讀，審核時對照用）');
   return `
     <div class="card">
-      <div class="card-title">客戶原始需求</div>
-      ${body}
+      <details class="fold"${(!snap || !q.confirmedRequirements) ? ' open' : ''}>
+        <summary>客戶原始需求 <span class="fold-hint">${hint}</span></summary>
+        ${body}
+      </details>
     </div>`;
 }
 
@@ -1011,7 +1020,7 @@ async function confirmRequirements() {
   const s = reviewSummary();
   const isRe = !!currentData.confirmedRequirements;
   if (!confirm(
-    `確認需求（Revision ${reviewWork.revision}）\n\n` +
+    `確認需求（第 ${reviewWork.revision} 版）\n\n` +
     `基本包含：${s.basicCount} 項\n加價需求：${s.pricedCount} 項\n待人工估價：${s.manualPricingCount} 項\n排除：${s.excludedCount} 項\n` +
     `預估價格區間：${reviewRange(s.totalMin, s.totalMax)}${s.manualPricingCount ? '（不含待人工估價項目）' : ''}\n\n` +
     '確認後，本版需求將作為正式報價依據。客戶原始需求不會被修改。')) return;
@@ -1020,8 +1029,8 @@ async function confirmRequirements() {
   try {
     const confirmed = NicocoReview.buildConfirmed(reviewWork, reviewAdminEmail(), firebase.firestore.FieldValue.serverTimestamp());
     const log = reviewLog(isRe
-      ? `需求已重新確認（Revision ${confirmed.revision}）：納入 ${s.includedCount} 項、排除 ${s.excludedCount} 項、待人工估價 ${s.manualPricingCount} 項`
-      : `需求已確認（Revision ${confirmed.revision}）：納入 ${s.includedCount} 項、排除 ${s.excludedCount} 項、待人工估價 ${s.manualPricingCount} 項`);
+      ? `需求已重新確認（第 ${confirmed.revision} 版）：納入 ${s.includedCount} 項、排除 ${s.excludedCount} 項、待人工估價 ${s.manualPricingCount} 項`
+      : `需求已確認（第 ${confirmed.revision} 版）：納入 ${s.includedCount} 項、排除 ${s.excludedCount} 項、待人工估價 ${s.manualPricingCount} 項`);
     const patch = {
       confirmedRequirements: confirmed,
       requirementReviewDraft: firebase.firestore.FieldValue.delete(),
@@ -1040,7 +1049,7 @@ async function confirmRequirements() {
     delete currentData.requirementReviewDraft;
     reviewWork = null; reviewDirty = false; reviewProblems = []; reviewConfirmedOpen = false;
     reviewPushLog(log);
-    showToast(`✓ 需求已確認（Revision ${confirmed.revision}）`);
+    showToast(`✓ 需求已確認（第 ${confirmed.revision} 版）`);
   } catch (err) {
     console.error(err); showToast(`⚠ 確認失敗：${err.message || err}`);
   } finally { reviewBusy = false; renderReviewSection(); }
@@ -1059,7 +1068,7 @@ async function reopenRequirementReview() {
     const draft = NicocoReview.createDraftFromConfirmed(JSON.parse(JSON.stringify(c)), reason, note);
     draft.createdAt = reviewNow(); draft.updatedAt = draft.createdAt;
     draft.reopenedAt = draft.createdAt; draft.reopenedBy = reviewAdminEmail();
-    const log = reviewLog(`重新開啟需求審核（由 Revision ${c.revision}）：${reason}${note ? '｜' + note : ''}`);
+    const log = reviewLog(`重新開啟需求審核（由第 ${c.revision} 版）：${reason}${note ? '｜' + note : ''}`);
     await db.collection('quotes').doc(currentId).update({
       requirementReviewDraft: draft,
       activityLogs: firebase.firestore.FieldValue.arrayUnion(log),
@@ -1067,7 +1076,7 @@ async function reopenRequirementReview() {
     currentData.requirementReviewDraft = draft;
     reviewWork = null; reviewDirty = false; reviewReopenOpen = false; reviewProblems = [];
     reviewPushLog(log);
-    showToast(`✓ 已重新開啟審核（工作稿 Revision ${draft.revision}）`);
+    showToast(`✓ 已重新開啟審核（工作稿 第 ${draft.revision} 版）`);
   } catch (err) {
     console.error(err); showToast(`⚠ 重新開啟失敗：${err.message || err}`);
   } finally { reviewBusy = false; renderReviewSection(); }
@@ -1110,7 +1119,7 @@ function reviewSummaryHtml(s) {
     </div>`;
 }
 function reviewSourceHtml(it) {
-  const text = it.sourceType === 'admin_custom' ? '（Admin 新增，非客戶原始需求）' : (it.sourceText || '—');
+  const text = it.sourceType === 'admin_custom' ? '（管理者新增，非客戶原始需求）' : (it.sourceText || '—');
   return `<div style="background:var(--ink-10);border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--ink-60);line-height:1.6;white-space:pre-wrap">${escapeHtml(text)}</div>`;
 }
 function reviewDecisionHtml(it, idx) {
@@ -1166,7 +1175,7 @@ function reviewItemHtml(it, idx) {
       <div class="info-label" style="margin:10px 0 4px">正式需求描述</div>
       <textarea class="field-textarea" style="min-height:52px" placeholder="這項需求正式要做的內容" oninput="reviewSetText(${idx},'finalDescription',this.value)">${escapeHtml(it.finalDescription || '')}</textarea>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
-        <div><div class="info-label" style="margin-bottom:4px">Scope 備註</div>
+        <div><div class="info-label" style="margin-bottom:4px">工作範圍備註</div>
           <input class="field-input" value="${escapeHtml(it.scopeNote || '')}" placeholder="範圍、限制、不包含" oninput="reviewSetText(${idx},'scopeNote',this.value)"></div>
         <div><div class="info-label" style="margin-bottom:4px">內部備註</div>
           <input class="field-input" value="${escapeHtml(it.adminNote || '')}" placeholder="只有後台看得到" oninput="reviewSetText(${idx},'adminNote',this.value)"></div>
@@ -1194,7 +1203,7 @@ function reviewReadonlyListHtml(c) {
         <div style="font-size:12px">${it.decision === 'included' ? reviewEstimateText(it) : ''}</div>
       </div>
       <div style="font-size:12.5px;color:var(--ink);line-height:1.6;margin-top:3px;white-space:pre-wrap">${escapeHtml(it.finalDescription || '')}</div>
-      ${it.scopeNote ? `<div style="font-size:12px;color:var(--ink-60);line-height:1.6">Scope 備註：${escapeHtml(it.scopeNote)}</div>` : ''}
+      ${it.scopeNote ? `<div style="font-size:12px;color:var(--ink-60);line-height:1.6">工作範圍備註：${escapeHtml(it.scopeNote)}</div>` : ''}
       ${it.adminNote ? `<div style="font-size:12px;color:var(--ink-30);line-height:1.6">內部備註：${escapeHtml(it.adminNote)}</div>` : ''}
       ${it.sourceType !== 'admin_custom' && it.sourceText ? `<div style="font-size:11.5px;color:var(--ink-30);line-height:1.6;white-space:pre-wrap">客戶原始：${escapeHtml(it.sourceText)}</div>` : ''}
     </div>`;
@@ -1219,9 +1228,9 @@ function renderReviewSection() {
 
   const confirmedHeader = confirmed ? `
     <div style="background:var(--green-light);border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#166534;line-height:1.7">
-      <strong>需求已確認</strong>　Revision ${escapeHtml(confirmed.revision)}　確認於 ${escapeHtml(reviewTs(confirmed.confirmedAt))}${confirmed.confirmedBy ? `　${escapeHtml(confirmed.confirmedBy)}` : ''}
+      <strong>需求已確認</strong>　第 ${escapeHtml(confirmed.revision)} 版　確認於 ${escapeHtml(reviewTs(confirmed.confirmedAt))}${confirmed.confirmedBy ? `　${escapeHtml(confirmed.confirmedBy)}` : ''}
       <div style="font-size:12px">納入 ${confirmed.summary.includedCount} 項・排除 ${confirmed.summary.excludedCount} 項・待人工估價 ${confirmed.summary.manualPricingCount} 項・預估 ${reviewRange(confirmed.summary.totalMin, confirmed.summary.totalMax)}</div>
-      ${q.previousConfirmedRequirements ? `<div style="font-size:11.5px;opacity:.8">上一版：Revision ${escapeHtml(q.previousConfirmedRequirements.revision)}（確認於 ${escapeHtml(reviewTs(q.previousConfirmedRequirements.confirmedAt))}，僅保留這一份歷史）</div>` : ''}
+      ${q.previousConfirmedRequirements ? `<div style="font-size:11.5px;opacity:.8">上一版：第 ${escapeHtml(q.previousConfirmedRequirements.revision)} 版（確認於 ${escapeHtml(reviewTs(q.previousConfirmedRequirements.confirmedAt))}，僅保留這一份歷史）</div>` : ''}
     </div>` : '';
 
   if (draft) {
@@ -1232,7 +1241,7 @@ function renderReviewSection() {
     body = `
       ${confirmed ? confirmedHeader.replace('需求已確認', `目前有效：需求已確認`) : ''}
       <div style="font-size:12.5px;color:var(--ink-60);line-height:1.6;margin-bottom:12px">
-        審核工作稿　Revision ${escapeHtml(reviewWork.revision)}${reviewWork.reopenedFromRevision ? `（由 Revision ${escapeHtml(reviewWork.reopenedFromRevision)} 重新開啟：${escapeHtml(reviewWork.reopenReason || '')}${reviewWork.reopenNote ? '｜' + escapeHtml(reviewWork.reopenNote) : ''}）` : ''}
+        審核工作稿　第 ${escapeHtml(reviewWork.revision)} 版${reviewWork.reopenedFromRevision ? `（由第 ${escapeHtml(reviewWork.reopenedFromRevision)} 版重新開啟：${escapeHtml(reviewWork.reopenReason || '')}${reviewWork.reopenNote ? '｜' + escapeHtml(reviewWork.reopenNote) : ''}）` : ''}
         ・依據需求書版本 ${escapeHtml(reviewWork.sourceSnapshotDefinitionVersion || '—')}。這裡的修改不會影響客戶原始需求${confirmed ? '，也不會影響目前有效的正式需求，直到你重新確認' : ''}。
       </div>
       ${reviewSummaryHtml(s)}
@@ -1274,7 +1283,7 @@ function renderReviewSection() {
       </div>
       ${reviewReopenOpen ? `
       <div style="border:1.5px solid var(--ink-10);border-radius:10px;padding:12px 14px;margin-top:12px">
-        <div style="font-size:13px;color:var(--ink-60);line-height:1.6;margin-bottom:8px">重新開啟會建立新的工作稿（Revision ${Number(confirmed.revision) + 1}）。目前有效的正式需求會保持不變，直到你再次確認。</div>
+        <div style="font-size:13px;color:var(--ink-60);line-height:1.6;margin-bottom:8px">重新開啟會建立新的工作稿（第 ${Number(confirmed.revision) + 1} 版）。目前有效的正式需求會保持不變，直到你再次確認。</div>
         <select class="field-select" id="rv-reopen-reason" style="max-width:260px;margin-bottom:8px">
           <option value="">請選擇理由</option>
           ${NicocoReview.REOPEN_REASONS.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('')}
@@ -1313,7 +1322,7 @@ function renderDetail() {
     <!-- Breadcrumb -->
     <nav class="breadcrumb">
       <span>🏠</span>
-      <a href="dashboard.html">Dashboard</a>
+      <a href="dashboard.html">總覽</a>
       <span class="breadcrumb-sep">/</span>
       <span>📋</span>
       <a href="quote-admin.html">案件管理</a>
@@ -1325,9 +1334,13 @@ function renderDetail() {
     <!-- Back buttons -->
     <div class="back-buttons">
       <a class="back-btn" href="quote-admin.html">← 返回案件列表</a>
-      <a class="back-btn" href="dashboard.html">🏠 返回工作台</a>
+      <a class="back-btn" href="dashboard.html">🏠 返回總覽</a>
     </div>
 
+    <!-- 後台流程與介面整理 v1：流程導覽＋下一步建議（依真實資料判斷） -->
+    <div id="workflowPanel"></div>
+
+    <div class="flow-heading" id="sec-basic"><span class="flow-no">1</span>案件基本資料</div>
     <!-- 基本資訊（唯讀，來自估價系統） -->
     <div class="card">
       <div class="quote-header">
@@ -1346,10 +1359,6 @@ function renderDetail() {
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span class="status-badge ${statusClass}">${statusLabel}</span>
-          <a href="quote-edit.html?id=${encodeURIComponent(currentId)}" class="btn-quotation-link">
-            ${q.quotationTotal ? '查看 / 編輯正式報價' : '建立正式報價'} →
-          </a>
-          ${q.quotationTotal ? `<button class="btn-copy-link" onclick="copyQuotationLink()">🔗 複製客戶連結</button>` : ''}
         </div>
       </div>
 
@@ -1364,9 +1373,14 @@ function renderDetail() {
       </div>
     </div>
 
-    <!-- 功能明細（唯讀） -->
+    <div class="flow-heading" id="sec-requirement"><span class="flow-no">2</span>客戶原始需求</div>
+    <!-- ── 客戶原始需求（Requirement Snapshot，唯讀）── -->
+    ${renderRequirementSnapshotCard(q)}
+
+    <!-- 功能明細（唯讀，估價系統舊欄位）：有需求書時預設收合 -->
     <div class="card">
-      <div class="card-title">功能明細</div>
+      <details class="fold"${q.requirementSnapshot ? '' : ' open'}>
+      <summary>估價系統功能明細 <span class="fold-hint">${q.requirementSnapshot ? '（舊版欄位，供對照）' : '（此案件的需求來源）'}</span></summary>
       <div class="tag-section">
         <div class="tag-section-label">方案已包含</div>
         ${includedTags ? `<div class="tags">${includedTags}</div>` : '<div class="tag-empty">無</div>'}
@@ -1383,23 +1397,30 @@ function renderDetail() {
         <div class="tag-section-label">客戶補充說明</div>
         <div style="font-size:13px;color:var(--ink-60);line-height:1.6">${escapeHtml(q.message || '無')}</div>
       </div>
+      </details>
     </div>
 
-    <!-- ── 客戶原始需求（Requirement Snapshot，唯讀）── -->
-    ${renderRequirementSnapshotCard(q)}
-
+    <div class="flow-heading"><span class="flow-no">3</span>需求審核</div>
     <!-- ── 需求審核（Requirement Review v1）── -->
     <div id="reviewSection"></div>
 
-    <!-- ── 專案管理 Project Scope & Progress（Backward compatible：舊報價無 project 欄位時顯示建立按鈕）── -->
-    <div id="projectSection"></div>
+    <div class="flow-heading"><span class="flow-no">4</span>正式報價</div>
+    <!-- ── 正式報價摘要（編輯在 quote-edit.html）── -->
+    <div id="quotationSection"></div>
 
-    <!-- ── Agreement／合約（獨立於 Project 是否建立，任何案件都可以直接建立合約）── -->
+    <div class="flow-heading"><span class="flow-no">5</span>合約</div>
+    <!-- ── 合約（獨立於 Project 是否建立，任何案件都可以直接建立合約）── -->
     <div id="agreementSection"></div>
 
-    <!-- ── Phase 4.5：案件紀錄 Timeline ── -->
+    <div class="flow-heading"><span class="flow-no">6</span>建立專案</div>
+    <!-- ── 專案管理（Backward compatible：舊報價無 project 欄位時顯示建立按鈕）
+         專案內依序為：6 專案總覽 → 7 分期收款與專案執行 → 8 驗收與結案 ── -->
+    <div id="projectSection"></div>
+
+    <div class="flow-heading" id="sec-log">操作紀錄與案件管理</div>
+    <!-- ── Phase 4.5：操作紀錄 ── -->
     <div class="card">
-      <div class="card-title">案件紀錄 Timeline</div>
+      <div class="card-title">操作紀錄</div>
 
       <div class="timeline-form">
         <select class="timeline-type-select" id="timelineType">
@@ -1415,17 +1436,17 @@ function renderDetail() {
     </div>
 
     <!-- ── Phase 4：可編輯的營運欄位 ── -->
-    <div class="card">
+    <div class="card" id="sec-admin">
       <div class="card-title">案件管理</div>
 
       <div class="field-row">
         <div class="field">
-          <label class="field-label">正式報價（officialPrice）</label>
+          <label class="field-label">議定金額（內部參考）</label>
           <input class="field-input" id="f-officialPrice" type="number" placeholder="輸入正式議定金額"
                  value="${q.officialPrice ?? ''}">
         </div>
         <div class="field">
-          <label class="field-label">付款狀態（paymentStatus）</label>
+          <label class="field-label">付款狀態（舊版欄位）</label>
           <select class="field-select" id="f-paymentStatus">
             ${PAYMENT_ORDER.map(p => `<option value="${p}" ${(q.paymentStatus||'unpaid')===p?'selected':''}>${PAYMENT_LABELS[p]}</option>`).join('')}
           </select>
@@ -1435,7 +1456,7 @@ function renderDetail() {
 
       <div class="field-row">
         <div class="field full">
-          <label class="field-label">專案進度（progress）</label>
+          <label class="field-label">專案進度（手動）</label>
           <div class="progress-row">
             <input class="progress-slider" id="f-progress" type="range" min="0" max="100" step="5"
                    value="${q.progress ?? 0}" oninput="onProgressInput(this.value)">
@@ -1447,20 +1468,20 @@ function renderDetail() {
 
       <div class="field-row">
         <div class="field full">
-          <label class="field-label">內部備註（notes）</label>
+          <label class="field-label">內部備註</label>
           <textarea class="field-textarea" id="f-notes" placeholder="記錄聯絡內容、報價調整原因、客戶特殊要求等…">${escapeHtml(q.notes || '')}</textarea>
         </div>
       </div>
 
       <div class="field-row">
         <div class="field">
-          <label class="field-label">案件狀態（status）</label>
+          <label class="field-label">案件狀態</label>
           <select class="field-select" id="f-status">
             ${STATUS_ORDER.map(s => `<option value="${s}" ${q.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}
           </select>
         </div>
         <div class="field">
-          <label class="field-label">優先度（priority）</label>
+          <label class="field-label">優先度</label>
           <select class="field-select" id="f-priority">
             ${PRIORITY_ORDER.map(p => `<option value="${p}" ${(q.priority||'normal')===p?'selected':''}>${PRIORITY_LABELS[p]}</option>`).join('')}
           </select>
@@ -1469,21 +1490,21 @@ function renderDetail() {
 
       <div class="field-row">
         <div class="field">
-          <label class="field-label">案件來源（source）</label>
+          <label class="field-label">案件來源</label>
           <select class="field-select" id="f-source">
             <option value="">未設定</option>
             ${SOURCE_OPTIONS.map(s => `<option value="${s}" ${(q.source||'')===s?'selected':''}>${SOURCE_LABELS[s]}</option>`).join('')}
           </select>
         </div>
         <div class="field">
-          <label class="field-label">負責人（assignedTo）</label>
+          <label class="field-label">負責人</label>
           <input class="field-input" id="f-assignedTo" type="text" placeholder="例如：me" value="${escapeHtml(q.assignedTo || '')}">
         </div>
       </div>
 
       <div class="field-row">
         <div class="field full">
-          <label class="field-label">最後聯絡時間（lastContactAt）</label>
+          <label class="field-label">最後聯絡時間</label>
           <input class="field-input" id="f-lastContactAt" type="datetime-local"
                  value="${tsToLocalInput(q.lastContactAt)}">
         </div>
@@ -1557,7 +1578,7 @@ function buildDefaultScopeList(q) {
 // ── 從報價建立專案：寫入 project 欄位 + 產生預設 Scope（不自動展開 Task）──
 async function createProjectFromQuote() {
   if (!currentId || !currentData) return;
-  if (!confirm('確定要從此報價建立專案嗎？系統會依網站類型與已選功能自動產生預設 Scope，建立後仍可人工新增／修改／刪除。')) return;
+  if (!confirm('確定要從此報價建立專案嗎？系統會依網站類型與已選功能自動產生預設工作範圍，建立後仍可人工新增／修改／刪除。')) return;
 
   try {
     const scopes = buildDefaultScopeList(currentData);
@@ -1592,7 +1613,7 @@ async function createProjectFromQuote() {
 
     await batch.commit();
     currentData.project = { status: 'planning' };
-    showToast(`✓ 專案已建立，已產生 ${scopes.length} 項預設 Scope`);
+    showToast(`✓ 專案已建立，已產生 ${scopes.length} 項預設工作範圍`);
     await renderProjectSection();
   } catch (err) {
     console.error(err);
@@ -1761,16 +1782,17 @@ async function renderProjectSection() {
   if (!currentData.project) {
     el.innerHTML = `
       <div class="card">
-        <div class="card-title">專案管理 Project</div>
+        <div class="card-title">專案管理</div>
         <div style="font-size:13px;color:var(--ink-60);margin-bottom:14px;line-height:1.6">
-          此案件尚未建立專案。建立後系統會依網站類型與已選功能自動產生預設 Scope，之後可再展開為開發任務並追蹤進度。
+          此案件尚未建立專案。建立後系統會依網站類型與已選功能自動產生預設工作範圍，之後可再展開為開發工作項目並追蹤進度。
+          <br><span style="font-size:12px">建議順序是報價接受、合約簽署後再建立專案（僅為建議，不會限制操作）。建立專案後，這裡會依序出現「7 分期收款與專案執行」與「8 驗收與結案」。</span>
         </div>
         <button class="btn-save" onclick="createProjectFromQuote()">從此報價建立專案</button>
       </div>`;
     return;
   }
 
-  el.innerHTML = `<div class="card"><div class="card-title">專案管理 Project</div><div class="loading-state" style="padding:40px 0"><div class="spinner"></div>載入專案資料中…</div></div>`;
+  el.innerHTML = `<div class="card"><div class="card-title">專案管理</div><div class="loading-state" style="padding:40px 0"><div class="spinner"></div>載入專案資料中…</div></div>`;
 
   try {
     const [scopeSnap, taskSnap, paymentSnap, crSnap] = await Promise.all([
@@ -1791,12 +1813,12 @@ async function renderProjectSection() {
     const noticeEl = document.getElementById('paymentStatusNotice');
     if (noticeEl) {
       noticeEl.innerHTML = paymentMilestones.length
-        ? `<div style="font-size:11px;color:var(--amber);margin-top:6px">此專案已啟用 Payment Milestone，付款明細請以付款里程碑為準。</div>`
+        ? `<div style="font-size:11px;color:var(--amber);margin-top:6px">此專案已啟用分期付款，付款明細請以分期付款為準。</div>`
         : '';
     }
   } catch (err) {
     console.error(err);
-    el.innerHTML = `<div class="card"><div class="card-title">專案管理 Project</div><div class="error-state">⚠ 讀取專案資料失敗：${escapeHtml(err.message || String(err))}</div></div>`;
+    el.innerHTML = `<div class="card"><div class="card-title">專案管理</div><div class="error-state">⚠ 讀取專案資料失敗：${escapeHtml(err.message || String(err))}</div></div>`;
   }
 }
 
@@ -1877,12 +1899,12 @@ function renderProjectUI() {
   const m = computeProjectMetrics();
   const proj = currentData.project || {};
   const hasInitRecord = !!(proj.initialProgressInitializedAt);
-  const initBtnLabel = hasInitRecord ? '批次調整 Task 狀態' : '初始化既有專案進度';
+  const initBtnLabel = hasInitRecord ? '批次調整工作項目狀態' : '初始化既有專案進度';
 
   el.innerHTML = `
     <div class="card">
       <div class="card-title">
-        Project Overview
+        專案總覽
         <select class="field-select" style="width:auto;padding:5px 10px;font-size:12px" id="f-projectStatus" onchange="updateProjectStatus(this.value)">
           ${PROJECT_STATUS_ORDER.map(s => `<option value="${s}" ${(proj.status||'planning')===s?'selected':''}>${PROJECT_STATUS_LABELS[s]}</option>`).join('')}
         </select>
@@ -1891,32 +1913,32 @@ function renderProjectUI() {
       ${hasInitRecord ? '<div style="font-size:11px;color:var(--ink-60);margin-top:-6px;margin-bottom:10px">此專案已有進度紀錄，此工具可持續作為批次調整工具使用。</div>' : ''}
 
       <div class="info-grid" style="margin-bottom:14px">
-        <div class="info-box"><div class="info-label">Project Progress</div><div class="info-value" style="font-size:18px;font-weight:800">${m.overall.toFixed(1)}%</div></div>
-        <div class="info-box"><div class="info-label">Waiting Client</div><div class="info-value" style="font-size:18px;font-weight:800;color:var(--amber)">${m.waitingClientPct.toFixed(1)}%</div></div>
+        <div class="info-box"><div class="info-label">專案進度</div><div class="info-value" style="font-size:18px;font-weight:800">${m.overall.toFixed(1)}%</div></div>
+        <div class="info-box"><div class="info-label">等待客戶比例</div><div class="info-value" style="font-size:18px;font-weight:800;color:var(--amber)">${m.waitingClientPct.toFixed(1)}%</div></div>
         ${PHASES.map(p => `<div class="info-box"><div class="info-label">${PHASE_LABELS[p]}</div><div class="info-value">${m.byPhase[p].toFixed(1)}%</div></div>`).join('')}
       </div>
 
       <div class="info-grid" style="margin-bottom:14px">
-        <div class="info-box"><div class="info-label">Total Scope Items</div><div class="info-value">${m.totalScopes}</div></div>
-        <div class="info-box"><div class="info-label">Total Tasks</div><div class="info-value">${m.totalTasks}</div></div>
-        <div class="info-box"><div class="info-label">Completed / In Progress</div><div class="info-value">${m.statusCounts.completed} / ${m.statusCounts.in_progress}</div></div>
-        <div class="info-box"><div class="info-label">Review / Waiting / Blocked</div><div class="info-value">${m.statusCounts.review} / ${m.statusCounts.waiting_client} / ${m.statusCounts.blocked}</div></div>
+        <div class="info-box"><div class="info-label">工作範圍數</div><div class="info-value">${m.totalScopes}</div></div>
+        <div class="info-box"><div class="info-label">工作項目數</div><div class="info-value">${m.totalTasks}</div></div>
+        <div class="info-box"><div class="info-label">已完成／進行中</div><div class="info-value">${m.statusCounts.completed} / ${m.statusCounts.in_progress}</div></div>
+        <div class="info-box"><div class="info-label">待驗收／等待客戶／受阻</div><div class="info-value">${m.statusCounts.review} / ${m.statusCounts.waiting_client} / ${m.statusCounts.blocked}</div></div>
       </div>
 
       ${m.blocked.length ? `
       <div class="tag-section">
-        <div class="tag-section-label" style="color:var(--red)">⚠ 受阻 Task（${m.blocked.length}）</div>
+        <div class="tag-section-label" style="color:var(--red)">⚠ 受阻工作項目（${m.blocked.length}）</div>
         ${m.blocked.map(t => `<div style="font-size:12px;color:var(--ink-60);margin-bottom:3px">・${escapeHtml(t.name)}：${escapeHtml(t.blockedReason || '未填寫原因')}</div>`).join('')}
       </div>` : ''}
 
       <div class="tag-section">
-        <div class="tag-section-label">Milestone Readiness（僅供專案管理與付款參考，不會自動觸發付款）</div>
+        <div class="tag-section-label">里程碑完成度（僅供專案管理與付款參考，不會自動觸發付款）</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${m.milestoneReadiness.map(r => `
             <div style="font-size:11.5px;background:var(--ink-10);border-radius:8px;padding:8px 10px;line-height:1.7">
               <strong>${MILESTONE_LABELS[r.milestone]}</strong><br>
-              Required：${r.required}　Completed：${r.completed}　In Review：${r.inReview}　Remaining：${r.remaining}<br>
-              Status：<span style="color:${r.ready?'var(--green)':'var(--amber)'};font-weight:600">${r.ready?'Ready':'Not Ready'}</span>
+              需完成：${r.required}　已完成：${r.completed}　待驗收：${r.inReview}　剩餘：${r.remaining}<br>
+              狀態：<span style="color:${r.ready?'var(--green)':'var(--amber)'};font-weight:600">${r.ready?'已就緒':'未就緒'}</span>
             </div>`).join('')}
         </div>
       </div>
@@ -1924,15 +1946,18 @@ function renderProjectUI() {
 
     ${renderInitPanel(m)}
 
+    <div class="flow-heading" id="sec-execution"><span class="flow-no">7</span>分期收款與專案執行</div>
+    <div id="sec-payment">${renderPaymentSection()}</div>
+
     <div class="card">
-      <div class="card-title">Scope Items（${projectScopes.length}）</div>
+      <div class="card-title">工作範圍（${projectScopes.length}）</div>
       <div class="info-grid" style="margin-bottom:14px">
-        <div class="info-box"><div class="info-label">總 Scope 數</div><div class="info-value">${projectScopes.length}</div></div>
-        <div class="info-box"><div class="info-label">initial_scope</div><div class="info-value">${projectScopes.filter(s => s.source === 'initial_scope').length}</div></div>
-        <div class="info-box"><div class="info-label">change_request</div><div class="info-value">${projectScopes.filter(s => s.source === 'change_request').length}</div></div>
-        <div class="info-box"><div class="info-label">internal</div><div class="info-value">${projectScopes.filter(s => s.source === 'internal').length}</div></div>
+        <div class="info-box"><div class="info-label">工作範圍總數</div><div class="info-value">${projectScopes.length}</div></div>
+        <div class="info-box"><div class="info-label">原始範圍</div><div class="info-value">${projectScopes.filter(s => s.source === 'initial_scope').length}</div></div>
+        <div class="info-box"><div class="info-label">需求變更</div><div class="info-value">${projectScopes.filter(s => s.source === 'change_request').length}</div></div>
+        <div class="info-box"><div class="info-label">內部項目</div><div class="info-value">${projectScopes.filter(s => s.source === 'internal').length}</div></div>
       </div>
-      <button class="btn-save" onclick="toggleScopeListExpanded()">${scopeListExpanded ? '收合 Scope 清單' : '管理 Scope'}</button>
+      <button class="btn-copy-link" onclick="toggleScopeListExpanded()">${scopeListExpanded ? '收合工作範圍清單' : '管理工作範圍'}</button>
 
       ${scopeListExpanded ? `
       <div style="margin-top:14px">
@@ -1940,39 +1965,38 @@ function renderProjectUI() {
           <button class="btn-copy-link" onclick="expandAllScopes()">全部展開</button>
           <button class="btn-copy-link" onclick="collapseAllScopes()">全部收合</button>
         </div>` : ''}
-        ${projectScopes.length ? projectScopes.map(renderScopeRow).join('') : '<div class="tag-empty">尚無 Scope，可於下方新增</div>'}
+        ${projectScopes.length ? projectScopes.map(renderScopeRow).join('') : '<div class="tag-empty">尚無工作範圍，可於下方新增</div>'}
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <input class="field-input" id="new-scope-name" placeholder="新增 Scope 名稱" style="flex:1;min-width:160px">
+          <input class="field-input" id="new-scope-name" placeholder="新增工作範圍名稱" style="flex:1;min-width:160px">
           <select class="field-select" id="new-scope-source" style="width:auto">
-            <option value="internal">internal（內部技術項目）</option>
-            <option value="initial_scope">initial_scope</option>
-            <option value="change_request">change_request</option>
+            <option value="internal">內部項目（內部技術項目）</option>
+            <option value="initial_scope">原始範圍</option>
+            <option value="change_request">需求變更</option>
           </select>
-          <button class="btn-save" style="padding:9px 18px" onclick="addManualScope()">新增 Scope</button>
+          <button class="btn-save" style="padding:9px 18px" onclick="addManualScope()">新增工作範圍</button>
         </div>
       </div>` : ''}
     </div>
 
     <div class="card">
-      <div class="card-title">Development Tasks</div>
+      <div class="card-title">開發工作項目</div>
       <div class="info-grid" style="margin-bottom:14px">
-        <div class="info-box"><div class="info-label">Overall Progress</div><div class="info-value">${m.overall.toFixed(1)}%</div></div>
-        <div class="info-box"><div class="info-label">Scope 數量</div><div class="info-value">${new Set(projectTasks.map(t => t.scopeId)).size}</div></div>
-        <div class="info-box"><div class="info-label">Task 數量</div><div class="info-value">${projectTasks.length}</div></div>
+        <div class="info-box"><div class="info-label">整體進度</div><div class="info-value">${m.overall.toFixed(1)}%</div></div>
+        <div class="info-box"><div class="info-label">工作範圍數量</div><div class="info-value">${new Set(projectTasks.map(t => t.scopeId)).size}</div></div>
+        <div class="info-box"><div class="info-label">工作項目數量</div><div class="info-value">${projectTasks.length}</div></div>
       </div>
-      <button class="btn-save" onclick="toggleDevTasksExpanded()">${devTasksExpanded ? '收合 Development Tasks' : '展開 Development Tasks'}</button>
+      <button class="btn-copy-link" onclick="toggleDevTasksExpanded()">${devTasksExpanded ? '收合開發工作項目' : '展開開發工作項目'}</button>
 
       ${devTasksExpanded ? `
       <div style="margin-top:14px">
-        ${projectTasks.length ? PHASES.map(p => renderPhaseTaskGroup(p, m)).join('') : '<div class="tag-empty">尚無 Task，請先在上方 Scope 按「展開成開發任務」</div>'}
+        ${projectTasks.length ? PHASES.map(p => renderPhaseTaskGroup(p, m)).join('') : '<div class="tag-empty">尚無工作項目，請先在上方工作範圍按「展開成開發任務」</div>'}
       </div>` : ''}
     </div>
 
-    ${renderAcceptanceWarrantySection()}
+    <div id="sec-cr">${renderChangeRequestSection()}</div>
 
-    ${renderPaymentSection()}
-
-    ${renderChangeRequestSection()}`;
+    <div class="flow-heading" id="sec-closing"><span class="flow-no">8</span>驗收與結案</div>
+    ${renderAcceptanceWarrantySection()}`;
 }
 
 function renderScopeRow(s) {
@@ -2001,11 +2025,11 @@ function renderScopeRow(s) {
           <div style="font-size:13.5px;font-weight:600;color:var(--ink)">
             <span style="font-size:10px;color:var(--ink-30);margin-right:4px;display:inline-block;width:10px">${expanded ? '▼' : '▶'}</span>
             ${escapeHtml(s.name)}
-            <span class="dtag" style="margin-left:6px" title="Source">${sourceLabel}</span>
+            <span class="dtag" style="margin-left:6px" title="來源">${sourceLabel}</span>
             ${!isActive ? '<span class="dtag" style="background:#fef2f2;color:var(--red)">已停用</span>' : ''}
             ${isActive && !includeProgress ? '<span class="dtag" style="background:var(--amber-light);color:var(--amber)">不計入總進度</span>' : ''}
           </div>
-          <div style="font-size:11px;color:var(--ink-60);margin-top:4px">Task 數：${taskCount}　Scope Progress：${progressDisplay}</div>
+          <div style="font-size:11px;color:var(--ink-60);margin-top:4px">工作項目數：${taskCount}　範圍進度：${progressDisplay}</div>
         </div>
       </div>
       ${expanded ? `
@@ -2041,7 +2065,7 @@ function renderPhaseTaskGroup(phase, m) {
     const groupTasks = tasksInPhase.filter(t => t.scopeId === scopeId).sort((a,b) => (a.order||0) - (b.order||0));
     const scopeGroupKey = 'scope_' + phase + '_' + scopeId;
     const scopeCollapsed = collapsedGroups.has(scopeGroupKey);
-    const scopeName = scope ? scope.name : '未分類（原 Scope 已不存在）';
+    const scopeName = scope ? scope.name : '未分類（原工作範圍已不存在）';
     // Scope Overall Progress：該 Scope 在整個 Project 中所有 active Task 的整體進度，
     // 同一 Scope 出現在不同 Phase 時顯示相同數值，避免互相矛盾（沿用既有 scopeProgress()）
     const scopeOverall = scope ? scopeProgress(scopeId) : 0;
@@ -2051,7 +2075,7 @@ function renderPhaseTaskGroup(phase, m) {
         <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 0" onclick="toggleGroupCollapse('${scopeGroupKey}')">
           <span style="font-size:10.5px;color:var(--ink-30);width:12px;flex-shrink:0">${scopeCollapsed ? '▶' : '▼'}</span>
           <span style="font-size:12.5px;font-weight:600;color:var(--ink)">${escapeHtml(scopeName)}</span>
-          <span style="font-size:11px;color:var(--ink-60)">${groupTasks.length} Tasks｜${scopeOverall.toFixed(1)}%</span>
+          <span style="font-size:11px;color:var(--ink-60)">${groupTasks.length} 項｜${scopeOverall.toFixed(1)}%</span>
         </div>
         ${scopeCollapsed ? '' : groupTasks.map(renderTaskRow).join('')}
       </div>`;
@@ -2062,7 +2086,7 @@ function renderPhaseTaskGroup(phase, m) {
       <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:7px 0;border-bottom:1.5px solid var(--ink-10)" onclick="toggleGroupCollapse('${phaseKey}')">
         <span style="font-size:12px;color:var(--ink-30);width:14px;flex-shrink:0">${phaseCollapsed ? '▶' : '▼'}</span>
         <span class="tag-section-label" style="margin:0;padding:0;border:none">${PHASE_LABELS[phase]}</span>
-        <span style="font-size:11.5px;color:var(--ink-60)">${tasksInPhase.length} Tasks｜${phaseProgress.toFixed(1)}%</span>
+        <span style="font-size:11.5px;color:var(--ink-60)">${tasksInPhase.length} 項｜${phaseProgress.toFixed(1)}%</span>
       </div>
       ${phaseCollapsed ? '' : scopeGroupsHtml}
     </div>`;
@@ -2080,19 +2104,19 @@ function renderTaskRow(t) {
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap">
         <div style="font-size:13px;font-weight:600;color:var(--ink);flex:1;min-width:140px;padding-bottom:6px">${escapeHtml(t.name)}</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-          ${field('Status', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px;color:${color}" onchange="updateTaskField('${t.id}','status',this.value)">
+          ${field('狀態', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px;color:${color}" onchange="updateTaskField('${t.id}','status',this.value)">
             ${TASK_STATUS_ORDER.map(s => `<option value="${s}" ${t.status===s?'selected':''}>${TASK_STATUS_LABELS[s]}</option>`).join('')}
           </select>`)}
-          ${field('Progress', `<div style="display:flex;align-items:center;gap:3px"><input type="number" min="0" max="100" value="${t.progress ?? 0}" style="width:56px" class="field-input"
+          ${field('進度', `<div style="display:flex;align-items:center;gap:3px"><input type="number" min="0" max="100" value="${t.progress ?? 0}" style="width:56px" class="field-input"
                onchange="updateTaskField('${t.id}','progress',parseFloat(this.value))"><span style="font-size:11px;color:var(--ink-30)">%</span></div>`)}
-          ${field('Weight', `<input type="number" min="1" step="1" value="${t.weight ?? 1}" style="width:50px" class="field-input"
+          ${field('權重', `<input type="number" min="1" step="1" value="${t.weight ?? 1}" style="width:50px" class="field-input"
                onchange="updateTaskField('${t.id}','weight',parseFloat(this.value))">`)}
-          ${field('Order', `<input type="number" min="0" step="1" value="${t.order ?? 0}" style="width:50px" class="field-input"
+          ${field('排序', `<input type="number" min="0" step="1" value="${t.order ?? 0}" style="width:50px" class="field-input"
                onchange="updateTaskField('${t.id}','order',parseFloat(this.value))">`)}
-          ${field('Phase', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" onchange="updateTaskField('${t.id}','phase',Number(this.value))">
-            ${PHASES.map(p => `<option value="${p}" ${Number(t.phase)===p?'selected':''}>Phase ${p}</option>`).join('')}
+          ${field('階段', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" onchange="updateTaskField('${t.id}','phase',Number(this.value))">
+            ${PHASES.map(p => `<option value="${p}" ${Number(t.phase)===p?'selected':''}>階段 ${p}</option>`).join('')}
           </select>`)}
-          ${field('Milestone', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" onchange="updateTaskField('${t.id}','requiredByMilestone',Number(this.value))">
+          ${field('里程碑', `<select class="field-select" style="width:auto;padding:5px 8px;font-size:11.5px" onchange="updateTaskField('${t.id}','requiredByMilestone',Number(this.value))">
             ${MILESTONES.map(mm => `<option value="${mm}" ${Number(t.requiredByMilestone)===mm?'selected':''}>M${mm}</option>`).join('')}
           </select>`)}
           <div style="display:flex;gap:6px;padding-bottom:5px">
@@ -2103,12 +2127,12 @@ function renderTaskRow(t) {
         </div>
       </div>
       ${t.status === 'waiting_client' ? `
-      <div style="margin-top:6px;font-size:11.5px;color:var(--amber)">Waiting For：
+      <div style="margin-top:6px;font-size:11.5px;color:var(--amber)">等待內容：
         <input class="field-input" style="display:inline-block;width:auto;min-width:180px;font-size:11.5px;padding:4px 8px" value="${escapeHtml(t.waitingFor || '')}"
                onchange="updateTaskField('${t.id}','waitingFor',this.value)">
       </div>` : ''}
       ${t.status === 'blocked' ? `
-      <div style="margin-top:6px;font-size:11.5px;color:var(--red)">Blocked Reason：
+      <div style="margin-top:6px;font-size:11.5px;color:var(--red)">受阻原因：
         <input class="field-input" style="display:inline-block;width:auto;min-width:180px;font-size:11.5px;padding:4px 8px" value="${escapeHtml(t.blockedReason || '')}"
                onchange="updateTaskField('${t.id}','blockedReason',this.value)">
       </div>` : ''}
@@ -2204,7 +2228,7 @@ function initBackToEdit() { initPanel.step = 'edit'; renderProjectUI(); }
 async function initConfirmApply() {
   const changes = initComputeChanges();
   if (!changes.length) { closeInitPanel(); return; }
-  if (!confirm(`確定要批次更新 ${changes.length} 個 Task 的 Status 與 Progress 嗎？\n此操作不會修改 Weight、Order、Phase、Milestone，也不會修改正式報價。`)) return;
+  if (!confirm(`確定要批次更新 ${changes.length} 個工作項目的狀態與進度嗎？\n此操作不會修改權重、排序、階段、里程碑，也不會修改正式報價。`)) return;
 
   try {
     const quoteRef = db.collection('quotes').doc(currentId);
@@ -2246,7 +2270,7 @@ async function initConfirmApply() {
     currentData.project = currentData.project || {};
     currentData.project[markerField] = true;
 
-    showToast(`✓ 已更新 ${changes.length} 個 Task`);
+    showToast(`✓ 已更新 ${changes.length} 個工作項目`);
     initPanel = { open: false, step: 'edit', draft: {} };
     renderProjectUI(); // 沿用既有 Progress / Milestone Readiness 計算邏輯，不建立第二套公式
   } catch (err) {
@@ -2278,7 +2302,7 @@ function renderInitPanel(m) {
       return `
         <div style="margin-left:14px;margin-bottom:10px;border-left:2px solid var(--ink-10);padding-left:12px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-            <div style="font-size:12.5px;font-weight:600;color:var(--ink)">${escapeHtml(scopeName)} <span style="font-size:11px;color:var(--ink-60);font-weight:400">${groupTasks.length} Tasks</span></div>
+            <div style="font-size:12.5px;font-weight:600;color:var(--ink)">${escapeHtml(scopeName)} <span style="font-size:11px;color:var(--ink-60);font-weight:400">${groupTasks.length} 項</span></div>
             <div style="display:flex;gap:5px;flex-wrap:wrap">
               <button class="btn-copy-link" onclick="initBulkScope('${scopeId}','completed')">全部已完成</button>
               <button class="btn-copy-link" onclick="initBulkScope('${scopeId}','in_progress')">全部進行中</button>
@@ -2292,7 +2316,7 @@ function renderInitPanel(m) {
     return `
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1.5px solid var(--ink-10);margin-bottom:6px">
-          <span class="tag-section-label" style="margin:0;padding:0;border:none">${PHASE_LABELS[phase]} <span style="font-size:11px;color:var(--ink-60);font-weight:400">${tasksInPhase.length} Tasks</span></span>
+          <span class="tag-section-label" style="margin:0;padding:0;border:none">${PHASE_LABELS[phase]} <span style="font-size:11px;color:var(--ink-60);font-weight:400">${tasksInPhase.length} 項</span></span>
           <div style="display:flex;gap:5px;flex-wrap:wrap">
             <button class="btn-copy-link" onclick="initBulkPhase(${phase},'completed')">全部已完成</button>
             <button class="btn-copy-link" onclick="initBulkPhase(${phase},'in_progress')">全部進行中</button>
@@ -2309,7 +2333,7 @@ function renderInitPanel(m) {
       <div style="font-size:12px;color:var(--ink-60);margin-bottom:12px;line-height:1.6">
         此工具只會修改目前「已存在」Task 的 Status 與 Progress。不會建立新 Task、不會展開 Scope，也不會修改 Weight、Order、Phase、Milestone 或報價。所有調整會先暫存在草稿中，按「預覽變更」後才會顯示即將寫入 Firestore 的內容。已停用（active=false）的 Task 不會出現在這裡。
       </div>
-      ${draftTasks.length ? phaseBlocks : '<div class="tag-empty">目前沒有可調整的 Task（僅列出已存在且未停用的 Task）</div>'}
+      ${draftTasks.length ? phaseBlocks : '<div class="tag-empty">目前沒有可調整的工作項目（僅列出已存在且未停用的項目）</div>'}
       <div style="display:flex;gap:8px;margin-top:14px">
         <button class="btn-copy-link" onclick="closeInitPanel()">取消</button>
         ${draftTasks.length ? `<button class="btn-save" style="padding:9px 18px" onclick="initGoPreview()">預覽變更</button>` : ''}
@@ -2335,12 +2359,12 @@ function renderInitTaskRow(t) {
         </div>
       </div>
       ${d.status === 'waiting_client' ? `
-      <div style="margin-top:5px;font-size:11px;color:var(--amber)">Waiting For：
+      <div style="margin-top:5px;font-size:11px;color:var(--amber)">等待內容：
         <input class="field-input" style="display:inline-block;width:auto;min-width:160px;font-size:11px;padding:3px 6px" value="${escapeHtml(d.waitingFor)}"
                onchange="initSetTaskField('${t.id}','waitingFor',this.value)">
       </div>` : ''}
       ${d.status === 'blocked' ? `
-      <div style="margin-top:5px;font-size:11px;color:var(--red)">Blocked Reason：
+      <div style="margin-top:5px;font-size:11px;color:var(--red)">受阻原因：
         <input class="field-input" style="display:inline-block;width:auto;min-width:160px;font-size:11px;padding:3px 6px" value="${escapeHtml(d.blockedReason)}"
                onchange="initSetTaskField('${t.id}','blockedReason',this.value)">
       </div>` : ''}
@@ -2357,7 +2381,7 @@ function renderInitPreview() {
     <div class="card" style="border:2px solid var(--ink)">
       <div class="card-title">預覽變更</div>
       ${changes.length ? `
-      <div style="font-size:13px;color:var(--ink);margin-bottom:10px;font-weight:600">即將更新 ${changes.length} 個 Tasks</div>
+      <div style="font-size:13px;color:var(--ink);margin-bottom:10px;font-weight:600">即將更新 ${changes.length} 個工作項目</div>
       <div class="info-grid" style="margin-bottom:14px">
         <div class="info-box"><div class="info-label">已完成</div><div class="info-value">${dist.completed}</div></div>
         <div class="info-box"><div class="info-label">進行中</div><div class="info-value">${dist.in_progress}</div></div>
@@ -2372,7 +2396,7 @@ function renderInitPreview() {
       <div style="font-size:12px;color:var(--ink-60);background:var(--ink-10);border-radius:8px;padding:10px 12px;margin-bottom:14px;line-height:1.6">
         ⚠ 此操作將批次修改 Task 的 Status 與 Progress（必要時含 Waiting For／Blocked Reason）。<br>
         不會修改 Task 的 Weight、Order、Phase、Milestone，也不會修改正式報價。
-      </div>` : `<div class="tag-empty">目前草稿與現有資料相同，沒有需要更新的 Task。</div>`}
+      </div>` : `<div class="tag-empty">目前草稿與現有資料相同，沒有需要更新的工作項目。</div>`}
       <div style="display:flex;gap:8px">
         <button class="btn-copy-link" onclick="initBackToEdit()">返回修改</button>
         ${changes.length ? `<button class="btn-save" style="padding:9px 18px" onclick="initConfirmApply()">確認套用</button>` : ''}
@@ -2421,9 +2445,9 @@ async function expandScopeToTasks(scopeId) {
   if (scope.tasksGenerated || existingTasks.length) {
     // 三種行為概念：取消／僅新增缺少的預設 Tasks（推薦）／強制重新生成完整一套
     const choice = prompt(
-      '此 Scope 已存在 Development Tasks。\n' +
-      '輸入 "add" ：僅新增缺少的預設 Tasks（推薦，不會重複建立）\n' +
-      '輸入 "force"：強制重新生成完整一套樣板 Tasks（不會刪除既有 Task，但可能產生重複）\n' +
+      '此工作範圍已存在開發工作項目。\n' +
+      '輸入 "add" ：僅新增缺少的預設工作項目（推薦，不會重複建立）\n' +
+      '輸入 "force"：強制重新生成完整一套樣板工作項目（不會刪除既有項目，但可能產生重複）\n' +
       '留空或取消：不執行任何動作',
       'add'
     );
@@ -2432,7 +2456,7 @@ async function expandScopeToTasks(scopeId) {
     if (normalized !== 'add' && normalized !== 'force') { showToast('已取消，未輸入有效指令'); return; }
     mode = normalized;
     if (mode === 'force') {
-      if (!confirm('確定要強制重新生成完整一套 Tasks？既有 Task 不會被刪除，但這會建立一批新的重複樣板任務，請確認這是你要的操作。')) return;
+      if (!confirm('確定要強制重新生成完整一套工作項目？既有項目不會被刪除，但這會建立一批新的重複樣板任務，請確認這是你要的操作。')) return;
     }
   }
 
@@ -2451,7 +2475,7 @@ async function expandScopeToTasks(scopeId) {
   const tasksToCreate = (mode === 'add') ? tpl.filter(t => !existingKeys.has(t.key)) : tpl;
 
   if (mode === 'add' && tasksToCreate.length === 0 && legacyMigrations.length === 0) {
-    showToast('此 Scope 的預設 Tasks 皆已存在，未新增任何項目');
+    showToast('此工作範圍的預設工作項目皆已存在，未新增任何項目');
     return;
   }
 
@@ -2509,7 +2533,7 @@ async function expandScopeToTasks(scopeId) {
       const t = projectTasks.find(pt => pt.id === mig.taskId);
       if (t) t.templateTaskKey = mig.key;
     });
-    const migrationNote = legacyMigrations.length ? `，並補齊 ${legacyMigrations.length} 項舊 Task 的 templateTaskKey` : '';
+    const migrationNote = legacyMigrations.length ? `，並補齊 ${legacyMigrations.length} 項舊工作項目的樣板對應` : '';
     showToast(`✓ 已產生 ${newTasks.length} 項開發任務${migrationNote}`);
     renderProjectUI();
   } catch (err) {
@@ -2523,7 +2547,7 @@ async function addManualScope() {
   const nameEl = document.getElementById('new-scope-name');
   const sourceEl = document.getElementById('new-scope-source');
   const name = (nameEl.value || '').trim();
-  if (!name) { showToast('請輸入 Scope 名稱'); return; }
+  if (!name) { showToast('請輸入工作範圍名稱'); return; }
 
   try {
     const maxOrder = projectScopes.reduce((mx, s) => Math.max(mx, s.order || 0), 0);
@@ -2538,20 +2562,20 @@ async function addManualScope() {
     await ref.set(data);
     projectScopes.push({ id: ref.id, ...data });
     nameEl.value = '';
-    showToast('✓ 已新增 Scope');
+    showToast('✓ 已新增工作範圍');
     renderProjectUI();
   } catch (err) {
     console.error(err);
-    showToast(`⚠ 新增 Scope 失敗：${err.message || err}`);
+    showToast(`⚠ 新增工作範圍失敗：${err.message || err}`);
   }
 }
 
 async function editScopeField(scopeId) {
   const scope = projectScopes.find(s => s.id === scopeId);
   if (!scope) return;
-  const newName = prompt('Scope 名稱：', scope.name);
+  const newName = prompt('工作範圍名稱：', scope.name);
   if (newName === null) return;
-  const newDesc = prompt('Scope 描述（可留空）：', scope.description || '');
+  const newDesc = prompt('工作範圍描述（可留空）：', scope.description || '');
   if (newDesc === null) return;
   try {
     await db.collection('quotes').doc(currentId).collection('scopes').doc(scopeId).update({
@@ -2561,7 +2585,7 @@ async function editScopeField(scopeId) {
     });
     scope.name = newName.trim() || scope.name;
     scope.description = newDesc;
-    showToast('✓ 已更新 Scope');
+    showToast('✓ 已更新工作範圍');
     renderProjectUI();
   } catch (err) {
     console.error(err);
@@ -2592,8 +2616,8 @@ async function deleteScope(scopeId) {
   if (!scope) return;
   const relatedTasks = projectTasks.filter(t => t.scopeId === scopeId);
   const msg = relatedTasks.length
-    ? `確定要刪除 Scope「${scope.name}」嗎？此 Scope 下的 ${relatedTasks.length} 項 Task 也會一併刪除，此操作無法復原。`
-    : `確定要刪除 Scope「${scope.name}」嗎？此操作無法復原。`;
+    ? `確定要刪除工作範圍「${scope.name}」嗎？此範圍下的 ${relatedTasks.length} 個工作項目也會一併刪除，此操作無法復原。`
+    : `確定要刪除工作範圍「${scope.name}」嗎？此操作無法復原。`;
   if (!confirm(msg)) return;
 
   try {
@@ -2603,7 +2627,7 @@ async function deleteScope(scopeId) {
     await batch.commit();
     projectScopes = projectScopes.filter(s => s.id !== scopeId);
     projectTasks = projectTasks.filter(t => t.scopeId !== scopeId);
-    showToast('✓ 已刪除 Scope');
+    showToast('✓ 已刪除工作範圍');
     renderProjectUI();
   } catch (err) {
     console.error(err);
@@ -2615,19 +2639,19 @@ async function deleteScope(scopeId) {
 // ── Task 欄位驗證：擋下無效值，顯示明確錯誤，並重新渲染把 UI 還原成儲存值 ──
 function validateTaskField(field, value) {
   if (field === 'weight') {
-    if (!Number.isFinite(value) || value <= 0) return 'Weight 必須為大於 0 的數字';
+    if (!Number.isFinite(value) || value <= 0) return '權重必須為大於 0 的數字';
   }
   if (field === 'progress') {
-    if (!Number.isFinite(value) || value < 0 || value > 100) return 'Progress 必須為 0～100 之間的數字';
+    if (!Number.isFinite(value) || value < 0 || value > 100) return '進度必須為 0～100 之間的數字';
   }
   if (field === 'order') {
-    if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) return 'Order 必須為 0 以上的整數';
+    if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) return '排序必須為 0 以上的整數';
   }
   if (field === 'phase') {
-    if (!PHASES.includes(Number(value))) return 'Phase 必須為合法的 Phase（1～3）';
+    if (!PHASES.includes(Number(value))) return '階段必須為 1～3';
   }
   if (field === 'requiredByMilestone') {
-    if (!MILESTONES.includes(Number(value))) return 'Required By Milestone 必須為合法的 Milestone（1～3）';
+    if (!MILESTONES.includes(Number(value))) return '所屬里程碑必須為 1～3';
   }
   return null;
 }
@@ -2679,9 +2703,9 @@ async function quickComplete(taskId) {
 async function editTaskField(taskId) {
   const task = projectTasks.find(t => t.id === taskId);
   if (!task) return;
-  const newName = prompt('Task 名稱：', task.name);
+  const newName = prompt('工作項目名稱：', task.name);
   if (newName === null) return;
-  const newDesc = prompt('Task 描述（可留空）：', task.description || '');
+  const newDesc = prompt('工作項目描述（可留空）：', task.description || '');
   if (newDesc === null) return;
   const newNotes = prompt('備註（可留空）：', task.notes || '');
   if (newNotes === null) return;
@@ -2695,7 +2719,7 @@ async function editTaskField(taskId) {
     task.name = newName.trim() || task.name;
     task.description = newDesc;
     task.notes = newNotes;
-    showToast('✓ 已更新 Task');
+    showToast('✓ 已更新工作項目');
     renderProjectUI();
   } catch (err) {
     console.error(err);
@@ -2706,11 +2730,11 @@ async function editTaskField(taskId) {
 async function deleteTask(taskId) {
   const task = projectTasks.find(t => t.id === taskId);
   if (!task) return;
-  if (!confirm(`確定要刪除 Task「${task.name}」嗎？此操作無法復原。`)) return;
+  if (!confirm(`確定要刪除工作項目「${task.name}」嗎？此操作無法復原。`)) return;
   try {
     await db.collection('quotes').doc(currentId).collection('tasks').doc(taskId).delete();
     projectTasks = projectTasks.filter(t => t.id !== taskId);
-    showToast('✓ 已刪除 Task');
+    showToast('✓ 已刪除工作項目');
     renderProjectUI();
   } catch (err) {
     console.error(err);
@@ -2935,7 +2959,7 @@ async function createPaymentPlan() {
     renderProjectUI();
     syncTimelineUI();
     const noticeEl = document.getElementById('paymentStatusNotice');
-    if (noticeEl) noticeEl.innerHTML = `<div style="font-size:11px;color:var(--amber);margin-top:6px">此專案已啟用 Payment Milestone，付款明細請以付款里程碑為準。</div>`;
+    if (noticeEl) noticeEl.innerHTML = `<div style="font-size:11px;color:var(--amber);margin-top:6px">此專案已啟用分期付款，付款明細請以分期付款為準。</div>`;
   } catch (err) {
     console.error(err);
     showToast(`⚠ 建立付款計畫失敗：${err.message || err}`);
@@ -3070,7 +3094,7 @@ function renderPaymentSection() {
   if (!paymentMilestones.length) {
     return `
       <div class="card">
-        <div class="card-title">Payment Milestones</div>
+        <div class="card-title">分期付款</div>
         <div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">尚未建立付款計畫。</div>
         <button class="btn-save" onclick="openPaymentPlanBuilder()">建立付款計畫</button>
       </div>`;
@@ -3091,15 +3115,15 @@ function renderPaymentSection() {
 
   return `
     <div class="card">
-      <div class="card-title">Payment Milestones</div>
+      <div class="card-title">分期付款</div>
 
       <div class="info-grid" style="margin-bottom:14px">
         <div class="info-box"><div class="info-label">目前合約總額</div><div class="info-value">NT$${summary.contractAmount.toLocaleString()}</div></div>
-        <div class="info-box"><div class="info-label">Paid</div><div class="info-value" style="color:var(--green)">NT$${summary.paid.toLocaleString()}</div></div>
-        <div class="info-box"><div class="info-label">Remaining</div><div class="info-value">NT$${summary.remaining.toLocaleString()}</div></div>
-        <div class="info-box"><div class="info-label">Overdue</div><div class="info-value" style="color:${summary.overdue > 0 ? 'var(--red)' : 'var(--ink)'}">NT$${summary.overdue.toLocaleString()}</div></div>
+        <div class="info-box"><div class="info-label">已收款</div><div class="info-value" style="color:var(--green)">NT$${summary.paid.toLocaleString()}</div></div>
+        <div class="info-box"><div class="info-label">未收款</div><div class="info-value">NT$${summary.remaining.toLocaleString()}</div></div>
+        <div class="info-box"><div class="info-label">逾期金額</div><div class="info-value" style="color:${summary.overdue > 0 ? 'var(--red)' : 'var(--ink)'}">NT$${summary.overdue.toLocaleString()}</div></div>
         ${summary.overpaid > 0 ? `<div class="info-box" style="background:var(--amber-light)"><div class="info-label" style="color:#92400e">溢收／待退款</div><div class="info-value" style="color:#92400e">NT$${summary.overpaid.toLocaleString()}</div></div>` : ''}
-        <div class="info-box" style="grid-column:1/-1"><div class="info-label">Next Due</div><div class="info-value" style="font-size:14px">${nextDueText}</div></div>
+        <div class="info-box" style="grid-column:1/-1"><div class="info-label">下一筆到期</div><div class="info-value" style="font-size:14px">${nextDueText}</div></div>
       </div>
 
       ${sorted.map(p => renderPaymentMilestoneRow(p, todayStr)).join('')}
@@ -3188,7 +3212,7 @@ async function submitForAcceptance() {
   if (current.status !== 'not_started') { showToast('⚠ 此專案已經送出過驗收'); return; }
 
   const incompleteCount = projectTasks.filter(t => t.active !== false && t.status !== 'completed').length;
-  const warnMsg = incompleteCount > 0 ? `目前仍有 ${incompleteCount} 個 Task 尚未完成，` : '';
+  const warnMsg = incompleteCount > 0 ? `目前仍有 ${incompleteCount} 個工作項目尚未完成，` : '';
   const dueDateInput = prompt(`${warnMsg}確定要送出驗收嗎？\n可設定預計驗收期限（格式 YYYY-MM-DD，留空可略過）：`, '');
   if (dueDateInput === null) return;
   const trimmed = dueDateInput.trim();
@@ -3199,7 +3223,7 @@ async function submitForAcceptance() {
     const acceptance = { status: 'in_review', submittedAt: firebase.firestore.FieldValue.serverTimestamp(), dueDate: trimmed || null, acceptedAt: null, note: current.note || '' };
     const newLog = {
       id: genActivityId(), type: 'acceptance',
-      content: `已送出驗收${trimmed ? `，預計期限 ${trimmed}` : ''}${incompleteCount > 0 ? `（尚有 ${incompleteCount} 個 Task 未完成）` : ''}`,
+      content: `已送出驗收${trimmed ? `，預計期限 ${trimmed}` : ''}${incompleteCount > 0 ? `（尚有 ${incompleteCount} 個工作項目未完成）` : ''}`,
       createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
     };
     const batch = db.batch();
@@ -3358,7 +3382,7 @@ function renderAcceptanceWarrantySection() {
 
   return `
     <div class="card">
-      <div class="card-title">驗收與保固 Acceptance &amp; Warranty</div>
+      <div class="card-title">驗收與結案（驗收・保固）</div>
       <div class="info-grid" style="margin-bottom:14px">
         <div class="info-box">
           <div class="info-label">驗收狀態</div>
@@ -3374,7 +3398,7 @@ function renderAcceptanceWarrantySection() {
         ${warranty.startDate ? `保固期間：${escapeHtml(warranty.startDate)} ～ ${escapeHtml(warranty.endDate)}（${warranty.durationDays} 天）<br>` : ''}
         ${acceptance.note ? `驗收備註：${escapeHtml(acceptance.note)}<br>` : ''}
         ${warranty.note ? `保固備註：${escapeHtml(warranty.note)}<br>` : ''}
-        <span style="color:var(--ink-30)">原功能 Bug／原 Scope 內調整請記錄於備註或 Timeline；超出 Scope 的新需求請改用 Change Request。</span>
+        <span style="color:var(--ink-30)">原功能 Bug／原工作範圍內調整請記錄於備註或操作紀錄；超出工作範圍的新需求請改用「需求變更」。</span>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${acceptanceActions.join('')}${warrantyActions.join('')}</div>
     </div>`;
@@ -3615,7 +3639,7 @@ async function crCancel(crId) {
 async function crApprove(crId) {
   const cr = changeRequests.find(c => c.id === crId);
   if (!cr || cr.status !== 'proposed') return;
-  if (!confirm(`確定要核准 ${cr.crNumber} 嗎？核准後金額與項目將無法再修改，如需更正請建立新的 Change Request。`)) return;
+  if (!confirm(`確定要核准 ${cr.crNumber} 嗎？核准後金額與項目將無法再修改，如需更正請建立新的需求變更。`)) return;
 
   try {
     const quoteRef = db.collection('quotes').doc(currentId);
@@ -3677,12 +3701,12 @@ async function crApprove(crId) {
 async function createScopeFromCR(crId) {
   const cr = changeRequests.find(c => c.id === crId);
   if (!cr || cr.status !== 'approved') return;
-  if (!currentData.project) { showToast('⚠ 尚未建立專案，無法建立 Scope'); return; }
+  if (!currentData.project) { showToast('⚠ 尚未建立專案，無法建立工作範圍'); return; }
 
   const already = (cr.scopeIds || []).length > 0;
   const confirmMsg = already
-    ? `${cr.crNumber} 已經建立過追加 Scope，確定要再建立一個嗎？`
-    : `確定要為 ${cr.crNumber} 建立追加 Scope「${cr.title}」嗎？（僅建立 Scope，不會自動展開 Task）`;
+    ? `${cr.crNumber} 已經建立過追加工作範圍，確定要再建立一個嗎？`
+    : `確定要為 ${cr.crNumber} 建立追加工作範圍「${cr.title}」嗎？（僅建立工作範圍，不會自動展開工作項目）`;
   if (!confirm(confirmMsg)) return;
 
   try {
@@ -3704,7 +3728,7 @@ async function createScopeFromCR(crId) {
     const newScopeIds = [...(cr.scopeIds || []), scopeRef.id];
     const newLog = {
       id: genActivityId(), type: 'change_request',
-      content: `已從 ${cr.crNumber} 建立追加 Scope：${cr.title}`,
+      content: `已從 ${cr.crNumber} 建立追加工作範圍：${cr.title}`,
       createdAt: firebase.firestore.Timestamp.now(), createdBy: 'me',
     };
 
@@ -3720,12 +3744,12 @@ async function createScopeFromCR(crId) {
     cr.scopeIds = newScopeIds;
     if (!currentData.activityLogs) currentData.activityLogs = [];
     currentData.activityLogs.push(newLog);
-    showToast(`✓ 已建立追加 Scope：${cr.title}`);
+    showToast(`✓ 已建立追加工作範圍：${cr.title}`);
     renderProjectUI();
     syncTimelineUI();
   } catch (err) {
     console.error(err);
-    showToast(`⚠ 建立追加 Scope 失敗：${err.message || err}`);
+    showToast(`⚠ 建立追加工作範圍失敗：${err.message || err}`);
   }
 }
 
@@ -3748,7 +3772,7 @@ function renderChangeRequestSection() {
 
   return `
     <div class="card">
-      <div class="card-title">Change Requests</div>
+      <div class="card-title">需求變更</div>
 
       ${changeRequests.length ? `
       <div class="info-grid" style="margin-bottom:14px">
@@ -3758,7 +3782,7 @@ function renderChangeRequestSection() {
       ${sorted.map(renderCrRow).join('')}
       ` : `<div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">尚未建立變更需求。</div>`}
 
-      <button class="btn-save" onclick="openCrBuilder()">＋ 建立 Change Request</button>
+      <button class="btn-copy-link" onclick="openCrBuilder()">＋ 建立需求變更</button>
     </div>`;
 }
 
@@ -3778,13 +3802,13 @@ function renderCrRow(cr) {
   if (cr.status === 'draft') {
     actions.push(`<button class="btn-copy-link" onclick="editCrDraft('${cr.id}')">編輯</button>`);
     actions.push(`<button class="btn-copy-link" onclick="crSubmitForProposal('${cr.id}')">送出確認</button>`);
-    actions.push(`<button class="btn-copy-link" style="color:var(--red)" onclick="crCancel('${cr.id}')">取消 CR</button>`);
+    actions.push(`<button class="btn-copy-link" style="color:var(--red)" onclick="crCancel('${cr.id}')">取消此需求變更</button>`);
   } else if (cr.status === 'proposed') {
     actions.push(`<button class="btn-copy-link" onclick="crRevertToDraft('${cr.id}')">退回草稿</button>`);
     actions.push(`<button class="btn-copy-link" style="color:var(--green)" onclick="crApprove('${cr.id}')">核准</button>`);
     actions.push(`<button class="btn-copy-link" style="color:var(--red)" onclick="crReject('${cr.id}')">拒絕</button>`);
   } else if (cr.status === 'approved') {
-    actions.push(`<button class="btn-copy-link" onclick="createScopeFromCR('${cr.id}')">建立追加 Scope</button>`);
+    actions.push(`<button class="btn-copy-link" onclick="createScopeFromCR('${cr.id}')">建立追加工作範圍</button>`);
   }
   actions.push(`<button class="btn-copy-link" onclick="toggleGroupCollapse('${detailKey}')">${detailOpen ? '收合' : '查看詳細'}</button>`);
 
@@ -3796,7 +3820,7 @@ function renderCrRow(cr) {
             ${escapeHtml(i.name)}${i.description ? `　${escapeHtml(i.description)}` : ''}
             　<span style="color:${(Number(i.amountDelta)||0)>=0?'var(--green)':'var(--red)'}">${(Number(i.amountDelta)||0)>=0?'+':'-'}NT$${Math.abs(Number(i.amountDelta)||0).toLocaleString()}</span>
           </div>`).join('')}
-        ${(cr.scopeIds && cr.scopeIds.length) ? `<div style="font-size:11px;color:var(--ink-30);margin-top:4px">已建立 ${cr.scopeIds.length} 個追加 Scope</div>` : ''}
+        ${(cr.scopeIds && cr.scopeIds.length) ? `<div style="font-size:11px;color:var(--ink-30);margin-top:4px">已建立 ${cr.scopeIds.length} 個追加工作範圍</div>` : ''}
       </div>` : '';
 
   return `
@@ -3815,7 +3839,7 @@ function renderCrRow(cr) {
             ${durationText ? `　<span style="color:var(--ink-60)">${durationText}</span>` : ''}
           </div>
           ${cr.status === 'approved'
-            ? `<div style="font-size:11px;color:var(--ink-30);margin-top:4px">已核准的變更需求不可直接修改，如需更正請建立新的 Change Request。</div>`
+            ? `<div style="font-size:11px;color:var(--ink-30);margin-top:4px">已核准的變更需求不可直接修改，如需更正請建立新的需求變更。</div>`
             : ''}
           ${itemDetail}
         </div>
@@ -3859,7 +3883,7 @@ function renderCrBuilder() {
 
   return `
     <div class="card" style="border:2px solid var(--ink)">
-      <div class="card-title">${b.id ? '編輯 Change Request' : '建立 Change Request'}</div>
+      <div class="card-title">${b.id ? '編輯需求變更' : '建立需求變更'}</div>
 
       <div class="field-row">
         <div class="field">
@@ -3969,7 +3993,7 @@ function resolveAgreementContractAmount() {
   return { amount: 0, source: 'none' };
 }
 const AGREEMENT_SOURCE_LABELS = {
-  'project.contractAmount': '沿用 Payment Milestone 合約金額快照',
+  'project.contractAmount': '沿用分期付款合約金額快照',
   'quotationTotal': '沿用正式報價金額',
   'officialPrice': '沿用議定金額',
   'manual': '管理者手動輸入',
@@ -4254,7 +4278,7 @@ async function agrBackToDraft(id) {
 }
 async function agrMarkSigned(id) {
   const a = agreements.find(x => x.id === id); if (!a || a.status !== 'ready') return;
-  if (!confirm(`確定要將 ${a.agreementNumber} 標記為「已簽署」嗎？\n簽署後所有合約內容（客戶/承攬方資料、Scope、金額、付款計畫、條款文字）將永久鎖定，不能再編輯，如需更正請建立新的合約。`)) return;
+  if (!confirm(`確定要將 ${a.agreementNumber} 標記為「已簽署」嗎？\n簽署後所有合約內容（客戶/承攬方資料、工作範圍、金額、付款計畫、條款文字）將永久鎖定，不能再編輯，如需更正請建立新的合約。`)) return;
   await agrUpdateStatus(a, 'signed', { signedAt: firebase.firestore.FieldValue.serverTimestamp() }, `${a.agreementNumber} 已簽署`);
 }
 async function agrMarkActive(id) {
@@ -4289,7 +4313,7 @@ async function renderAgreementSection() {
   const el = document.getElementById('agreementSection');
   if (!el) return;
 
-  el.innerHTML = `<div class="card"><div class="card-title">Agreement／合約</div><div class="loading-state" style="padding:40px 0"><div class="spinner"></div>載入合約資料中…</div></div>`;
+  el.innerHTML = `<div class="card"><div class="card-title">合約</div><div class="loading-state" style="padding:40px 0"><div class="spinner"></div>載入合約資料中…</div></div>`;
 
   try {
     const snap = await db.collection('quotes').doc(currentId).collection('agreements').get();
@@ -4297,7 +4321,7 @@ async function renderAgreementSection() {
     renderAgreementUI();
   } catch (err) {
     console.error(err);
-    el.innerHTML = `<div class="card"><div class="card-title">Agreement／合約</div><div class="error-state">⚠ 讀取合約資料失敗：${escapeHtml(err.message || String(err))}</div></div>`;
+    el.innerHTML = `<div class="card"><div class="card-title">合約</div><div class="error-state">⚠ 讀取合約資料失敗：${escapeHtml(err.message || String(err))}</div></div>`;
   }
 }
 
@@ -4311,7 +4335,7 @@ function renderAgreementUI() {
 
   el.innerHTML = `
     <div class="card">
-      <div class="card-title">Agreement／合約</div>
+      <div class="card-title">合約</div>
       ${agreements.length ? `
       <div class="info-grid" style="margin-bottom:14px">
         <div class="info-box"><div class="info-label">草稿／備妥中</div><div class="info-value">${summary.draftCount}</div></div>
@@ -4320,7 +4344,7 @@ function renderAgreementUI() {
       </div>
       ${sorted.map(renderAgreementRow).join('')}
       ` : `<div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">尚未建立合約。此功能不需要先建立專案，任何案件都可以直接建立合約。</div>`}
-      <button class="btn-save" onclick="openAgreementBuilder()">＋ 建立 Agreement</button>
+      <button class="btn-save" onclick="openAgreementBuilder()">＋ 建立合約</button>
     </div>`;
 }
 
@@ -4353,10 +4377,10 @@ function renderAgreementRow(a) {
         <div style="margin-bottom:4px">客戶：${escapeHtml(a.client.name || '—')}${a.client.company ? `／${escapeHtml(a.client.company)}` : ''}</div>
         <div style="margin-bottom:4px">承攬方：${escapeHtml(a.provider.studioName || '—')}</div>
         <div style="margin-bottom:4px">合約金額：NT$${(Number(a.contractAmountSnapshot) || 0).toLocaleString()}（${AGREEMENT_SOURCE_LABELS[a.contractAmountSource] || a.contractAmountSource}）</div>
-        <div style="margin-bottom:4px">Scope（${(a.scopeSnapshot || []).length} 項）：${(a.scopeSnapshot || []).map(s => escapeHtml(s.name)).join('、') || '—'}</div>
+        <div style="margin-bottom:4px">工作範圍（${(a.scopeSnapshot || []).length} 項）：${(a.scopeSnapshot || []).map(s => escapeHtml(s.name)).join('、') || '—'}</div>
         <div style="margin-bottom:4px">付款計畫（${(a.paymentPlanSnapshot || []).length} 期）：${(a.paymentPlanSnapshot || []).map(p => `${escapeHtml(p.title)} ${p.percentage}%`).join('、') || '—'}</div>
         ${a.timeline && (a.timeline.estimatedStartDate || a.timeline.estimatedCompletionDate) ? `<div style="margin-bottom:4px">預計期間：${a.timeline.estimatedStartDate || '—'} ～ ${a.timeline.estimatedCompletionDate || '—'}</div>` : ''}
-        ${locked ? `<div style="color:var(--ink-30);margin-top:6px">此合約內容已鎖定為歷史定案資料，如需更正請建立新的 Agreement。</div>` : ''}
+        ${locked ? `<div style="color:var(--ink-30);margin-top:6px">此合約內容已鎖定為歷史定案資料，如需更正請建立新的合約。</div>` : ''}
       </div>` : '';
 
   return `
@@ -4384,7 +4408,7 @@ function renderAgreementBuilder() {
 
   const scopeRows = b.scopeSnapshot.map((s, idx) => `
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-      <input class="field-input" style="flex:1;min-width:140px" placeholder="Scope 名稱" value="${escapeHtml(s.name)}" onchange="agrSetScopeField(${idx},'name',this.value)">
+      <input class="field-input" style="flex:1;min-width:140px" placeholder="工作範圍名稱" value="${escapeHtml(s.name)}" onchange="agrSetScopeField(${idx},'name',this.value)">
       <input class="field-input" style="flex:1;min-width:140px" placeholder="說明（可留空）" value="${escapeHtml(s.description || '')}" onchange="agrSetScopeField(${idx},'description',this.value)">
       <button class="btn-copy-link" style="color:var(--red)" onclick="agrRemoveScopeRow(${idx})">刪除</button>
     </div>`).join('');
@@ -4405,7 +4429,7 @@ function renderAgreementBuilder() {
 
   return `
     <div class="card" style="border:2px solid var(--ink)">
-      <div class="card-title">${b.id ? '編輯 Agreement 草稿' : '建立 Agreement'}</div>
+      <div class="card-title">${b.id ? '編輯合約草稿' : '建立合約'}</div>
 
       <div style="margin:6px 0 10px;font-size:12px;color:var(--ink-60)">客戶／委託方</div>
       <div class="field-row">
@@ -4422,7 +4446,7 @@ function renderAgreementBuilder() {
       </div>
       <div class="field"><label class="field-label">地址</label><input class="field-input" value="${escapeHtml(b.client.address)}" onchange="agrSetField('client.address',this.value)"></div>
 
-      <div style="margin:14px 0 10px;font-size:12px;color:var(--ink-60)">承攬方（來自 Studio 設定，可個別覆寫）</div>
+      <div style="margin:14px 0 10px;font-size:12px;color:var(--ink-60)">承攬方（來自系統設定，可個別覆寫）</div>
       <div class="field-row">
         <div class="field"><label class="field-label">工作室名稱</label><input class="field-input" value="${escapeHtml(b.provider.studioName)}" onchange="agrSetField('provider.studioName',this.value)"></div>
         <div class="field"><label class="field-label">統一編號</label><input class="field-input" value="${escapeHtml(b.provider.taxId)}" onchange="agrSetField('provider.taxId',this.value)"></div>
@@ -4432,7 +4456,7 @@ function renderAgreementBuilder() {
       <div style="margin:14px 0 10px;font-size:12px;color:var(--ink-60)">專案</div>
       <div class="field"><label class="field-label">專案名稱</label><input class="field-input" value="${escapeHtml(b.projectName)}" onchange="agrSetField('projectName',this.value)"></div>
 
-      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">工作內容／Scope：</div>
+      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">工作內容／工作範圍：</div>
       ${scopeRows || '<div style="font-size:11.5px;color:var(--ink-30);margin-bottom:8px">尚無項目，可手動新增</div>'}
       <button class="btn-copy-link" onclick="agrAddScopeRow()">＋ 新增項目</button>
 
@@ -4452,7 +4476,7 @@ function renderAgreementBuilder() {
 
       <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">合約條款（可編輯，皆有預設文字）</div>
       <div class="field"><label class="field-label">付款條件</label><textarea class="field-textarea" onchange="agrSetField('paymentTermsText',this.value)">${escapeHtml(b.paymentTermsText)}</textarea></div>
-      <div class="field"><label class="field-label">修改與追加需求（Change Request）條款</label><textarea class="field-textarea" onchange="agrSetField('changeRequestPolicy',this.value)">${escapeHtml(b.changeRequestPolicy)}</textarea></div>
+      <div class="field"><label class="field-label">修改與追加需求（需求變更）條款</label><textarea class="field-textarea" onchange="agrSetField('changeRequestPolicy',this.value)">${escapeHtml(b.changeRequestPolicy)}</textarea></div>
       <div class="field"><label class="field-label">驗收方式</label><textarea class="field-textarea" onchange="agrSetField('acceptancePolicy',this.value)">${escapeHtml(b.acceptancePolicy)}</textarea></div>
       <div class="field"><label class="field-label">保固／維護條件</label><textarea class="field-textarea" onchange="agrSetField('warrantyPolicy',this.value)">${escapeHtml(b.warrantyPolicy)}</textarea></div>
       <div class="field"><label class="field-label">第三方服務費說明</label><textarea class="field-textarea" onchange="agrSetField('thirdPartyFeeNotice',this.value)">${escapeHtml(b.thirdPartyFeeNotice)}</textarea></div>
@@ -4700,6 +4724,168 @@ function copyQuotationLink() {
     prompt('請手動複製此連結：', url);
   });
 }
+
+// ══════════════════════════════════════════════════
+//  後台流程與介面整理 v1：流程導覽、下一步建議、正式報價摘要
+//  只讀取 currentData／agreements／paymentMilestones 等既有資料來顯示，
+//  不寫入 Firestore、不改任何狀態值；判斷邏輯在 admin-workflow.js（NicocoWorkflow）。
+// ══════════════════════════════════════════════════
+const wfLoad = { agreements: false, project: false };
+
+function wfContext() {
+  let paymentSummary = null;
+  try { if (currentData && currentData.project && wfLoad.project) paymentSummary = computePaymentSummary(); } catch (e) { paymentSummary = null; }
+  return {
+    quoteId: currentId,
+    agreementsLoaded: wfLoad.agreements,
+    agreements,
+    projectLoaded: wfLoad.project,
+    paymentMilestones,
+    paymentSummary,
+    now: Date.now(),
+  };
+}
+
+function wfScrollTo(id) {
+  const el = document.getElementById(id) || document.getElementById('projectSection');
+  if (!el) return;
+  // 收合中的區塊先展開，避免捲到看不見內容的地方
+  const fold = el.matches && el.matches('details') ? el : (el.querySelector && el.querySelector(':scope > .card > details.fold'));
+  if (fold && !fold.open) fold.open = true;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  el.classList.remove('wf-flash'); void el.offsetWidth; el.classList.add('wf-flash');
+}
+
+function renderWorkflowPanel() {
+  const el = document.getElementById('workflowPanel');
+  if (!el || !currentData || !window.NicocoWorkflow) return;
+  const wf = NicocoWorkflow.compute(currentData, wfContext());
+  const MARK = { done: '✓', current: '●', todo: '○', unknown: '？', na: '－', attention: '！' };
+  const steps = wf.stages.map((s, i) => `
+    <li>
+      <button type="button" class="wf-step is-${s.state}${s.focus ? ' is-focus' : ''}" onclick="wfScrollTo('${s.target}')"
+              aria-label="${escapeHtml(s.label)}：${escapeHtml(s.stateText)}，${escapeHtml(s.detail)}">
+        <span class="wf-step-name"><span class="wf-step-mark" aria-hidden="true">${MARK[s.state] || ''}</span>${escapeHtml(s.label)}</span>
+        <span class="wf-step-state">${escapeHtml(s.stateText)}・${escapeHtml(s.detail)}</span>
+      </button>
+    </li>${i < wf.stages.length - 1 ? '<li class="wf-arrow" aria-hidden="true">→</li>' : ''}`).join('');
+  const n = wf.next;
+  let actionHtml = '';
+  if (n && n.action) {
+    actionHtml = n.action.type === 'link'
+      ? `<a class="wf-btn-primary" href="${escapeHtml(n.action.href)}">${escapeHtml(n.action.label)} →</a>`
+      : `<button type="button" class="wf-btn-primary" onclick="wfScrollTo('${n.action.target}')">${escapeHtml(n.action.label)} ↓</button>`;
+  }
+  el.innerHTML = `
+    <div class="wf-panel">
+      <div class="wf-title">案件流程</div>
+      <ol class="wf-steps">${steps}</ol>
+      ${n ? `
+      <div class="wf-next">
+        <div style="flex:1;min-width:220px">
+          <div class="wf-next-label">下一步建議（操作指引，不會限制其他操作）</div>
+          <div class="wf-next-title">${escapeHtml(n.title)}</div>
+          <div class="wf-next-desc">${escapeHtml(n.desc)}</div>
+          ${n.notes && n.notes.length ? `<ul class="wf-next-notes">${n.notes.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>` : ''}
+        </div>
+        ${actionHtml}
+      </div>` : ''}
+    </div>`;
+}
+
+// ── 正式報價摘要：依序呈現「需求依據 → 報價明細 → 價格 → 發送 → 客戶回覆」；實際編輯仍在 quote-edit.html ──
+function renderQuotationSection() {
+  const el = document.getElementById('quotationSection');
+  if (!el || !currentData || !window.NicocoWorkflow) return;
+  const q = currentData;
+  const f = NicocoWorkflow.quotationFacts(q, Date.now());
+  const c = f.confirmed;
+  const editHref = `quote-edit.html?id=${encodeURIComponent(currentId)}`;
+
+  let basis;
+  if (c) {
+    const s = c.summary || {};
+    basis = `已確認第 ${escapeHtml(c.revision)} 版：納入 ${Number(s.includedCount) || 0}・排除 ${Number(s.excludedCount) || 0}・待人工估價 ${Number(s.manualPricingCount) || 0}`;
+  } else if (q.requirementSnapshot) {
+    basis = q.requirementReviewDraft ? '需求審核進行中，尚未確認' : '需求尚未審核';
+  } else {
+    basis = '舊案件（無需求書），沿用既有報價方式';
+  }
+  let basedOn = '—';
+  if (f.hasQuote) basedOn = f.basedOnRevision ? `第 ${escapeHtml(f.basedOnRevision)} 版需求` : (c ? '不是依確認需求產生' : '既有報價方式');
+
+  let totalText = '尚未建立';
+  if (f.hasQuote) {
+    totalText = `NT$${(Number(q.quotationTotal) || 0).toLocaleString()}`;
+    if (f.pending) totalText += `（另有 ${f.pending} 項待填價格，尚未計入）`;
+  }
+  let statusText = f.statusText;
+  if (f.expired) statusText += '（已過有效期限）';
+  if (f.status === 'sent' && !f.expired) statusText += '・等待客戶回覆';
+
+  const validText = f.validMs !== null ? new Date(f.validMs).toLocaleDateString('zh-TW') : '未設定';
+  const notes = [];
+  if (f.revisionStale) notes.push(`需求已重新確認為第 ${escapeHtml(c.revision)} 版，報價仍引用第 ${escapeHtml(f.basedOnRevision)} 版。是否重新產生明細需在正式報價頁主動確認，不會自動覆寫。`);
+  if (f.notFromConfirmed && f.status !== 'accepted') notes.push('需求已確認，但目前報價明細不是依確認需求產生；可在正式報價頁選擇是否重新產生。');
+  if (f.pending) notes.push(`有 ${f.pending} 項「待填價格」，填寫完成前無法發送給客戶。`);
+  if (q.requirementSnapshot && !c && f.hasQuote && f.status !== 'accepted') notes.push('需求尚未審核；也可以沿用既有方式直接報價。');
+  if (f.status === 'accepted') notes.push('客戶已接受，正式報價維持鎖定；如需變更請使用「需求變更」或建立新的報價版本。');
+
+  const primaryLabel = !f.hasQuote ? '建立正式報價' : (f.status === 'accepted' ? '查看正式報價（已鎖定）' : '前往正式報價');
+  el.innerHTML = `
+    <div class="card">
+      <div class="qs-grid">
+        <div class="qs-box"><div class="qs-label">① 需求依據</div><div class="qs-value">${basis}</div></div>
+        <div class="qs-box"><div class="qs-label">② 報價明細依據</div><div class="qs-value">${basedOn}${f.hasQuote ? `・${f.items.length} 項` : ''}</div></div>
+        <div class="qs-box"><div class="qs-label">③ 報價總額</div><div class="qs-value">${totalText}</div></div>
+        <div class="qs-box"><div class="qs-label">④⑤ 報價狀態</div><div class="qs-value">${escapeHtml(statusText)}</div></div>
+        <div class="qs-box"><div class="qs-label">有效期限</div><div class="qs-value">${escapeHtml(validText)}${f.expired ? '（已過期）' : ''}</div></div>
+        <div class="qs-box"><div class="qs-label">付款條件</div><div class="qs-value">${escapeHtml(q.paymentTerms || '—')}</div></div>
+      </div>
+      ${notes.length ? `<div class="qs-note">${notes.map(t => `・${t}`).join('<br>')}</div>` : ''}
+      <div class="qs-actions">
+        <a class="wf-btn-primary" href="${editHref}">${primaryLabel} →</a>
+        ${f.hasQuote ? `<button type="button" class="wf-btn-secondary" onclick="copyQuotationLink()">🔗 複製客戶連結</button>` : ''}
+        ${!c && q.requirementSnapshot ? `<button type="button" class="wf-btn-secondary" onclick="wfScrollTo('reviewSection')">前往需求審核</button>` : ''}
+      </div>
+    </div>`;
+}
+
+let wfTimer = null;
+let wfHashDone = false;
+function scheduleWorkflowRender() {
+  if (wfTimer) return;
+  wfTimer = setTimeout(() => {
+    wfTimer = null;
+    try { renderQuotationSection(); renderWorkflowPanel(); } catch (e) { console.error('workflow render failed', e); }
+    // 從其他頁面帶 #區塊 進來（例如正式報價頁的「準備合約」），等該區塊載入後再捲動過去
+    if (!wfHashDone && location.hash) {
+      const id = decodeURIComponent(location.hash.slice(1));
+      const ready = (id !== 'agreementSection' || wfLoad.agreements) && (id !== 'projectSection' || wfLoad.project);
+      if (ready && document.getElementById(id)) { wfHashDone = true; wfScrollTo(id); }
+    }
+  }, 0);
+}
+
+// 既有的區塊渲染函式維持原樣，只在它們執行後順便更新流程導覽（不改原本行為）
+(function installWorkflowHooks() {
+  const wrap = (name, after) => {
+    const orig = window[name];
+    if (typeof orig !== 'function') return;
+    window[name] = function () {
+      const r = orig.apply(this, arguments);
+      if (r && typeof r.then === 'function') r.then(() => { after && after(); scheduleWorkflowRender(); }, () => scheduleWorkflowRender());
+      else { after && after(); scheduleWorkflowRender(); }
+      return r;
+    };
+  };
+  wrap('renderDetail');
+  wrap('renderReviewSection');
+  wrap('renderProjectSection', () => { if (!currentData || !currentData.project) wfLoad.project = true; });
+  wrap('renderProjectUI', () => { wfLoad.project = true; });
+  wrap('renderAgreementUI', () => { wfLoad.agreements = true; });
+  wrap('syncTimelineUI');
+})();
 
 // ══════════════════════════════════════════════════
 //  AUTH GUARD

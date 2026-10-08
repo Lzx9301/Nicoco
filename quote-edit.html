@@ -13,6 +13,8 @@
 <script src="quotation-shared.js"></script>
 <!-- Requirement Review v1：依 confirmedRequirements 初始化正式報價明細（只用已存下的估價區間，不重新計價） -->
 <script src="requirement-review.js"></script>
+<!-- 後台流程與介面整理 v1：報價相關判斷（待填價格、需求版本、有效期限）共用 -->
+<script src="admin-workflow.js"></script>
 <script>
 const FB_CONFIG = {
   apiKey:            'AIzaSyD7LyLGlpY-FiSnEIzfwolg0aJCfDmlHwY',
@@ -288,6 +290,7 @@ body {
   .qi-table td { border-bottom: none; padding: 4px 0; }
 }
 </style>
+<link rel="stylesheet" href="admin-ui.css">
 </head>
 <body>
 
@@ -297,11 +300,12 @@ body {
       <div class="header-logo-mark">W</div>
       Website CRM
     </a>
-    <nav style="display:flex;gap:16px">
-      <a class="nav-link" href="dashboard.html">Dashboard</a>
-      <a class="nav-link active" href="quote-admin.html">案件</a>
-      <a class="nav-link" href="settings.html">設定</a>
-        </nav>
+    <nav class="admin-nav" aria-label="後台主選單">
+      <a class="nav-link" href="dashboard.html">總覽</a>
+      <a class="nav-link active" href="quote-admin.html" title="需求、報價、合約、專案與收款都在各案件內操作">案件管理</a>
+      <a class="nav-link" href="dashboard.html#sec-payments" title="總覽頁的付款追蹤區塊">收款追蹤</a>
+      <a class="nav-link" href="settings.html">系統設定</a>
+    </nav>
   </div>
   <div class="header-right">
     <span class="header-email" id="headerEmail"></span>
@@ -409,29 +413,54 @@ function regenerateFromConfirmed() {
   recalcTotals();
   renderRequirementBanner();
   markDirty();
-  showToast('✓ 已依確認需求重新產生報價草稿，確認金額後請按「儲存正式報價」');
+  showToast('✓ 已依確認需求重新產生報價草稿，確認金額後請按「儲存草稿」');
 }
 
 function renderRequirementBanner() {
   const el = document.getElementById('requirementBanner');
   if (!el) return;
-  const c = currentData && currentData.confirmedRequirements;
-  if (!c) { el.innerHTML = ''; return; }
-  const s = c.summary || {};
-  const pending = pendingPricingCount();
-  const hasSaved = (currentData.quotationItems || []).length > 0;
-  const stale = itemsFromRevision && itemsFromRevision !== c.revision;
-  const wantRegen = new URLSearchParams(window.location.search).get('regen') === '1';
-  el.innerHTML = `
-    <div style="background:var(--accent-light);border:1px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.7;margin-bottom:16px">
-      <strong>${itemsFromRevision ? `本正式報價依據 Requirement Review Revision ${escapeHtml(itemsFromRevision)}` : `此案件的需求已確認（Revision ${escapeHtml(c.revision)}），目前的報價明細不是由確認需求產生`}</strong>
-      <div style="font-size:12px">確認需求 ${Number(s.includedCount) || 0} 項・排除 ${Number(s.excludedCount) || 0} 項・待人工估價 ${Number(s.manualPricingCount) || 0} 項</div>
-      ${stale ? `<div style="font-size:12px;color:#92400e">目前有效的需求確認版本是 Revision ${escapeHtml(c.revision)}，與這份報價依據的版本不同。</div>` : ''}
-      ${pending ? `<div style="font-size:12px;color:#92400e;font-weight:600">尚有 ${pending} 項正式需求未完成定價（標示「待填價格」）。全部填寫後才能將報價設為「已送出」。</div>` : ''}
-      ${hasSaved && !isQuotationAccepted() ? `
-        <div style="margin-top:6px;font-size:12px">本案件已有正式報價明細。需求確認不會自動覆寫現有報價。</div>
-        <button type="button" onclick="regenerateFromConfirmed()" style="font:inherit;font-size:12.5px;margin-top:6px;padding:6px 14px;border-radius:8px;cursor:pointer;border:1.5px solid ${wantRegen ? '#1e40af' : '#bfdbfe'};background:#fff;color:#1e40af">依確認需求重新產生報價草稿</button>` : ''}
-    </div>`;
+  const q = currentData || {};
+  const c = q.confirmedRequirements;
+  const box = 'border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.7;margin:14px 0 12px';
+  const detailHref = `quote-detail.html?id=${encodeURIComponent(currentId)}#reviewSection`;
+  if (c) {
+    const s = c.summary || {};
+    const stale = itemsFromRevision && Number(itemsFromRevision) !== Number(c.revision);
+    el.innerHTML = `
+      <div style="${box};background:var(--accent-light);border:1px solid #bfdbfe;color:#1e40af">
+        <strong>需求審核：已確認第 ${escapeHtml(c.revision)} 版</strong>
+        <div style="font-size:12px">已納入 ${Number(s.includedCount) || 0} 項・排除 ${Number(s.excludedCount) || 0} 項・待人工估價 ${Number(s.manualPricingCount) || 0} 項</div>
+        <div style="font-size:12px">${itemsFromRevision ? `本正式報價依據：需求審核第 ${escapeHtml(itemsFromRevision)} 版` : '目前的報價明細不是由確認需求產生（例如需求審核前就建立的報價）'}</div>
+        ${stale ? `<div style="font-size:12px;color:#92400e;font-weight:600">目前有效的需求確認版本是第 ${escapeHtml(c.revision)} 版，與這份報價依據的版本不同。</div>` : ''}
+        ${q.requirementReviewDraft ? `<div style="font-size:12px;color:#92400e">需求審核目前有尚未確認的工作稿（重新審核中）。<a href="${detailHref}" style="color:inherit">前往需求審核</a></div>` : ''}
+      </div>`;
+  } else if (q.requirementSnapshot) {
+    el.innerHTML = `
+      <div style="${box};background:var(--amber-light);border:1px solid #fde68a;color:#92400e">
+        <strong>需求尚未確認</strong>
+        <div style="font-size:12px">建議先完成需求審核，報價明細就能依正式需求產生；也可以沿用既有方式直接報價。</div>
+        <a href="${detailHref}" class="btn-copy-link" style="margin-top:8px;text-decoration:none;padding:6px 14px">前往需求審核 →</a>
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <div style="${box};background:var(--ink-10);color:var(--ink-60)">
+        <strong style="color:var(--ink)">舊案件（沒有需求書）</strong>
+        <div style="font-size:12px">沿用既有報價方式：明細預設帶入基礎建置費與加選功能，請逐項確認金額。</div>
+      </div>`;
+  }
+
+  // ② 重新產生報價明細：只在已有儲存的明細時出現，必須由 Admin 主動按下並再次確認
+  const regen = document.getElementById('regenArea');
+  if (regen) {
+    const hasSaved = (q.quotationItems || []).length > 0;
+    const wantRegen = new URLSearchParams(window.location.search).get('regen') === '1';
+    const stale = c && itemsFromRevision && Number(itemsFromRevision) !== Number(c.revision);
+    regen.innerHTML = (c && hasSaved && !isQuotationAccepted()) ? `
+      <div style="font-size:12px;color:var(--ink-60);line-height:1.7;margin-bottom:12px;padding:10px 12px;border:1.5px dashed ${wantRegen || stale || !itemsFromRevision ? '#93c5fd' : 'var(--ink-10)'};border-radius:10px">
+        本案件已有正式報價明細。需求確認不會自動覆寫現有報價。
+        <button type="button" onclick="regenerateFromConfirmed()" style="font:inherit;font-size:12.5px;margin-left:6px;padding:6px 14px;border-radius:8px;cursor:pointer;border:1.5px solid ${wantRegen ? '#1e40af' : '#bfdbfe'};background:#fff;color:#1e40af">依確認需求重新產生報價草稿</button>
+      </div>` : (c && !hasSaved ? `<div style="font-size:12px;color:var(--ink-60);margin-bottom:10px">明細已依確認需求第 ${escapeHtml(itemsFromRevision || c.revision)} 版初始化，可自由調整後再儲存。</div>` : '');
+  }
 }
 
 function buildDefaultItems(q) {
@@ -504,7 +533,7 @@ function renderPage() {
     <!-- Breadcrumb -->
     <nav class="breadcrumb">
       <span>🏠</span>
-      <a href="dashboard.html">Dashboard</a>
+      <a href="dashboard.html">總覽</a>
       <span class="breadcrumb-sep">/</span>
       <span>📋</span>
       <a href="quote-admin.html">案件管理</a>
@@ -519,14 +548,15 @@ function renderPage() {
     <!-- Back buttons -->
     <div class="back-buttons">
       <a class="back-btn" href="quote-detail.html?id=${encodeURIComponent(currentId)}">← 返回案件詳情</a>
-      <a class="back-btn" href="dashboard.html">🏠 返回工作台</a>
+      <a class="back-btn" href="dashboard.html">🏠 返回總覽</a>
     </div>
 
-    <!-- Requirement Review v1：這份報價依據的需求確認版本 -->
-    <div id="requirementBanner"></div>
+    <!-- 報價流程進度（依實際報價狀態顯示） -->
+    <div id="quoteFlowBar"></div>
 
-    <!-- 客戶基本資料（唯讀） -->
-    <div class="card">
+    <!-- ① 確認需求依據 -->
+    <div class="card" id="step-basis">
+      <div class="step-title"><span class="flow-no">1</span>確認需求依據</div>
       <div class="quote-header">
         <div>
           <div class="qh-id">${escapeHtml(q.quoteId || currentId)}</div>
@@ -535,23 +565,29 @@ function renderPage() {
         </div>
         <span class="status-badge qstatus-${qStatus}" id="qStatusBadge">${QSTATUS_LABELS[qStatus]}</span>
       </div>
-      <div class="info-grid">
-        <div class="info-box"><div class="info-label">系統估算價格</div><div class="info-value">${fmtPriceRange(q)}</div></div>
-        <div class="info-box"><div class="info-label">預估工期</div><div class="info-value">${escapeHtml(q.duration || '—')}</div></div>
-      </div>
-      <div class="tag-section">
-        <div class="tag-section-label">加選功能（系統估價時選擇）</div>
-        ${selectedTags ? `<div class="tags">${selectedTags}</div>` : '<div class="tag-empty">無</div>'}
-      </div>
-      <div class="tag-section">
-        <div class="tag-section-label">需評估項目</div>
-        ${evalTags ? `<div class="tags">${evalTags}</div>` : '<div class="tag-empty">無</div>'}
-      </div>
+      <!-- Requirement Review v1：這份報價依據的需求確認版本 -->
+      <div id="requirementBanner"></div>
+      <details class="fold">
+        <summary>估價系統資料 <span class="fold-hint">（系統估算價格、工期、加選與需評估項目）</span></summary>
+        <div class="info-grid">
+          <div class="info-box"><div class="info-label">系統估算價格</div><div class="info-value">${fmtPriceRange(q)}</div></div>
+          <div class="info-box"><div class="info-label">預估工期</div><div class="info-value">${escapeHtml(q.duration || '—')}</div></div>
+        </div>
+        <div class="tag-section">
+          <div class="tag-section-label">加選功能（系統估價時選擇）</div>
+          ${selectedTags ? `<div class="tags">${selectedTags}</div>` : '<div class="tag-empty">無</div>'}
+        </div>
+        <div class="tag-section">
+          <div class="tag-section-label">需評估項目</div>
+          ${evalTags ? `<div class="tags">${evalTags}</div>` : '<div class="tag-empty">無</div>'}
+        </div>
+      </details>
     </div>
 
-    <!-- 正式報價項目 -->
-    <div class="card">
-      <div class="card-title">正式報價項目</div>
+    <!-- ② 建立報價明細 -->
+    <div class="card" id="step-items">
+      <div class="step-title"><span class="flow-no">2</span>建立報價明細 <span class="step-sub">既有明細不會被自動覆寫</span></div>
+      <div id="regenArea"></div>
       <table class="qi-table">
         <thead>
           <tr>
@@ -566,7 +602,12 @@ function renderPage() {
         <tbody id="qiTableBody"></tbody>
       </table>
       <button class="qi-add-btn" onclick="addItem()">＋ 新增項目</button>
+    </div>
 
+    <!-- ③ 檢查價格與報價條件 -->
+    <div class="card" id="step-price">
+      <div class="step-title"><span class="flow-no">3</span>檢查價格與報價條件</div>
+      <div id="priceCheck"></div>
       <div class="totals-box">
         <div class="totals-row">
           <span class="t-label">項目小計</span>
@@ -577,34 +618,22 @@ function renderPage() {
           <input class="t-input" id="f-discount" type="number" value="${q.quotationDiscount ?? 0}" oninput="recalcTotals()">
         </div>
         <div class="totals-row editable">
-          <span class="t-label">稅金（輸入金額，例如 5%稅自行計算後填入）</span>
+          <span class="t-label">稅額（輸入金額，例如 5% 稅自行計算後填入）</span>
           <input class="t-input" id="f-tax" type="number" value="${q.quotationTax ?? 0}" oninput="recalcTotals()">
         </div>
         <div class="totals-row grand">
           <span class="t-label">總計</span>
           <span class="t-value" id="sumTotal">${fmtMoney(0)}</span>
         </div>
+        <div id="pendingTotalNote" style="font-size:12px;color:#92400e;text-align:right"></div>
       </div>
-    </div>
-
-    <!-- 報價條件 -->
-    <div class="card">
-      <div class="card-title">報價條件</div>
-      <div class="field-row">
+      <div class="field-row" style="margin-top:18px">
         <div class="field">
-          <label class="field-label">報價狀態（quotationStatus）</label>
-          <select class="field-select" id="f-quotationStatus">
-            ${QSTATUS_ORDER.map(s => `<option value="${s}" ${qStatus===s?'selected':''}>${QSTATUS_LABELS[s]}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field">
-          <label class="field-label">報價有效期限（validUntil）</label>
+          <label class="field-label" for="f-validUntil">報價有效期限</label>
           <input class="field-input" id="f-validUntil" type="date" value="${tsToDateInput(q.validUntil)}">
         </div>
-      </div>
-      <div class="field-row">
-        <div class="field full">
-          <label class="field-label">付款條件（paymentTerms）</label>
+        <div class="field">
+          <label class="field-label" for="f-paymentTerms">付款條件</label>
           <select class="field-select" id="f-paymentTerms" onchange="onPaymentTermsChange()">
             ${PAYMENT_TERMS_PRESETS.map(p => `<option value="${p}" ${(q.paymentTerms||PAYMENT_TERMS_PRESETS[0])===p?'selected':''}>${p}</option>`).join('')}
           </select>
@@ -615,23 +644,64 @@ function renderPage() {
       </div>
       <div class="field-row">
         <div class="field full">
-          <label class="field-label">報價備註（quotationNote）</label>
+          <label class="field-label" for="f-quotationNote">報價備註（客戶看得到）</label>
           <textarea class="field-textarea" id="f-quotationNote" placeholder="例如：報價不含後續每年主機/網域續費，需另計…">${escapeHtml(q.quotationNote || '')}</textarea>
         </div>
       </div>
       ${q.quotationUpdatedAt ? `<div style="font-size:11px;color:var(--ink-30);margin-top:4px">上次更新：${fmtDate(q.quotationUpdatedAt)}</div>` : ''}
     </div>
 
-    <div class="save-bar">
-      <span class="save-status" id="saveStatus"></span>
-      <button class="btn-copy-link" onclick="copyQuotationLink()" id="copyLinkBtn">🔗 複製客戶連結</button>
-      <button class="btn-save" id="saveBtn" onclick="saveQuotation()">儲存正式報價</button>
+    <!-- ④ 儲存草稿　⑤ 發送正式報價（兩個不同操作，發送前會再檢查一次） -->
+    <div class="card" id="step-send">
+      <div class="step-title"><span class="flow-no">4</span>儲存草稿　<span class="flow-no">5</span>發送正式報價</div>
+      <div id="sendArea"></div>
+      <div class="save-bar" style="position:static;justify-content:flex-start;margin-top:6px">
+        <span class="save-status" id="saveStatus"></span>
+      </div>
+      <details class="fold qf-danger-zone" id="qeAdvanced">
+        <summary>進階：手動設定報價狀態 <span class="fold-hint">（例如客戶以電話／Email 回覆時由管理者代為標記）</span></summary>
+        <div style="font-size:12px;color:var(--ink-60);line-height:1.7;margin-bottom:10px">
+          選擇狀態後按「依所選狀態儲存」。標記為「已接受」會建立不可修改的接受紀錄並鎖定報價；有待填價格時無法設為「已送出」或「已接受」。
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="f-quotationStatus">報價狀態</label>
+            <select class="field-select" id="f-quotationStatus">
+              ${QSTATUS_ORDER.map(s => `<option value="${s}" ${qStatus===s?'selected':''}>${QSTATUS_LABELS[s]}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field" style="justify-content:flex-end">
+            <button class="btn-copy-link" id="saveBtn" onclick="saveQuotation()">依所選狀態儲存</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <!-- ⑥ 等待客戶回覆 -->
+    <div class="card" id="step-response">
+      <div class="step-title"><span class="flow-no">6</span>客戶回覆</div>
+      <div id="responseArea"></div>
+      <div class="qs-actions" style="margin-top:10px">
+        <button class="btn-copy-link" onclick="copyQuotationLink()" id="copyLinkBtn">🔗 複製客戶連結</button>
+      </div>
+    </div>
+
+    <!-- ⑦ 進入合約階段 -->
+    <div class="card" id="step-contract">
+      <div class="step-title"><span class="flow-no">7</span>進入合約階段</div>
+      <div id="contractArea"></div>
     </div>`;
 
   renderItemsTable();
   recalcTotals();
   renderRequirementBanner();
   applyAcceptedLock();
+  renderQuoteFlow();
+  // 發送前檢查畫面開著時，有效期限／付款條件／備註變動也即時更新
+  ['f-validUntil','f-paymentTerms','f-paymentTermsCustom','f-quotationNote'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { if (sendReviewOpen) renderQuoteFlow(); });
+  });
 
   // 監聽欄位變動，標記 dirty
   ['f-discount','f-tax','f-quotationStatus','f-validUntil','f-paymentTerms','f-paymentTermsCustom','f-quotationNote']
@@ -662,6 +732,245 @@ function applyAcceptedLock() {
   }
 }
 
+// ══════════════════════════════════════════════════
+//  後台流程與介面整理 v1：報價操作順序
+//  「儲存草稿」與「發送正式報價」是兩個不同按鈕；兩者最後都呼叫既有的 saveQuotation()，
+//  只是先把報價狀態設成 draft／sent。所有既有的安全檢查（已接受鎖定、待填價格阻擋、
+//  安全連結 token、公開投影 batch）都在 saveQuotation() 內，完全沒有移除。
+// ══════════════════════════════════════════════════
+let sendReviewOpen = false;
+let flowBusy = false;
+
+function savedStatus() { return (currentData && currentData.quotationStatus) || 'draft'; }
+
+function currentTotals() {
+  const subtotal = items.reduce((sum, i) => sum + (Number(i.subtotal) || 0), 0);
+  const discount = Number(document.getElementById('f-discount')?.value || 0);
+  const tax      = Number(document.getElementById('f-tax')?.value || 0);
+  return { subtotal, discount, tax, total: subtotal - discount + tax };
+}
+
+function currentPaymentTerms() {
+  const sel = document.getElementById('f-paymentTerms');
+  const custom = document.getElementById('f-paymentTermsCustom');
+  if (!sel) return '';
+  return (sel.value === '自訂' && custom && custom.value.trim()) ? custom.value.trim() : sel.value;
+}
+
+function isBaseItem(i) {
+  return i.reqKey === 'base' || (!i.reqKey && (i.name === '基礎建置費' || i.name === '網站基礎建置'));
+}
+
+// ── 發送前檢查：block＝不能發送；warn＝提醒但可以發送；ok＝通過 ──
+function computeSendChecks() {
+  const out = [];
+  const q = currentData || {};
+  const c = q.confirmedRequirements;
+  const t = currentTotals();
+  const pending = pendingPricingCount();
+  if (!items.length) out.push({ level: 'block', text: '還沒有任何報價項目。' });
+  else out.push({ level: 'ok', text: `報價項目 ${items.length} 項。` });
+  const unnamed = items.filter(i => !String(i.name || '').trim()).length;
+  if (unnamed) out.push({ level: 'block', text: `有 ${unnamed} 個項目沒有名稱。` });
+  if (pending) out.push({ level: 'block', text: `尚有 ${pending} 項「待填價格」，客戶不應收到未定價的項目。` });
+  else out.push({ level: 'ok', text: '所有項目都已填寫價格。' });
+  if (t.total < 0) out.push({ level: 'block', text: '總計小於 0，請檢查折扣與稅額。' });
+  else if (t.total === 0) out.push({ level: 'warn', text: '總計為 NT$0，請確認是否正確。' });
+  else out.push({ level: 'ok', text: `總計 ${fmtMoney(t.total)}。` });
+  const vu = document.getElementById('f-validUntil')?.value || '';
+  if (!vu) out.push({ level: 'warn', text: '尚未設定報價有效期限（客戶可以一直回覆）。' });
+  else {
+    const today = new Date(); const pad = n => String(n).padStart(2, '0');
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    if (vu <= todayStr) out.push({ level: 'block', text: `有效期限 ${vu} 已到期，客戶將無法接受或拒絕。請改為之後的日期。` });
+    else out.push({ level: 'ok', text: `有效期限至 ${vu}。` });
+  }
+  if (c) {
+    if (itemsFromRevision && Number(itemsFromRevision) !== Number(c.revision)) out.push({ level: 'warn', text: `報價引用需求第 ${itemsFromRevision} 版，但目前有效的需求是第 ${c.revision} 版。` });
+    else if (!itemsFromRevision) out.push({ level: 'warn', text: '需求已確認，但這份報價明細不是依確認需求產生。' });
+    else out.push({ level: 'ok', text: `報價依據為最新的需求第 ${c.revision} 版。` });
+    if (q.requirementReviewDraft) out.push({ level: 'warn', text: '需求審核目前有尚未確認的工作稿。' });
+  } else if (q.requirementSnapshot) {
+    out.push({ level: 'warn', text: '需求尚未審核（可沿用既有方式報價）。' });
+  } else {
+    out.push({ level: 'ok', text: '舊案件：沿用既有報價方式。' });
+  }
+  return out;
+}
+
+function clientPreviewHtml() {
+  const t = currentTotals();
+  const vu = document.getElementById('f-validUntil')?.value || '—';
+  const note = document.getElementById('f-quotationNote')?.value || '';
+  return `
+    <div class="qf-preview">
+      <div style="font-weight:700;margin-bottom:6px">客戶會看到的內容</div>
+      <table>
+        ${items.map(i => `<tr><td>${escapeHtml(i.name || '（未命名）')}${i.description ? `<div style="color:var(--ink-60);font-size:11.5px">${escapeHtml(i.description)}</div>` : ''}</td>
+          <td class="num">× ${Number(i.qty) || 0}</td>
+          <td class="num">${i.pricingPending ? '<strong style="color:var(--amber)">待填價格</strong>' : fmtMoney(i.subtotal)}</td></tr>`).join('')}
+        <tr><td>項目小計</td><td></td><td class="num">${fmtMoney(t.subtotal)}</td></tr>
+        ${t.discount ? `<tr><td>折扣</td><td></td><td class="num">−${fmtMoney(t.discount)}</td></tr>` : ''}
+        ${t.tax ? `<tr><td>稅額</td><td></td><td class="num">${fmtMoney(t.tax)}</td></tr>` : ''}
+        <tr><td><strong>總計</strong></td><td></td><td class="num"><strong>${fmtMoney(t.total)}</strong></td></tr>
+      </table>
+      <div style="margin-top:6px;color:var(--ink-60)">有效期限：${escapeHtml(vu)}　付款條件：${escapeHtml(currentPaymentTerms() || '—')}</div>
+      ${note ? `<div style="margin-top:4px;color:var(--ink-60)">備註：${escapeHtml(note)}</div>` : ''}
+    </div>`;
+}
+
+function renderQuoteFlow() {
+  if (!currentData) return;
+  const status = savedStatus();
+  const accepted = isQuotationAccepted();
+  const hasSaved = (currentData.quotationItems || []).length > 0;
+  const pending = pendingPricingCount();
+  const f = window.NicocoWorkflow ? NicocoWorkflow.quotationFacts(currentData, Date.now()) : { expired: false };
+
+  // 頂部：七個步驟的進度
+  const bar = document.getElementById('quoteFlowBar');
+  if (bar) {
+    const sentOrLater = status === 'sent' || status === 'accepted' || status === 'rejected';
+    const steps = [
+      ['確認需求依據', !!currentData.confirmedRequirements || !currentData.requirementSnapshot],
+      ['建立報價明細', hasSaved],
+      ['檢查價格', hasSaved && pending === 0],
+      ['儲存草稿', hasSaved],
+      ['發送正式報價', sentOrLater],
+      ['等待客戶回覆', status === 'accepted' || status === 'rejected'],
+      ['進入合約階段', false],
+    ];
+    let currentIdx = steps.findIndex(s => !s[1]);
+    if (status === 'sent') currentIdx = 5;
+    if (status === 'accepted') currentIdx = 6;
+    bar.innerHTML = `<ol class="qf-flow" aria-label="正式報價流程">${steps.map((s, i) =>
+      `<li class="${s[1] && i !== currentIdx ? 'is-done' : (i === currentIdx ? 'is-current' : '')}">${s[0]}${i === currentIdx ? '（目前）' : ''}</li>`).join('')}</ol>`;
+  }
+
+  // ③ 價格檢查摘要
+  const pc = document.getElementById('priceCheck');
+  if (pc) {
+    const base = items.filter(i => isBaseItem(i) && !i.pricingPending);
+    const add = items.filter(i => !isBaseItem(i) && !i.pricingPending);
+    const pend = items.filter(i => i.pricingPending);
+    const sum = arr => arr.reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
+    pc.innerHTML = `
+      <div class="qs-grid">
+        <div class="qs-box"><div class="qs-label">基礎建置費</div><div class="qs-value">${base.length ? fmtMoney(sum(base)) : '—'}</div></div>
+        <div class="qs-box"><div class="qs-label">加價項目（${add.length} 項）</div><div class="qs-value">${fmtMoney(sum(add))}</div></div>
+        <div class="qs-box"${pend.length ? ' style="background:var(--amber-light)"' : ''}><div class="qs-label">待人工估價</div><div class="qs-value">${pend.length ? `${pend.length} 項・待填價格` : '無'}</div></div>
+      </div>
+      ${pend.length ? `<div class="qs-note">待填價格：${pend.map(i => escapeHtml(i.name)).join('、')}（未填寫前不會當成 NT$0 計入，也不能發送）</div>` : ''}`;
+  }
+  const ptn = document.getElementById('pendingTotalNote');
+  if (ptn) ptn.textContent = pending ? `另有 ${pending} 項待填價格尚未計入總計` : '';
+
+  // ④⑤ 儲存草稿／發送
+  const sa = document.getElementById('sendArea');
+  if (sa) {
+    let html = '';
+    if (accepted) {
+      html = `<div style="font-size:13px;color:#166534;line-height:1.7">客戶已接受，正式報價已鎖定，不能再儲存或發送。</div>`;
+    } else {
+      const hint = status === 'sent'
+        ? (f.expired ? '這份報價已送出但已過有效期限，客戶無法回覆。更新有效期限後可重新發送。' : '這份報價已送出，客戶可以透過連結回覆。若修改內容，需要重新發送，客戶連結會顯示最新版本。')
+        : status === 'rejected' ? '客戶已拒絕這份報價。修改後可以儲存草稿，或檢查後重新發送。'
+        : '「儲存草稿」只會儲存，客戶無法回覆；「發送正式報價」會先檢查內容，確認後客戶才能透過連結接受或拒絕。';
+      html = `<div style="font-size:12.5px;color:var(--ink-60);line-height:1.7;margin-bottom:12px">${hint}</div>`;
+      if (sendReviewOpen) {
+        const checks = computeSendChecks();
+        const blocking = checks.some(c => c.level === 'block');
+        const LBL = { ok: ['ck-ok', '✓ 通過'], warn: ['ck-warn', '！提醒'], block: ['ck-block', '✕ 未通過'] };
+        html += `
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px">發送前檢查</div>
+          <ul class="qf-checks">${checks.map(c => `<li><span class="ck ${LBL[c.level][0]}">${LBL[c.level][1]}</span><span>${escapeHtml(c.text)}</span></li>`).join('')}</ul>
+          ${clientPreviewHtml()}
+          ${blocking ? '<div style="font-size:12.5px;color:var(--red);margin-bottom:10px">有未通過的項目，修正後才能發送。</div>' : ''}
+          <div class="qf-actions">
+            <button type="button" class="wf-btn-secondary qf-action" onclick="closeSendReview()">取消</button>
+            <button type="button" class="wf-btn-primary qf-action" id="confirmSendBtn" onclick="confirmSend()" ${blocking || flowBusy ? 'disabled' : ''}>${status === 'sent' ? '確認更新並發送' : '確認發送給客戶'}</button>
+          </div>`;
+      } else {
+        html += `
+          <div class="qf-actions">
+            ${status === 'sent' ? '' : `<button type="button" class="wf-btn-secondary qf-action" id="saveDraftBtn" onclick="saveDraft()" ${flowBusy ? 'disabled' : ''}>儲存草稿</button>`}
+            <button type="button" class="${status === 'sent' ? 'wf-btn-secondary' : 'wf-btn-primary'} qf-action" id="sendBtn" onclick="openSendReview()" ${flowBusy ? 'disabled' : ''}>${status === 'sent' ? '檢查並更新已送出的報價…' : '檢查並發送正式報價…'}</button>
+          </div>`;
+      }
+    }
+    sa.innerHTML = html;
+  }
+
+  // ⑥ 客戶回覆
+  const ra = document.getElementById('responseArea');
+  if (ra) {
+    const secure = window.NicocoQuotation && NicocoQuotation.hasSecureLink(currentData);
+    let text;
+    if (status === 'accepted') {
+      text = '<strong style="color:var(--green)">已接受</strong>　客戶已接受這份報價，系統已保存不可修改的接受紀錄。';
+    } else if (status === 'rejected') text = '<strong style="color:var(--red)">已拒絕</strong>　客戶已拒絕這份報價。';
+    else if (status === 'sent') text = f.expired ? '<strong style="color:var(--amber)">已過期</strong>　已超過有效期限，客戶目前無法回覆。' : '<strong>已送出・等待客戶回覆</strong>　把客戶連結傳給客戶，客戶可在連結頁面接受或拒絕。';
+    else text = '<strong>尚未發送</strong>　目前是草稿，客戶開啟連結只能預覽，不能回覆。';
+    ra.innerHTML = `<div style="font-size:13px;color:var(--ink-60);line-height:1.7">${text}</div>
+      <div style="font-size:12px;color:var(--ink-30);margin-top:4px">${secure ? '客戶連結為安全連結（不含案件編號）。' : (currentData.clientToken ? '舊的客戶連結已失效，下次儲存或發送時會產生新的安全連結。' : '儲存草稿或發送後才會產生客戶連結。')}</div>`;
+  }
+
+  // ⑦ 進入合約階段
+  const ca = document.getElementById('contractArea');
+  if (ca) {
+    ca.innerHTML = accepted
+      ? `<div style="font-size:13px;color:var(--ink-60);line-height:1.7;margin-bottom:10px">客戶已接受報價，報價維持鎖定（不能直接修改）。下一步：準備合約。</div>
+         <a class="wf-btn-primary" href="quote-detail.html?id=${encodeURIComponent(currentId)}#agreementSection">準備合約 →</a>`
+      : '<div style="font-size:12.5px;color:var(--ink-30)">客戶接受報價後，才會進入合約階段。</div>';
+  }
+}
+
+function setQuotationStatusSelect(v) {
+  const sel = document.getElementById('f-quotationStatus');
+  if (sel) sel.value = v;
+}
+
+// 共用：先設定狀態，再呼叫既有 saveQuotation()（所有阻擋與安全邏輯都在裡面）
+async function runFlowSave(status) {
+  if (flowBusy) return;
+  flowBusy = true;
+  renderQuoteFlow();
+  setQuotationStatusSelect(status);
+  try {
+    await saveQuotation();
+  } finally {
+    flowBusy = false;
+    setQuotationStatusSelect(savedStatus());
+    renderQuoteFlow();
+  }
+}
+
+function saveDraft() {
+  if (isQuotationAccepted()) { showToast('此報價已由客戶接受，無法直接修改。'); return; }
+  return runFlowSave('draft');
+}
+
+function openSendReview() {
+  if (isQuotationAccepted()) return;
+  sendReviewOpen = true;
+  renderQuoteFlow();
+  const el = document.getElementById('step-send');
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeSendReview() {
+  sendReviewOpen = false;
+  renderQuoteFlow();
+}
+
+async function confirmSend() {
+  const checks = computeSendChecks();
+  if (checks.some(c => c.level === 'block')) { showToast('⚠ 發送前檢查有未通過的項目'); renderQuoteFlow(); return; }
+  sendReviewOpen = false;
+  await runFlowSave('sent');
+  if (savedStatus() === 'sent' && !dirty) showToast('✓ 正式報價已發送。請按「複製客戶連結」傳給客戶');
+}
+
 function onPaymentTermsChange() {
   const sel = document.getElementById('f-paymentTerms');
   const customInput = document.getElementById('f-paymentTermsCustom');
@@ -676,13 +985,13 @@ function renderItemsTable() {
   const tbody = document.getElementById('qiTableBody');
   tbody.innerHTML = items.map(item => `
     <tr data-id="${item.id}">
-      <td><input class="qi-input" value="${escapeHtml(item.name)}" oninput="updateItem('${item.id}','name',this.value)"></td>
-      <td><textarea class="qi-textarea" rows="1" oninput="updateItem('${item.id}','description',this.value)">${escapeHtml(item.description||'')}</textarea></td>
-      <td><input class="qi-input num" type="number" min="0" step="1" value="${item.qty}" oninput="updateItem('${item.id}','qty',this.value)"></td>
-      <td><input class="qi-input num" type="number" min="0" step="100" value="${item.pricingPending ? '' : item.unitPrice}"
+      <td data-label="項目名稱"><input class="qi-input" aria-label="項目名稱" value="${escapeHtml(item.name)}" oninput="updateItem('${item.id}','name',this.value)"></td>
+      <td data-label="說明"><textarea class="qi-textarea" aria-label="說明" rows="1" oninput="updateItem('${item.id}','description',this.value)">${escapeHtml(item.description||'')}</textarea></td>
+      <td data-label="數量"><input class="qi-input num" aria-label="數量" type="number" min="0" step="1" value="${item.qty}" oninput="updateItem('${item.id}','qty',this.value)"></td>
+      <td data-label="單價"><input class="qi-input num" aria-label="單價" type="number" min="0" step="100" value="${item.pricingPending ? '' : item.unitPrice}"
                  ${item.pricingPending ? 'placeholder="待填價格" style="border-color:var(--amber);background:var(--amber-light)"' : ''}
                  oninput="updateItem('${item.id}','unitPrice',this.value)"></td>
-      <td class="qi-subtotal">${item.pricingPending ? '<span style="color:var(--amber);font-weight:600">待填價格</span>' : fmtMoney(item.subtotal)}</td>
+      <td class="qi-subtotal" data-label="小計">${item.pricingPending ? '<span style="color:var(--amber);font-weight:600">待填價格</span>' : fmtMoney(item.subtotal)}</td>
       <td><button class="qi-delete-btn" onclick="deleteItem('${item.id}')" title="刪除項目">✕</button></td>
     </tr>`).join('');
 }
@@ -748,6 +1057,7 @@ function recalcTotals() {
   const totalEl    = document.getElementById('sumTotal');
   if (subtotalEl) subtotalEl.textContent = fmtMoney(subtotal);
   if (totalEl)    totalEl.textContent    = fmtMoney(total);
+  renderQuoteFlow();
 }
 
 // ══════════════════════════════════════════════════
@@ -791,13 +1101,13 @@ function copyQuotationLink() {
   // Security v1：連結只帶 clientToken（publicQuotations 的文件 ID）。舊版 token 一律視為失效。
   if (!NicocoQuotation.hasSecureLink(currentData)) {
     showToast(currentData && currentData.clientToken
-      ? '⚠ 舊的客戶連結已失效，請重新儲存一次正式報價以產生新的安全連結'
-      : '⚠ 請先儲存正式報價，才能複製客戶連結');
+      ? '⚠ 舊的客戶連結已失效，請先「儲存草稿」或重新發送一次以產生新的安全連結'
+      : '⚠ 請先儲存草稿或發送正式報價，才能複製客戶連結');
     return;
   }
   const url = NicocoQuotation.publicUrl(currentData.clientToken);
   const hint = currentData.quotationStatus === 'draft'
-    ? '（目前為草稿：客戶可預覽但無法回覆，狀態改為「已送出」並儲存後才能接受／拒絕）' : '';
+    ? '（目前為草稿：客戶可預覽但無法回覆，按「發送正式報價」後才能接受／拒絕）' : '';
   navigator.clipboard.writeText(url).then(() => {
     showToast('✓ 客戶連結已複製到剪貼簿' + hint);
   }).catch(() => {
@@ -946,8 +1256,14 @@ async function saveQuotation() {
       if (itemsFromRevision) currentData.quotationRequirementRevision = itemsFromRevision;
     }
     regeneratedThisSession = false;
+    if (currentData) {
+      currentData.validUntil = quotation.validUntil;
+      currentData.quotationTotal = total;
+      currentData.paymentTerms = paymentTerms;
+    }
     renderRequirementBanner();
     applyAcceptedLock();
+    renderQuoteFlow();
 
     dirty = false;
     statusEl.textContent = '✓ 已儲存';

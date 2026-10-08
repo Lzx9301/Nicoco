@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>系統設定 — Website CRM</title>
+<title>系統設定｜Website CRM</title>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -178,6 +178,7 @@ body {
   .field.full { grid-column: 1; }
 }
 </style>
+<link rel="stylesheet" href="admin-ui.css">
 </head>
 <body>
 
@@ -187,10 +188,11 @@ body {
       <div class="header-logo-mark" id="headerLogoMark">W</div>
       Website CRM
     </a>
-    <nav style="display:flex;gap:16px">
-      <a class="nav-link" href="dashboard.html">Dashboard</a>
-      <a class="nav-link" href="quote-admin.html">案件</a>
-      <a class="nav-link active" href="settings.html">設定</a>
+    <nav class="admin-nav" aria-label="後台主選單">
+      <a class="nav-link" href="dashboard.html">總覽</a>
+      <a class="nav-link" href="quote-admin.html" title="需求、報價、合約、專案與收款都在各案件內操作">案件管理</a>
+      <a class="nav-link" href="dashboard.html#sec-payments" title="總覽頁的付款追蹤區塊">收款追蹤</a>
+      <a class="nav-link active" href="settings.html">系統設定</a>
     </nav>
   </div>
   <div class="header-right">
@@ -286,18 +288,18 @@ function renderSettings(d) {
         </div>
         <div class="field">
           <label class="field-label">系統顯示名稱
-            <span class="field-hint">Header 上的系統名稱</span>
+            <span class="field-hint">後台頁首顯示的系統名稱</span>
           </label>
           <input class="field-input" id="f-displayName" value="${escapeAttr(d.displayName)}" placeholder="Website CRM">
         </div>
         <div class="field">
-          <label class="field-label">Logo 文字
-            <span class="field-hint">Header 左上角的方形文字</span>
+          <label class="field-label">標誌文字
+            <span class="field-hint">頁首左上角的方形文字（最多 2 字）</span>
           </label>
           <input class="field-input" id="f-logoText" maxlength="2" value="${escapeAttr(d.logoText)}" placeholder="W" oninput="updateLogoPreview()">
         </div>
         <div class="field">
-          <label class="field-label">Logo 預覽</label>
+          <label class="field-label">標誌預覽</label>
           <div class="logo-preview">
             <div class="logo-mark-preview" id="logoPreview">${escapeHtml(d.logoText || 'W')}</div>
             <div class="logo-name-preview" id="logoNamePreview">${escapeHtml(d.displayName || 'Website CRM')}</div>
@@ -339,13 +341,13 @@ function renderSettings(d) {
       <div class="field-grid">
         <div class="field full">
           <label class="field-label">報價單頁尾說明
-            <span class="field-hint">顯示在 quotation.html 底部</span>
+            <span class="field-hint">顯示在客戶報價單頁面底部</span>
           </label>
           <textarea class="field-textarea" id="f-quotationFooter" placeholder="本報價單由 Website Studio 提供…">${escapeHtml(d.quotationFooter)}</textarea>
         </div>
         <div class="field full">
           <label class="field-label">Email 頁尾簽名
-            <span class="field-hint">用於 EmailJS 通知信底部</span>
+            <span class="field-hint">用於 Email 通知信底部（EmailJS）</span>
           </label>
           <textarea class="field-textarea" id="f-emailFooter" placeholder="Website Studio">${escapeHtml(d.emailFooter)}</textarea>
         </div>
