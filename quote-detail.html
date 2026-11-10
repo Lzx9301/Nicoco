@@ -16,6 +16,8 @@
 <!-- Requirement Review v1：價格資料（與公開估價同一份）＋審核邏輯 -->
 <script src="pricing-data.js"></script>
 <script src="requirement-review.js"></script>
+<!-- Agreement Generator v2.1：合約資料整合與完整需求附件（純邏輯，不讀寫 Firestore） -->
+<script src="agreement-data.js"></script>
 <!-- 後台流程與介面整理 v1：流程進度與下一步建議（純判斷，不寫資料） -->
 <script src="admin-workflow.js"></script>
 <script>
@@ -350,6 +352,7 @@ body {
 }
 </style>
 <link rel="stylesheet" href="admin-ui.css">
+<link rel="stylesheet" href="agreement-v21.css">
 </head>
 <body>
 
@@ -761,6 +764,12 @@ let crBuilder = null;
 let agreements = [];
 // 建立/編輯 Agreement 時的前端草稿；null=未開啟
 let agreementBuilder = null;
+// Agreement v2.1：合約資料預覽（已儲存合約，唯讀）＝ agreement id；null＝未開啟
+let agreementPreviewId = null;
+// Agreement v2.1：建立合約資料所需、但不在案件文件上的來源（需求變更、客戶接受報價快照）
+let agrV21Sources = null;   // { changeRequests, acceptance, loadedAt } ；null＝尚未載入
+// Agreement v2.1：合約需求明細目前展開編輯的列（純 UI 狀態）
+const agrV21OpenRows = new Set();
 // settings/studio 文件的本地快取（承攬方資料來源），同一頁面內只需讀取一次
 let studioSettingsCache = null;
 // Activity Timeline 資訊密度優化：預設只顯示最近 5 筆，不改動 activityLogs 資料本身
@@ -4069,7 +4078,12 @@ async function openAgreementBuilder(agreementId) {
       ipDeliverablesPolicy: existing.ipDeliverablesPolicy || '',
       terminationPolicy: existing.terminationPolicy || '',
       note: existing.note || '',
+      // v2.1：既有合約資料（舊合約沒有時為 null，可在編輯畫面主動帶入）
+      contractData: existing.contractData ? agrV21Clone(existing.contractData) : null,
+      view: 'edit',
+      resyncReport: null,
     };
+    await agrV21LoadSources();
   } else {
     const provider = await getStudioSettings();
     const { amount, source } = resolveAgreementContractAmount();
@@ -4097,8 +4111,15 @@ async function openAgreementBuilder(agreementId) {
       ipDeliverablesPolicy: AGREEMENT_DEFAULT_TEXT.ipDeliverablesPolicy,
       terminationPolicy: AGREEMENT_DEFAULT_TEXT.terminationPolicy,
       note: '',
+      contractData: null,
+      view: 'edit',
+      resyncReport: null,
     };
+    // v2.1：建立合約時自動讀取客戶原始需求、確認需求、正式報價與已核准變更
+    await agrV21LoadSources();
+    agrV21CaptureInto(agreementBuilder, null);
   }
+  agreementPreviewId = null;
   renderAgreementUI();
 }
 function closeAgreementBuilder() {
@@ -4192,6 +4213,11 @@ async function saveAgreementDraft() {
     thirdPartyFeeNotice: b.thirdPartyFeeNotice, ipDeliverablesPolicy: b.ipDeliverablesPolicy,
     terminationPolicy: b.terminationPolicy, note: b.note,
   };
+  // v2.1：合約資料（寫入前重新檢查每一列的狀態是否在允許範圍內）
+  if (b.contractData && window.NicocoAgreement) {
+    commonPayload.agreementSchemaVersion = NicocoAgreement.SCHEMA_VERSION;
+    commonPayload.contractData = NicocoAgreement.toFirestore(b.contractData);
+  }
 
   try {
     const agrColl = db.collection('quotes').doc(currentId).collection('agreements');
@@ -4205,7 +4231,7 @@ async function saveAgreementDraft() {
       const patch = { ...commonPayload, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
       await agrColl.doc(b.id).update(patch);
       Object.assign(existing, patch);
-      showToast(`✓ 已更新 ${existing.agreementNumber}`);
+      showToast(`✓ 已儲存草稿 ${existing.agreementNumber}`);
     } else {
       const agreementNumber = nextAgreementNumber();
       const ref = agrColl.doc();
@@ -4231,7 +4257,10 @@ async function saveAgreementDraft() {
       currentData.activityLogs.push(newLog);
       showToast(`✓ 已建立 ${agreementNumber}`);
       syncTimelineUI();
+      b.id = ref.id;
     }
+    // v2.1：儲存後留在編輯畫面，可繼續預覽、返回編輯、再次儲存草稿（按「關閉」離開）
+    if (b.contractData) { b.savedOnce = true; renderAgreementUI(); return; }
     agreementBuilder = null;
     renderAgreementUI();
   } catch (err) {
@@ -4268,7 +4297,8 @@ async function agrUpdateStatus(agr, newStatus, extra, logText) {
 // signed/active/completed 一律鎖死，不允許改回其他狀態、不允許取消。
 async function agrMarkReady(id) {
   const a = agreements.find(x => x.id === id); if (!a || a.status !== 'draft') return;
-  if (!confirm(`確定要將 ${a.agreementNumber} 標記為「已備妥」嗎？`)) return;
+  const missingNote = agrV21ReadyWarning(a);
+  if (!confirm(`確定要將 ${a.agreementNumber} 標記為「已備妥」嗎？${missingNote}`)) return;
   await agrUpdateStatus(a, 'ready', {}, `${a.agreementNumber} 已備妥`);
 }
 async function agrBackToDraft(id) {
@@ -4329,6 +4359,7 @@ function renderAgreementUI() {
   const el = document.getElementById('agreementSection');
   if (!el) return;
   if (agreementBuilder) { el.innerHTML = renderAgreementBuilder(); return; }
+  if (agreementPreviewId) { el.innerHTML = agrV21RenderSavedPreview(); return; }
 
   const summary = computeAgreementSummary();
   const sorted = [...agreements].sort((a, b) => (b.agreementNumber || '').localeCompare(a.agreementNumber || ''));
@@ -4370,6 +4401,7 @@ function renderAgreementRow(a) {
   } else if (a.status === 'active') {
     actions.push(`<button class="btn-copy-link" onclick="agrMarkCompleted('${a.id}')">標記已完成</button>`);
   }
+  actions.push(`<button class="btn-copy-link" onclick="agrV21OpenPreview('${a.id}')">合約資料預覽</button>`);
   actions.push(`<button class="btn-copy-link" onclick="toggleGroupCollapse('${detailKey}')">${detailOpen ? '收合' : '查看詳細'}</button>`);
 
   const detail = detailOpen ? `
@@ -4380,6 +4412,7 @@ function renderAgreementRow(a) {
         <div style="margin-bottom:4px">工作範圍（${(a.scopeSnapshot || []).length} 項）：${(a.scopeSnapshot || []).map(s => escapeHtml(s.name)).join('、') || '—'}</div>
         <div style="margin-bottom:4px">付款計畫（${(a.paymentPlanSnapshot || []).length} 期）：${(a.paymentPlanSnapshot || []).map(p => `${escapeHtml(p.title)} ${p.percentage}%`).join('、') || '—'}</div>
         ${a.timeline && (a.timeline.estimatedStartDate || a.timeline.estimatedCompletionDate) ? `<div style="margin-bottom:4px">預計期間：${a.timeline.estimatedStartDate || '—'} ～ ${a.timeline.estimatedCompletionDate || '—'}</div>` : ''}
+        <div style="margin-bottom:4px">合約資料：${a.contractData ? `v${escapeHtml(a.agreementSchemaVersion || a.contractData.schemaVersion || '2.1')}・${escapeHtml(window.NicocoAgreement ? NicocoAgreement.sourceSummary(a.contractData.sources).replace(/<[^>]+>/g, '') : '')}` : '無（建立於 v2.1 之前）'}</div>
         ${locked ? `<div style="color:var(--ink-30);margin-top:6px">此合約內容已鎖定為歷史定案資料，如需更正請建立新的合約。</div>` : ''}
       </div>` : '';
 
@@ -4403,6 +4436,7 @@ function renderAgreementRow(a) {
 
 function renderAgreementBuilder() {
   const b = agreementBuilder;
+  if (b.view === 'preview') return agrV21RenderBuilderPreview();
   const err = validateAgreementBuilder();
   const sumPct = b.paymentPlanSnapshot.reduce((s, p) => s + (Number(p.percentage) || 0), 0);
 
@@ -4456,7 +4490,9 @@ function renderAgreementBuilder() {
       <div style="margin:14px 0 10px;font-size:12px;color:var(--ink-60)">專案</div>
       <div class="field"><label class="field-label">專案名稱</label><input class="field-input" value="${escapeHtml(b.projectName)}" onchange="agrSetField('projectName',this.value)"></div>
 
-      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">工作內容／工作範圍：</div>
+      ${agrV21RenderPanel()}
+
+      <div style="margin:14px 0 8px;font-size:12px;color:var(--ink-60)">工作內容／工作範圍${b.contractData ? '（摘要；正式開發義務以上方「合約需求明細」的狀態為準）' : ''}：</div>
       ${scopeRows || '<div style="font-size:11.5px;color:var(--ink-30);margin-bottom:8px">尚無項目，可手動新增</div>'}
       <button class="btn-copy-link" onclick="agrAddScopeRow()">＋ 新增項目</button>
 
@@ -4486,11 +4522,339 @@ function renderAgreementBuilder() {
 
       ${err ? `<div style="font-size:12px;color:var(--red);margin-top:10px">⚠ ${err}</div>` : ''}
 
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="btn-copy-link" onclick="closeAgreementBuilder()">取消</button>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn-copy-link" onclick="closeAgreementBuilder()">${b.savedOnce ? '關閉' : '取消'}</button>
+        ${b.contractData ? `<button class="btn-copy-link" onclick="agrV21SetView('preview')">合約資料預覽</button>` : ''}
         <button class="btn-save" style="padding:9px 18px" onclick="saveAgreementDraft()">${b.id ? '儲存草稿' : '建立草稿'}</button>
       </div>
     </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  AGREEMENT GENERATOR v2.1 — 合約資料整合與完整需求附件
+//  邏輯在 agreement-data.js（NicocoAgreement）；這裡只負責讀取來源、畫面與編輯狀態。
+//  寫入一律走既有 saveAgreementDraft()（只寫 quotes/{id}/agreements/{id} 與 activityLogs），
+//  不會寫入 requirementSnapshot／confirmedRequirements／正式報價欄位。
+//  來源資料更新時只顯示差異；Admin 按「重新帶入來源資料」並確認後才更新草稿（仍須再按儲存）。
+// ══════════════════════════════════════════════════
+
+// 複製 Firestore 資料，保留 Timestamp 物件本身（避免變成一般 map）
+function agrV21Clone(v) {
+  if (v === null || typeof v !== 'object') return v;
+  if (v instanceof firebase.firestore.Timestamp) return v;
+  if (Array.isArray(v)) return v.map(agrV21Clone);
+  const o = {};
+  Object.keys(v).forEach(k => { o[k] = agrV21Clone(v[k]); });
+  return o;
+}
+
+// 讀取不在案件文件上的來源：需求變更（全部狀態，由邏輯層篩選）與客戶接受報價時的快照
+async function agrV21LoadSources() {
+  const out = { changeRequests: [], acceptance: null, loadedAt: Date.now(), warnings: [] };
+  const quoteRef = db.collection('quotes').doc(currentId);
+  try {
+    const snap = await quoteRef.collection('changeRequests').get();
+    out.changeRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error('讀取需求變更失敗：', err);
+    out.warnings.push('需求變更清單');
+  }
+  if (currentData.quotationStatus === 'accepted' && currentData.clientToken) {
+    try {
+      const acc = await quoteRef.collection('acceptances').doc(currentData.clientToken).get();
+      if (acc.exists) out.acceptance = acc.data();
+    } catch (err) {
+      console.error('讀取客戶接受報價快照失敗：', err);
+      out.warnings.push('客戶接受報價快照');
+    }
+  }
+  agrV21Sources = out;
+  return out;
+}
+
+function agrV21Ready() { return !!window.NicocoAgreement; }
+
+function agrV21CaptureInto(b, previous) {
+  if (!agrV21Ready() || !b) return null;
+  const src = agrV21Sources || { changeRequests: [], acceptance: null, warnings: ['需求變更清單'] };
+  const res = NicocoAgreement.capture({
+    quote: currentData,
+    acceptance: src.acceptance,
+    changeRequests: src.changeRequests,
+    pricing: window.NicocoPricing || null,
+    review: window.NicocoReview || null,
+    capturedAt: firebase.firestore.Timestamp.now(),
+    loadWarnings: src.warnings,
+  }, previous || null);
+  b.contractData = res.data;
+  b.resyncReport = res.report;
+  return res;
+}
+
+// 目前的來源與合約草稿當時帶入的來源相比，有哪些變動（來源尚未載入時回傳 null＝無法判斷）
+function agrV21StaleSources(contractData) {
+  if (!agrV21Ready() || !contractData || !contractData.sources || !agrV21Sources) return null;
+  const now = NicocoAgreement.sourceState(currentData, agrV21Sources.acceptance, agrV21Sources.changeRequests);
+  return NicocoAgreement.compareSources(contractData.sources, now);
+}
+
+// 舊合約草稿（v2.1 之前建立）：Admin 主動帶入
+async function agrV21CaptureNow() {
+  const b = agreementBuilder;
+  if (!b || b.contractData) return;
+  await agrV21LoadSources();
+  agrV21CaptureInto(b, null);
+  showToast('✓ 已帶入合約資料，確認後請按「儲存草稿」');
+  renderAgreementUI();
+}
+
+// 重新帶入：需二次確認；人工填寫內容依合約項目識別碼保留；仍需按「儲存草稿」才寫入
+async function agrV21Resync() {
+  const b = agreementBuilder;
+  if (!b || !b.contractData) return;
+  if (!confirm('重新帶入會以目前的客戶需求、確認需求、正式報價與已核准變更，重建「合約需求明細」與費用資料。\n\n'
+    + '・已填寫的約定內容、不包含、交付成果、驗收依據、備註、待確認事項會依合約項目識別碼保留\n'
+    + '・新來源不再允許的狀態會重設，並在畫面上列出\n'
+    + '・按下「儲存草稿」前不會寫入\n\n確定要重新帶入嗎？')) return;
+  await agrV21LoadSources();
+  agrV21CaptureInto(b, b.contractData);
+  showToast('✓ 已重新帶入來源資料（尚未儲存）');
+  renderAgreementUI();
+}
+
+function agrV21SetView(view) {
+  if (!agreementBuilder) return;
+  agreementBuilder.view = view === 'preview' ? 'preview' : 'edit';
+  renderAgreementUI();
+  const el = document.getElementById('agreementSection');
+  if (el) el.scrollIntoView({ block: 'start' });
+}
+function agrV21ToggleRow(id) {
+  if (agrV21OpenRows.has(id)) agrV21OpenRows.delete(id); else agrV21OpenRows.add(id);
+  renderAgreementUI();
+}
+function agrV21Row(idx) {
+  const b = agreementBuilder;
+  return (b && b.contractData && b.contractData.items && b.contractData.items[idx]) || null;
+}
+function agrV21SetStatus(idx, value) {
+  const r = agrV21Row(idx);
+  if (!r) return;
+  const allowed = NicocoAgreement.allowedStatuses(r);
+  if (allowed.indexOf(value) === -1) { showToast('⚠ 這個項目不能設為「' + (NicocoAgreement.STATUS[value] || value) + '」'); renderAgreementUI(); return; }
+  r.contractStatus = value;
+  renderAgreementUI();
+}
+function agrV21SetItemField(idx, field, value) {
+  const r = agrV21Row(idx);
+  if (!r || NicocoAgreement.EDITABLE_FIELDS.indexOf(field) === -1) return;
+  r[field] = String(value || '');
+  renderAgreementUI();
+}
+function agrV21SetFeeCategory(quotationItemId, value) {
+  const b = agreementBuilder;
+  if (!b || !b.contractData) return;
+  const ov = b.contractData.feeCategoryOverrides || (b.contractData.feeCategoryOverrides = {});
+  if (!value) delete ov[quotationItemId];
+  else if (NicocoAgreement.FEE_CATEGORIES[value] && value !== 'unclassified') ov[quotationItemId] = value;
+  renderAgreementUI();
+}
+
+const AGR_V21_SOURCE_KIND_TEXT = {
+  confirmed: '確認需求', snapshot_unconfirmed: '原始需求（未確認）', snapshot_missing: '原始需求（確認需求中沒有）',
+  legacy: '舊版估價欄位', quotation_line: '正式報價明細', change_request: '需求變更（已核准）', change_proposal: '需求變更（提案中）',
+};
+
+function agrV21RenderEditRow(r, idx) {
+  const A = NicocoAgreement;
+  const open = agrV21OpenRows.has(r.contractItemId);
+  const allowed = A.allowedStatuses(r);
+  const qItems = ((agreementBuilder.contractData.quotationSnapshot || {}).items || []);
+  const qNames = (r.quotationItemIds || []).map(id => { const l = qItems.find(x => x.id === id); return l ? l.name : id; });
+  const ta = (field, label, ph) => `
+      <div class="field"><label class="field-label">${label}</label>
+        <textarea class="field-textarea agv-ta" placeholder="${escapeHtml(ph || '')}" onchange="agrV21SetItemField(${idx},'${field}',this.value)">${escapeHtml(r[field] || '')}</textarea></div>`;
+  return `
+    <div class="agv-edit-row agv-st-border-${escapeHtml(r.contractStatus)}">
+      <div class="agv-edit-head">
+        <select class="field-select agv-status-select" aria-label="合約狀態" onchange="agrV21SetStatus(${idx},this.value)" ${allowed.length === 1 ? 'disabled' : ''}>
+          ${allowed.map(s => `<option value="${s}" ${s === r.contractStatus ? 'selected' : ''}>${A.STATUS[s]}</option>`).join('')}
+        </select>
+        <div class="agv-edit-title">
+          <div><strong>${escapeHtml(r.label)}</strong>${r.contractStatus !== r.defaultStatus ? '<span class="agv-tag agv-diff">與預設不同</span>' : ''}</div>
+          <div class="agv-muted">${escapeHtml(r.groupLabel || '')}${r.groupLabel ? '・' : ''}${AGR_V21_SOURCE_KIND_TEXT[r.sourceKind] || r.sourceKind}・${escapeHtml(r.contractItemId)}
+            ${(r.flags || []).length ? `<span class="agv-warn">　⚠ ${r.flags.length} 項需注意</span>` : ''}</div>
+        </div>
+        <button class="btn-copy-link" onclick="agrV21ToggleRow('${escapeHtml(r.contractItemId)}')">${open ? '收合' : '展開編輯'}</button>
+      </div>
+      ${open ? `
+      <div class="agv-edit-body">
+        <div class="agv-f"><span class="agv-k">原始需求內容</span>${r.originType === 'admin_added' ? '<span class="agv-empty">非客戶原始需求（需求審核新增）</span>' : (r.originalContent ? escapeHtml(r.originalContent) : '<span class="agv-empty">無</span>')}</div>
+        <div class="agv-f"><span class="agv-k">審核狀態</span>${r.reviewDecision ? escapeHtml(A.REVIEW_DECISION_TEXT[r.reviewDecision] || r.reviewDecision) + (r.confirmedRevision ? `（第 ${escapeHtml(r.confirmedRevision)} 版）` : '') : '<span class="agv-empty">未經需求審核</span>'}</div>
+        ${r.confirmedDescription ? `<div class="agv-f"><span class="agv-k">確認需求描述</span>${escapeHtml(r.confirmedDescription)}</div>` : ''}
+        <div class="agv-f"><span class="agv-k">對應報價項目</span>${qNames.length ? qNames.map(escapeHtml).join('、') : ''} <span class="agv-muted">${escapeHtml(A.MAPPING_TEXT[r.quotationMapping] || '')}</span></div>
+        ${(r.thirdParty || []).length ? `<div class="agv-f"><span class="agv-k">相關第三方服務</span>${r.thirdParty.map(escapeHtml).join('、')}</div>` : ''}
+        ${(r.flags || []).length ? `<div class="agv-flags">${r.flags.map(f => `<div>⚠ ${escapeHtml(f)}</div>`).join('')}</div>` : ''}
+        ${allowed.indexOf('included') === -1 && r.sourceKind !== 'change_request' ? '<div class="agv-muted" style="margin:6px 0">此項目沒有已確認需求或已接受報價作為依據，不能列為「已納入開發」。如需納入，請先在需求審核中確認。</div>' : ''}
+        ${ta('agreedScope', '最終約定的開發內容', '')}
+        ${ta('exclusions', '明確不包含的功能', '')}
+        ${ta('deliverables', '交付成果', '')}
+        ${ta('acceptanceCriteria', '驗收依據', '')}
+        ${ta('notes', '備註', '')}
+        ${ta('openQuestions', '待確認事項', '')}
+      </div>` : ''}
+    </div>`;
+}
+
+function agrV21RenderFeeEditor(d) {
+  const A = NicocoAgreement;
+  const fees = A.buildFees(d, agreementBuilder.contractAmountSnapshot);
+  if (fees.mode === 'none') return `<div class="agv-muted">沒有正式報價資料，費用明細無法對應。</div>`;
+  if (fees.mode === 'total_only') {
+    return `<div class="agv-alert">報價只有總額 ${escapeHtml('NT$' + fees.baseTotal.toLocaleString())}（${fees.baseTotalSource === 'officialPrice' ? '議定金額' : '正式報價'}），沒有費用拆分。各類費用顯示「${A.MANUAL_SPLIT_TEXT}」，合約資料不會自行推算金額。</div>`;
+  }
+  const opts = (sel) => ['<option value="">依需求資料自動判斷</option>']
+    .concat(A.FEE_CATEGORY_ORDER.filter(k => k !== 'unclassified').map(k => `<option value="${k}" ${sel === k ? 'selected' : ''}>${A.FEE_CATEGORIES[k]}</option>`)).join('');
+  const ov = d.feeCategoryOverrides || {};
+  return `
+    <div class="agv-muted">金額來自${fees.quotationSource === 'acceptance' ? '客戶接受報價時的快照' : '正式報價'}，這裡只能調整「分類」，不能修改金額。</div>
+    <table class="agv-table">
+      <thead><tr><th>報價項目</th><th class="agv-num">金額</th><th>分類</th></tr></thead>
+      <tbody>${fees.lines.map(l => `
+        <tr>
+          <td>${escapeHtml(l.name)}</td>
+          <td class="agv-num">${l.pricingPending ? '<span class="agv-warn">待定價</span>' : 'NT$' + Number(l.amount).toLocaleString()}</td>
+          <td><select class="field-select agv-cat-select" onchange="agrV21SetFeeCategory('${escapeHtml(l.quotationItemId)}',this.value)">${opts(ov[l.quotationItemId] || '')}</select>
+            <div class="agv-muted">${l.categorySource === 'manual' ? '人工指定' : l.autoCategory ? '自動：' + escapeHtml(A.FEE_CATEGORIES[l.autoCategory]) : '<span class="agv-warn">' + escapeHtml(A.FEE_CATEGORIES.unclassified) + '</span>'}</div></td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+// 編輯畫面中的 v2.1 區塊
+function agrV21RenderPanel() {
+  const b = agreementBuilder;
+  if (!agrV21Ready()) {
+    return `<div class="agv-panel"><div class="agv-alert">⚠ 合約資料模組（agreement-data.js）未載入，無法產生合約資料。既有合約欄位仍可編輯。</div></div>`;
+  }
+  if (!b.contractData) {
+    return `
+      <div class="agv-panel">
+        <div class="agv-panel-title">合約資料（v2.1）</div>
+        <div class="agv-muted" style="margin-bottom:8px">此合約草稿建立於 v2.1 之前，尚未帶入客戶原始需求、確認需求與費用資料。帶入後仍需按「儲存草稿」才會寫入。</div>
+        <button class="btn-copy-link" onclick="agrV21CaptureNow()">帶入合約資料（v2.1）</button>
+      </div>`;
+  }
+  const A = NicocoAgreement;
+  const d = b.contractData;
+  const stale = agrV21StaleSources(d);
+  const rows = d.items || [];
+  const counts = {};
+  A.STATUS_ORDER.forEach(s => { counts[s] = 0; });
+  rows.forEach(r => { counts[r.contractStatus] = (counts[r.contractStatus] || 0) + 1; });
+  const indexed = rows.map((r, idx) => ({ r, idx }))
+    .sort((x, y) => (A.STATUS_ORDER.indexOf(x.r.contractStatus) - A.STATUS_ORDER.indexOf(y.r.contractStatus)) || (x.idx - y.idx));
+  const rep = b.resyncReport;
+  const reportBox = rep ? `
+      <div class="agv-note">重新帶入結果：保留 ${rep.kept} 項、新增 ${rep.added} 項${rep.removed.length ? `、來源中已不存在 ${rep.removed.length} 項（${rep.removed.map(escapeHtml).join('、')}）` : ''}${rep.statusReset.length ? `；${rep.statusReset.length} 項狀態已重設：${rep.statusReset.map(x => escapeHtml(x.label) + '（' + (A.STATUS[x.from] || x.from) + '→' + (A.STATUS[x.to] || x.to) + '）').join('、')}` : ''}。尚未儲存。</div>` : '';
+  return `
+    <div class="agv-panel">
+      <div class="agv-panel-title">合約資料（v2.1）</div>
+      <div class="agv-muted">帶入時的來源版本：${A.sourceSummary(d.sources)}</div>
+      ${stale === null ? '<div class="agv-muted">（來源資料載入中，暫時無法比對是否有更新）</div>' : ''}
+      ${stale && stale.length ? `
+        <div class="agv-alert">來源資料已在帶入後更新，合約草稿目前仍是帶入時的內容，不會自動改寫：
+          ${stale.map(s => `<div>・${escapeHtml(s.label)}${s.detail ? '：' + escapeHtml(s.detail) : ''}</div>`).join('')}
+          <button class="btn-copy-link" style="margin-top:6px" onclick="agrV21Resync()">檢視後重新帶入來源資料</button>
+        </div>` : ''}
+      ${(d.loadWarnings || []).length ? `<div class="agv-alert">帶入時讀取失敗：${d.loadWarnings.map(escapeHtml).join('、')}。請按「重新帶入來源資料」。</div>` : ''}
+      ${reportBox}
+
+      <div class="agv-sub">合約需求明細</div>
+      <div class="agv-muted" style="margin-bottom:6px">只有「已納入開發」與「已確認的後續變更」構成開發義務。客戶曾勾選但未經確認的項目一律為「待確認」。</div>
+      <div class="agv-counts">${A.STATUS_ORDER.map(s => `<span class="agv-tag agv-st-${s}">${A.STATUS[s]} ${counts[s] || 0}</span>`).join('')}</div>
+      ${indexed.length ? indexed.map(x => agrV21RenderEditRow(x.r, x.idx)).join('') : '<div class="agv-muted">沒有任何需求或報價資料。</div>'}
+
+      <div class="agv-sub">費用分類</div>
+      ${agrV21RenderFeeEditor(d)}
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn-copy-link" onclick="agrV21SetView('preview')">合約資料預覽</button>
+        <button class="btn-copy-link" onclick="agrV21Resync()">重新帶入來源資料</button>
+      </div>
+    </div>`;
+}
+
+// 編輯中的草稿：預覽（含尚未儲存的修改）
+function agrV21RenderBuilderPreview() {
+  const b = agreementBuilder;
+  const existing = b.id ? agreements.find(a => a.id === b.id) : null;
+  const agrLike = {
+    ...b,
+    agreementNumber: existing ? existing.agreementNumber : '',
+    quoteId: currentId,
+    status: 'draft',
+    statusLabel: '草稿',
+  };
+  const body = agrV21Ready()
+    ? NicocoAgreement.renderPreview(agrLike, { staleSources: agrV21StaleSources(b.contractData) || [], reviewDraftOpen: !!currentData.requirementReviewDraft })
+    : '<div class="agv-alert">⚠ 合約資料模組未載入</div>';
+  return `
+    <div class="card" style="border:2px solid var(--ink)">
+      <div class="card-title">合約資料預覽</div>
+      <div class="agv-muted" style="margin-bottom:10px">預覽顯示目前編輯中的內容（包含尚未儲存的修改）。本輪不提供 PDF 匯出與電子簽署。</div>
+      <div class="agv-preview">${body}</div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn-copy-link" onclick="agrV21SetView('edit')">返回編輯</button>
+        <button class="btn-save" style="padding:9px 18px" onclick="saveAgreementDraft()">${b.id ? '儲存草稿' : '建立草稿'}</button>
+        <button class="btn-copy-link" onclick="closeAgreementBuilder()">${b.savedOnce ? '關閉' : '取消'}</button>
+      </div>
+    </div>`;
+}
+
+// 已儲存的合約：唯讀預覽（任何狀態皆可看；已簽署／鎖定的合約不提供任何修改或重新帶入）
+async function agrV21OpenPreview(id) {
+  agreementPreviewId = id;
+  renderAgreementUI();
+  await agrV21LoadSources();
+  if (agreementPreviewId === id) renderAgreementUI();
+  const el = document.getElementById('agreementSection');
+  if (el) el.scrollIntoView({ block: 'start' });
+}
+function agrV21ClosePreview() {
+  agreementPreviewId = null;
+  renderAgreementUI();
+}
+function agrV21RenderSavedPreview() {
+  const a = agreements.find(x => x.id === agreementPreviewId);
+  if (!a) { agreementPreviewId = null; return ''; }
+  const isDraft = a.status === 'draft';
+  const stale = a.contractData ? agrV21StaleSources(a.contractData) : null;
+  const agrLike = { ...a, statusLabel: AGREEMENT_STATUS_LABELS[a.status] || a.status };
+  const body = agrV21Ready()
+    ? NicocoAgreement.renderPreview(agrLike, { staleSources: isDraft ? (stale || []) : [], reviewDraftOpen: isDraft && !!currentData.requirementReviewDraft })
+    : '<div class="agv-alert">⚠ 合約資料模組未載入</div>';
+  const lockedNote = !isDraft
+    ? `<div class="agv-note">此合約狀態為「${escapeHtml(AGREEMENT_STATUS_LABELS[a.status] || a.status)}」，內容不可修改。${stale && stale.length ? '帶入後來源資料有更新（' + stale.map(s => escapeHtml(s.label)).join('、') + '），合約仍維持原內容；簽署後的範圍或金額變動請建立需求變更。' : ''}</div>`
+    : '';
+  return `
+    <div class="card">
+      <div class="card-title">合約資料預覽　${escapeHtml(a.agreementNumber || '')}</div>
+      ${lockedNote}
+      <div class="agv-preview">${body}</div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn-copy-link" onclick="agrV21ClosePreview()">返回合約列表</button>
+        ${isDraft ? `<button class="btn-save" style="padding:9px 18px" onclick="openAgreementBuilder('${a.id}')">編輯草稿</button>` : ''}
+      </div>
+    </div>`;
+}
+
+// 標記「已備妥」前的提醒（不阻擋既有流程）
+function agrV21ReadyWarning(a) {
+  if (!agrV21Ready() || !a || !a.contractData) return '';
+  const stale = agrV21StaleSources(a.contractData) || [];
+  const req = NicocoAgreement.missingInfo(a, a.contractData, { staleSources: stale }).filter(x => x.level === 'required');
+  if (!req.length) return '';
+  return `\n\n提醒：合約資料仍有 ${req.length} 項「必要」資訊未完成：\n・${req.map(x => x.text).join('\n・')}\n\n標記已備妥後內容將無法編輯（需退回草稿）。`;
 }
 
 // ══════════════════════════════════════════════════
